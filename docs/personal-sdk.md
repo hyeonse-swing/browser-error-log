@@ -2,9 +2,21 @@
 
 The SDK accepts an `endpoint` or a custom `transport`. React is optional. For persistent storage, start with the [self-hosting guide](micro-server.md).
 
-**Release candidate:** MIT has been selected for `0.1.0`. The SDK packages are being prepared for npm; authenticated publication and registry installation have not yet been verified. These local tarball commands work from a source checkout. Once publication is verified, use `npm install browser-error-log` or, for React, `npm install browser-error-log browser-error-log-react`. The protocol package resolves transitively unless your app imports it directly.
+The `0.1.0` SDK packages are available on npm under MIT. In the consuming app, install the browser SDK:
 
-## Build local packages
+```sh
+npm install browser-error-log
+```
+
+For an existing React 18/19 app, also install the adapter:
+
+```sh
+npm install browser-error-log browser-error-log-react
+```
+
+For ordinary app integration, you do not need a separate protocol install. `browser-error-log-protocol` is installed automatically with the SDK and contains the shared event types and constants. Install it directly only when importing those contracts in your own collector or viewer. It is not an error collector or a server.
+
+## Optional: build local tarballs from source
 
 Use Node.js 24 and npm from the repository root:
 
@@ -13,7 +25,7 @@ npm ci
 npm run check:package
 ```
 
-The script builds three tarballs in `output/packages/` and installs them into isolated consumers to check browser-only installation, TypeScript declarations, ESM/CJS exports, and SSR imports. It does not publish anything.
+The script builds three tarballs in `output/packages/` and installs them into isolated consumers to check browser-only installation, TypeScript declarations, ESM/CJS exports, and SSR imports. This path is for local development and does not publish anything.
 
 In the consuming app, replace `SDK_DIR` with this checkout's absolute path:
 

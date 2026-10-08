@@ -2,7 +2,7 @@
 
 Capture browser failures on infrastructure you control. This project includes a framework-independent browser SDK, a React Error Boundary, a small self-hosted collector, and a viewer. A Node.js 24 process can persist events in SQLite and serve the viewer. You choose where records live, how long they remain, and who can read them. The public event types and transport hook also support a backend you own.
 
-**Release candidate:** MIT has been selected for the first `0.1.0` source and npm release. The three SDK packages are being prepared for publication; authenticated npm publication and registry installation have not yet been verified. Use the local tarballs below until that verification is complete. See [release readiness](docs/releasing.md). A GitHub source release and npm registry publication are separate actions.
+The browser SDK, React adapter, and protocol are available on npm at `0.1.0` under the MIT license. The collector and viewer run on your own infrastructure; see the [release guide](docs/releasing.md) for package details.
 
 ## Start with persistent storage
 
@@ -21,30 +21,19 @@ SQLite defaults to seven days from server receipt, 10,000 events, and a 64 MiB l
 
 ## Connect another app
 
-Build and verify the local tarballs:
+In another web app, install the SDK:
 
 ```sh
-npm run check:package
-```
-
-After all three packages have been published and verified on npm, the registry commands will be `npm install browser-error-log` or `npm install browser-error-log browser-error-log-react` for React. `browser-error-log-protocol` will resolve as a dependency; consumers normally do not install it directly unless using its types or constants.
-
-In the consuming app, set `SDK_DIR` to this checkout's absolute path and install the protocol and browser packages together:
-
-```sh
-SDK_DIR="/absolute/path/to/browser-error-log"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.0.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-0.1.0.tgz"
+npm install browser-error-log
 ```
 
 For an existing React 18/19 app, add the adapter:
 
 ```sh
-SDK_DIR="/absolute/path/to/browser-error-log"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.0.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-0.1.0.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-react-0.1.0.tgz"
+npm install browser-error-log browser-error-log-react
 ```
+
+For a standard integration, install only `browser-error-log`. It automatically installs `browser-error-log-protocol`, the shared event types and constants used by SDKs and collectors. The protocol package does not capture errors or run a server. Add `browser-error-log-react` only when you need a React Error Boundary. The [SDK guide](docs/personal-sdk.md) also covers local source-checkout tarballs.
 
 For an app at `http://localhost:5173`, start the collector with that exact browser origin:
 
