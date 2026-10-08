@@ -1,0 +1,36 @@
+{
+  "name": "@browser-error-log/browser",
+  "version": "0.1.0",
+  "description": "A small, framework-independent browser error SDK for a collector you control.",
+  "keywords": [
+    "browser",
+    "error-monitoring",
+    "self-hosted",
+    "typescript",
+    "telemetry"
+  ],
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "dependencies": {
+    "@browser-error-log/protocol": "0.1.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hyeonse-swing/browser-error-log.git",
+    "directory": "packages/browser"
+  },
+  "homepage": "https://github.com/hyeonse-swing/browser-error-log#readme",
+  "bugs": {
+    "url": "https://github.com/hyeonse-swing/browser-error-log/issues"
+  }
+}

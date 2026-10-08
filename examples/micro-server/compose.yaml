@@ -1,0 +1,52 @@
+# Build the portable folder with `npm run build:micro` before starting Compose.
+services:
+  collector:
+    build:
+      context: ../../dist/micro-server
+    restart: unless-stopped
+    init: true
+    environment:
+      MICRO_STORAGE: ${MICRO_STORAGE:-sqlite}
+      MICRO_PUBLIC_URL: https://${MICRO_DOMAIN:?Set the collector domain}
+      MICRO_ALLOWED_ORIGINS: ${MICRO_ALLOWED_ORIGINS:?Set exact website origins}
+      MICRO_PROJECTS: ${MICRO_PROJECTS:-my-web}
+      MICRO_VIEWER_PASSWORD: ${MICRO_VIEWER_PASSWORD:?Set a viewer password in the environment}
+      MICRO_RETENTION_DAYS: 7
+      MICRO_MAX_EVENTS: 10000
+      MICRO_MAX_DB_MB: 64
+      MICRO_LOG_FILE_MB: 8
+      MICRO_LOG_FILES: 3
+      MICRO_REQUESTS_PER_MINUTE: 120
+    volumes:
+      - error_data:/data
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "2"
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      MICRO_DOMAIN: ${MICRO_DOMAIN:?Set the collector domain}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - collector
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "2"
+volumes:
+  error_data:
+  caddy_data:
+  caddy_config:

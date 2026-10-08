@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect the SDK · Browser Error Log</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { max-width: 720px; margin: 48px auto; padding: 0 24px; line-height: 1.7; }
+  h1 { font-size: 28px; }
+  label { display: block; margin-top: 16px; }
+  input, button { font: inherit; padding: 10px; }
+  input { box-sizing: border-box; width: 100%; }
+  button { margin-top: 20px; cursor: pointer; }
+  pre { padding: 16px; border: 1px solid #8886; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+</style>
+<h1>Connect the SDK</h1>
+<p>Send a sample error to your self-hosted collector. Find it in the dashboard in SQLite mode, or in your log files in JSONL mode.</p>
+<label for="endpoint">Collector endpoint</label><input id="endpoint" type="url">
+<label for="project">Project</label><input id="project" value="my-web" maxlength="64">
+<button id="send" type="button">Send a sample error</button>
+<pre id="status" role="status">Ready to send</pre>
+<h2>Connect your app</h2>
+<p>Install the SDK package, then initialize it once in your browser entry point. This source preview is not published on npm yet; use the package installation instructions in the repository. The project must match your collector's allowlist, and a separate app origin must be included in <code>MICRO_ALLOWED_ORIGINS</code>.</p>
+<pre id="snippet"></pre>
+<p><a href="/">Open this collector's viewer</a></p>
+<p>Infrastructure is not included. You choose and pay for your hosting, servers, databases, storage, bandwidth, domains, backups, and third-party services. Any charges are billed separately by your providers, not by this project or its maintainers.</p>
+<script type="module">
+  import { init } from './sdk.js';
+  const endpoint = document.querySelector('#endpoint');
+  const project = document.querySelector('#project');
+  const status = document.querySelector('#status');
+  const send = document.querySelector('#send');
+  endpoint.value = `${location.origin}/api/events`;
+  const update = () => {
+    document.querySelector('#snippet').textContent = `import { init } from '@browser-error-log/browser';\n\nconst errorLog = init({\n  project: ${JSON.stringify(project.value)},\n  endpoint: ${JSON.stringify(endpoint.value)},\n  environment: 'production',\n  release: 'my-release',\n});`;
+  };
+  endpoint.addEventListener('input', update);
+  project.addEventListener('input', update);
+  update();
+  send.addEventListener('click', async () => {
+    send.disabled = true;
+    let client;
+    try {
+      client = init({ project: project.value, endpoint: endpoint.value, environment: 'example', release: 'micro-server-example' });
+      client.captureException(new Error('Micro server SDK example'), { context: { source: 'synthetic-example' } });
+      await client.flush();
+      const stats = client.getStats();
+      status.textContent = stats.sent === 1
+        ? `The collector accepted one error.\n${JSON.stringify(stats)}`
+        : `Delivery failed. Check the endpoint, allowed origin, project, and collector status.\n${JSON.stringify(stats)}`;
+    } catch {
+      status.textContent = 'Check your SDK configuration.';
+    } finally {
+      client?.destroy();
+      send.disabled = false;
+    }
+  });
+</script>
+</html>

@@ -1,0 +1,38 @@
+{
+  "name": "@browser-error-log/react",
+  "version": "0.1.0",
+  "description": "A React Error Boundary adapter for the self-hosted Browser Error Log SDK.",
+  "keywords": [
+    "react",
+    "error-boundary",
+    "error-monitoring",
+    "self-hosted"
+  ],
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "peerDependencies": {
+    "react": ">=18 <20"
+  },
+  "dependencies": {
+    "@browser-error-log/browser": "0.1.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hyeonse-swing/browser-error-log.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/hyeonse-swing/browser-error-log#readme",
+  "bugs": {
+    "url": "https://github.com/hyeonse-swing/browser-error-log/issues"
+  }
+}

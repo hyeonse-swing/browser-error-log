@@ -1,0 +1,49 @@
+{
+  "name": "browser-error-log-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "npm run build:sdk && vite build",
+    "build:sdk": "node scripts/build-sdk.mjs",
+    "build:collector": "node scripts/build-collector.mjs",
+    "collector": "npm run build:collector && node dist/collector/server.mjs",
+    "build:micro": "npm run build && node scripts/build-micro-server.mjs",
+    "check:micro": "npm run build:micro && node scripts/verify-micro-server.mjs",
+    "micro": "npm run build:micro && node dist/micro-server/server.mjs",
+    "start:micro": "node dist/micro-server/server.mjs",
+    "export:logs": "node dist/micro-server/export.mjs",
+    "check:package": "npm run build:sdk && node scripts/verify-package.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm test && npm run build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "esbuild": "^0.28.2",
+    "jsdom": "^26.0.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.2",
+    "vitest": "5.0.3"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hyeonse-swing/browser-error-log.git"
+  },
+  "homepage": "https://github.com/hyeonse-swing/browser-error-log#readme",
+  "bugs": {
+    "url": "https://github.com/hyeonse-swing/browser-error-log/issues"
+  }
+}

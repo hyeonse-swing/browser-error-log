@@ -1,0 +1,32 @@
+{
+  "name": "@browser-error-log/protocol",
+  "version": "0.1.0",
+  "description": "Versioned event and query contracts for Browser Error Log collectors and viewers.",
+  "keywords": [
+    "error-monitoring",
+    "self-hosted",
+    "typescript",
+    "protocol"
+  ],
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hyeonse-swing/browser-error-log.git",
+    "directory": "packages/protocol"
+  },
+  "homepage": "https://github.com/hyeonse-swing/browser-error-log#readme",
+  "bugs": {
+    "url": "https://github.com/hyeonse-swing/browser-error-log/issues"
+  }
+}

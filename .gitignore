@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+output/
+.playwright-cli/
+*.tgz
+.env*
+!.env.example
+.DS_Store
+.data/
+
+# Unrelated company work is never part of this personal repository.
+/company/
