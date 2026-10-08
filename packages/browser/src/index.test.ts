@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EventBatch } from '@browser-error-log/protocol';
+import type { EventBatch } from 'browser-error-log-protocol';
 import { init, type BrowserErrorLogClient } from './index';
 
 const clients: BrowserErrorLogClient[] = [];

@@ -1,7 +1,7 @@
 import { mkdir, open, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { ErrorEventRecord, EventFilter, EventPage } from '@browser-error-log/protocol';
+import type { ErrorEventRecord, EventFilter, EventPage } from 'browser-error-log-protocol';
 import { isEventRecord } from '../../../apps/local-collector/store.ts';
 import type { MicroStorage, StorageMode, StorageOptions, WriteResult } from './types.ts';
 

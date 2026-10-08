@@ -1,4 +1,4 @@
-import type { ErrorEventRecord, EventFilter, EventPage } from '@browser-error-log/protocol';
+import type { ErrorEventRecord, EventFilter, EventPage } from 'browser-error-log-protocol';
 
 export type StorageMode = 'sqlite' | 'jsonl';
 export interface WriteResult { accepted: number; stored: number; duplicates: number }

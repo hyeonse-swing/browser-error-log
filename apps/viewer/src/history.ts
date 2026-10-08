@@ -1,4 +1,4 @@
-import type { ErrorEventRecord, EventDataSource, EventFilter, EventPage, EventType, Runtime } from '@browser-error-log/protocol';
+import type { ErrorEventRecord, EventDataSource, EventFilter, EventPage, EventType, Runtime } from 'browser-error-log-protocol';
 
 export const MAX_HISTORY_EVENTS = 10_000;
 export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;

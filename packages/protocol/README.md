@@ -1,8 +1,14 @@
-# @browser-error-log/protocol
+# browser-error-log-protocol
 
 Versioned TypeScript contracts for Browser Error Log SDKs, collectors, and viewers. Use them when connecting the SDK to your own backend or implementing a viewer data source.
 
-**Release status:** unpublished source preview, with `private: true` and license selection pending. In the source checkout, `npm run check:package` generates `output/packages/browser-error-log-protocol-0.1.0.tgz`; install that file by absolute path. Registry installation is only planned for a future release.
+Install directly when implementing your own collector or viewer; `browser-error-log` also brings this package in as a dependency:
+
+```sh
+npm install browser-error-log-protocol
+```
+
+For local source-checkout tarballs before publication, use Node.js 24, `npm ci`, and `npm run check:package`, then install `output/packages/browser-error-log-protocol-0.1.0.tgz` by absolute path. See the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md).
 
 ## Event and query contracts
 
@@ -15,7 +21,7 @@ import {
   type EventFilter,
   type EventPage,
   type EventDataSource,
-} from '@browser-error-log/protocol';
+} from 'browser-error-log-protocol';
 
 function makeBatch(events: ErrorEventRecord[]): EventBatch {
   return { schemaVersion: SCHEMA_VERSION, events };
@@ -31,8 +37,8 @@ function makeBatch(events: ErrorEventRecord[]): EventBatch {
 
 These are types and constants, not a runtime validator, database, or HTTP server. Treat all incoming data as untrusted and validate it at your collector. Scope deduplication and event lookup by `(project, eventId)`; different projects may use the same event ID. Use ISO timestamps and distinguish client-supplied `occurredAt` from server-owned `receivedAt`.
 
-The repository's `docs/integration.md` describes the HTTP contract; `examples/micro-server` implements a small self-hosted collector with persistent SQLite or log-only JSONL storage. The in-memory development collector is only a demo.
+The [integration contract](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/integration.md) describes the HTTP API; `examples/micro-server` implements a small self-hosted collector with persistent SQLite or log-only JSONL storage. The in-memory development collector is only a demo.
 
 ## Hosting and costs
 
-The package provides no managed infrastructure. Each operator is responsible for selecting and paying their server, database, storage, network, and other providers. Provider charges are independent of this project and its maintainers.
+Infrastructure is not included. Hosting, servers, databases, storage, bandwidth, domains, backups, and third-party services are selected and paid for by each operator. Any charges are billed independently by their providers, not by this project or its maintainers.

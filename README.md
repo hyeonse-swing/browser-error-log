@@ -2,7 +2,7 @@
 
 Capture browser failures on infrastructure you control. This project includes a framework-independent browser SDK, a React Error Boundary, a small self-hosted collector, and a viewer. A Node.js 24 process can persist events in SQLite and serve the viewer. You choose where records live, how long they remain, and who can read them. The public event types and transport hook also support a backend you own.
 
-**Release status:** All packages are currently private workspace packages and have not been published to npm. License selection is pending; this is not yet an open-source release. Use the local tarballs below. See [release readiness](docs/releasing.md) for what remains before publication.
+**Release candidate:** MIT has been selected for the first `0.1.0` source and npm release. The three SDK packages are being prepared for publication; authenticated npm publication and registry installation have not yet been verified. Use the local tarballs below until that verification is complete. See [release readiness](docs/releasing.md). A GitHub source release and npm registry publication are separate actions.
 
 ## Start with persistent storage
 
@@ -27,12 +27,14 @@ Build and verify the local tarballs:
 npm run check:package
 ```
 
+After all three packages have been published and verified on npm, the registry commands will be `npm install browser-error-log` or `npm install browser-error-log browser-error-log-react` for React. `browser-error-log-protocol` will resolve as a dependency; consumers normally do not install it directly unless using its types or constants.
+
 In the consuming app, set `SDK_DIR` to this checkout's absolute path and install the protocol and browser packages together:
 
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
 npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.0.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-browser-0.1.0.tgz"
+  "$SDK_DIR/output/packages/browser-error-log-0.1.0.tgz"
 ```
 
 For an existing React 18/19 app, add the adapter:
@@ -40,7 +42,7 @@ For an existing React 18/19 app, add the adapter:
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
 npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.0.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-browser-0.1.0.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-0.1.0.tgz" \
   "$SDK_DIR/output/packages/browser-error-log-react-0.1.0.tgz"
 ```
 
@@ -53,7 +55,7 @@ MICRO_PROJECTS=my-web MICRO_ALLOWED_ORIGINS=http://localhost:5173 npm run start:
 Initialize once in the app's browser entry point:
 
 ```ts
-import { init } from '@browser-error-log/browser';
+import { init } from 'browser-error-log';
 
 export const errorLog = init({
   project: 'my-web',

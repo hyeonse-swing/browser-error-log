@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { EventFilter } from '@browser-error-log/protocol';
+import type { EventFilter } from 'browser-error-log-protocol';
 import { EventStore, createSampleEvents, isEventRecord } from './store.ts';
 
 export function json(res: ServerResponse, status: number, body: unknown): void {

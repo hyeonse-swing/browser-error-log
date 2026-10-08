@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { init } from '@browser-error-log/browser';
-import { ErrorBoundary } from '@browser-error-log/react';
+import { init } from 'browser-error-log';
+import { ErrorBoundary } from 'browser-error-log-react';
 import './style.css';
 
 const client = init({ endpoint: '/api/events', project: 'sdk-playground', environment: 'development', release: 'local-0.1.0', captureConsole: true, flushIntervalMs: 1000 });

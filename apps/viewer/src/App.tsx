@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EVENT_LABELS, type ErrorEventRecord, type EventFilter, type EventType } from '@browser-error-log/protocol';
+import { EVENT_LABELS, type ErrorEventRecord, type EventFilter, type EventType } from 'browser-error-log-protocol';
 import { eventDataSource, viewerConfig } from './data-source';
 import { Dashboard } from './Dashboard';
 

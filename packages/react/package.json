@@ -1,5 +1,5 @@
 {
-  "name": "@browser-error-log/react",
+  "name": "browser-error-log-react",
   "version": "0.1.0",
   "description": "A React Error Boundary adapter for the self-hosted Browser Error Log SDK.",
   "keywords": [
@@ -8,7 +8,11 @@
     "error-monitoring",
     "self-hosted"
   ],
-  "private": true,
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -21,10 +25,12 @@
     "react": ">=18 <20"
   },
   "dependencies": {
-    "@browser-error-log/browser": "0.1.0"
+    "browser-error-log": "0.1.0"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "repository": {
     "type": "git",

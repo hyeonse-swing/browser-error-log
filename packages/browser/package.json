@@ -1,5 +1,5 @@
 {
-  "name": "@browser-error-log/browser",
+  "name": "browser-error-log",
   "version": "0.1.0",
   "description": "A small, framework-independent browser error SDK for a collector you control.",
   "keywords": [
@@ -9,7 +9,11 @@
     "typescript",
     "telemetry"
   ],
-  "private": true,
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -19,10 +23,12 @@
     }
   },
   "dependencies": {
-    "@browser-error-log/protocol": "0.1.0"
+    "browser-error-log-protocol": "0.1.0"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "repository": {
     "type": "git",

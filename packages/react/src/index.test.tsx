@@ -2,8 +2,8 @@ import * as React from 'react';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
-import { init } from '@browser-error-log/browser';
-import type { EventBatch } from '@browser-error-log/protocol';
+import { init } from 'browser-error-log';
+import type { EventBatch } from 'browser-error-log-protocol';
 import { ErrorBoundary } from './index';
 
 afterEach(() => { vi.restoreAllMocks(); });

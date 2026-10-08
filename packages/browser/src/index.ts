@@ -1,6 +1,6 @@
-import type { ErrorEventRecord, EventBatch, EventType, Runtime } from '@browser-error-log/protocol';
+import type { ErrorEventRecord, EventBatch, EventType, Runtime } from 'browser-error-log-protocol';
 
-export type { ErrorEventRecord, EventBatch } from '@browser-error-log/protocol';
+export type { ErrorEventRecord, EventBatch } from 'browser-error-log-protocol';
 
 export interface CaptureExtra {
   type?: EventType;

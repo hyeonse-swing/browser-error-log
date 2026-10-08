@@ -32,7 +32,7 @@
   const send = document.querySelector('#send');
   endpoint.value = `${location.origin}/api/events`;
   const update = () => {
-    document.querySelector('#snippet').textContent = `import { init } from '@browser-error-log/browser';\n\nconst errorLog = init({\n  project: ${JSON.stringify(project.value)},\n  endpoint: ${JSON.stringify(endpoint.value)},\n  environment: 'production',\n  release: 'my-release',\n});`;
+    document.querySelector('#snippet').textContent = `import { init } from 'browser-error-log';\n\nconst errorLog = init({\n  project: ${JSON.stringify(project.value)},\n  endpoint: ${JSON.stringify(endpoint.value)},\n  environment: 'production',\n  release: 'my-release',\n});`;
   };
   endpoint.addEventListener('input', update);
   project.addEventListener('input', update);

@@ -12,9 +12,9 @@
     "esModuleInterop": true,
     "types": ["node", "vitest/globals"],
     "paths": {
-      "@browser-error-log/protocol": ["./packages/protocol/src/index.ts"],
-      "@browser-error-log/browser": ["./packages/browser/src/index.ts"],
-      "@browser-error-log/react": ["./packages/react/src/index.tsx"]
+      "browser-error-log-protocol": ["./packages/protocol/src/index.ts"],
+      "browser-error-log": ["./packages/browser/src/index.ts"],
+      "browser-error-log-react": ["./packages/react/src/index.tsx"]
     }
   },
   "include": ["packages", "apps", "examples/micro-server/src", "tests", "vite.config.ts", "vitest.config.ts"]

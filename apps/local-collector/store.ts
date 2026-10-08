@@ -1,4 +1,4 @@
-import type { ErrorEventRecord, EventFilter, EventPage, EventType } from '@browser-error-log/protocol';
+import type { ErrorEventRecord, EventFilter, EventPage, EventType } from 'browser-error-log-protocol';
 
 const types = new Set<EventType>(['javascript', 'promise', 'react', 'console', 'http', 'network', 'manual']);
 const runtimes = new Set(['browser', 'webview-ios', 'webview-android', 'unknown']);

@@ -1,8 +1,6 @@
-# @browser-error-log/browser
+# browser-error-log
 
 A small browser error SDK for a collector you control. Use your own backend or the repository's self-hosted Node.js collector, which stores events in SQLite or rotating JSONL files.
-
-**Release status:** this is a source preview, not a published npm release. Package names are provisional, `private: true` is still enabled, and the open-source license has not been selected. Registry installation will become available only after a release.
 
 ## Why use it?
 
@@ -12,22 +10,13 @@ A small browser error SDK for a collector you control. Use your own backend or t
 - **Start with useful error context.** Collect JavaScript exceptions, unhandled promises, fetch/XHR failures, and manually reported errors, with project, release, page, and occurrence time. Console capture is opt-in.
 - **Keep storage portable.** The companion collector offers SQLite with a live viewer, or JSONL logs that can be exported and inspected locally. You can implement the same versioned contract in your own backend.
 
-## Install the current preview
-
-In a source checkout, use Node.js 24 and npm:
+## Install
 
 ```sh
-npm ci
-npm run check:package
+npm install browser-error-log
 ```
 
-This builds and verifies the local packages and writes tarballs to `output/packages/`. In your web app, install both tarballs together, replacing `/path/to/browser-error-log` with the absolute path to the checkout:
-
-```sh
-npm install /path/to/browser-error-log/output/packages/browser-error-log-protocol-0.1.0.tgz /path/to/browser-error-log/output/packages/browser-error-log-browser-0.1.0.tgz
-```
-
-After an npm release under this package name, the equivalent registry command will be `npm install @browser-error-log/browser`. It is not the installation path for this unpublished preview.
+The `browser-error-log-protocol` dependency resolves from npm. For a local source checkout before publication, use Node.js 24, `npm ci`, and `npm run check:package`, then install the protocol and browser tarballs together as shown in the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md).
 
 ## Connect in three steps
 
@@ -40,7 +29,7 @@ After an npm release under this package name, the equivalent registry command wi
 2. In your app's browser entry point, initialize once:
 
    ```ts
-   import { init } from '@browser-error-log/browser';
+   import { init } from 'browser-error-log';
 
    export const errorLog = init({
      project: 'my-web',
@@ -60,7 +49,7 @@ After an npm release under this package name, the equivalent registry command wi
 
 Keep the client alive for the app's lifetime. Use `destroy()` for test cleanup or when disposing the app; it removes instrumentation and discards pending events. `flush()` completes the SDK's delivery attempts, not a guarantee of storage: check `getStats()` and the collector. Capturing starts only after initialization.
 
-Use the repository's `docs/micro-server.md` for external hosting. Production apps need their own HTTPS collector, exact allowed origins, persistent storage, and viewer authentication. `localhost` and `127.0.0.1` are different origins. The viewer password belongs only on the server; do not put it in SDK configuration.
+Use the [self-hosting guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/micro-server.md) for external hosting. Production apps need their own HTTPS collector, exact allowed origins, persistent storage, and viewer authentication. `localhost` and `127.0.0.1` are different origins. The viewer password belongs only on the server; do not put it in SDK configuration.
 
 ## Capture handled errors
 
@@ -72,7 +61,7 @@ try {
 }
 ```
 
-The optional `@browser-error-log/react` package provides an Error Boundary. The base SDK does not require React. Imports and initialization are safe during SSR but do not collect server-side errors; initialize in your framework's browser/client entry point.
+The optional `browser-error-log-react` package provides an Error Boundary. The base SDK does not require React. Imports and initialization are safe during SSR but do not collect server-side errors; initialize in your framework's browser/client entry point.
 
 ## Collection controls
 

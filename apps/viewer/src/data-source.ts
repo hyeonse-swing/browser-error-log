@@ -1,4 +1,4 @@
-import type { ErrorEventRecord, EventDataSource, EventFilter, EventPage } from '@browser-error-log/protocol';
+import type { ErrorEventRecord, EventDataSource, EventFilter, EventPage } from 'browser-error-log-protocol';
 
 declare global {
   interface Window {

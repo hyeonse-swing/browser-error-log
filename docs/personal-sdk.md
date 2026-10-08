@@ -2,7 +2,7 @@
 
 The SDK accepts an `endpoint` or a custom `transport`. React is optional. For persistent storage, start with the [self-hosting guide](micro-server.md).
 
-**Distribution status:** All packages have `private: true`; none has been published to npm. License selection is pending, so this is not yet an open-source release. The commands below install local tarballs. A future npm install path will be documented only after publication.
+**Release candidate:** MIT has been selected for `0.1.0`. The SDK packages are being prepared for npm; authenticated publication and registry installation have not yet been verified. These local tarball commands work from a source checkout. Once publication is verified, use `npm install browser-error-log` or, for React, `npm install browser-error-log browser-error-log-react`. The protocol package resolves transitively unless your app imports it directly.
 
 ## Build local packages
 
@@ -20,7 +20,7 @@ In the consuming app, replace `SDK_DIR` with this checkout's absolute path:
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
 npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.0.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-browser-0.1.0.tgz"
+  "$SDK_DIR/output/packages/browser-error-log-0.1.0.tgz"
 ```
 
 For an existing React 18/19 app, add the adapter in the same install:
@@ -28,7 +28,7 @@ For an existing React 18/19 app, add the adapter in the same install:
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
 npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.0.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-browser-0.1.0.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-0.1.0.tgz" \
   "$SDK_DIR/output/packages/browser-error-log-react-0.1.0.tgz"
 ```
 
@@ -45,7 +45,7 @@ MICRO_PROJECTS=my-web MICRO_ALLOWED_ORIGINS=http://localhost:5173 npm run micro
 The exact origin must match, including hostname and port; `localhost` and `127.0.0.1` are different origins. Initialize once in the consuming app's browser entry point:
 
 ```ts
-import { init } from '@browser-error-log/browser';
+import { init } from 'browser-error-log';
 
 export const errorLog = init({
   project: 'my-web',
@@ -88,7 +88,7 @@ The client exposes `captureException(error, extra?)`, `flush()`, `getStats()`, a
 Reuse the same client with the React adapter:
 
 ```tsx
-import { ErrorBoundary } from '@browser-error-log/react';
+import { ErrorBoundary } from 'browser-error-log-react';
 import { errorLog } from './error-log';
 
 <ErrorBoundary client={errorLog} fallback={(_error, reset) => (

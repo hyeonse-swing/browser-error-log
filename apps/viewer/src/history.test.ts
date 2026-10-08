@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ErrorEventRecord, EventDataSource, EventFilter, EventPage } from '@browser-error-log/protocol';
+import type { ErrorEventRecord, EventDataSource, EventFilter, EventPage } from 'browser-error-log-protocol';
 import { filterHistory, loadHistory, MAX_HISTORY_EVENTS, MAX_IMPORT_BYTES, parseHistoryJson, serializeHistory } from './history';
 
 function event(overrides: Partial<ErrorEventRecord> = {}): ErrorEventRecord {

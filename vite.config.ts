@@ -18,9 +18,9 @@ const externalCollector = collectorTarget(process.env.ERROR_LOG_COLLECTOR_URL);
 export default defineConfig({
   root: 'apps/viewer',
   resolve: { alias: {
-    '@browser-error-log/protocol': fileURLToPath(new URL('./packages/protocol/src/index.ts', import.meta.url)),
-    '@browser-error-log/browser': fileURLToPath(new URL('./packages/browser/src/index.ts', import.meta.url)),
-    '@browser-error-log/react': fileURLToPath(new URL('./packages/react/src/index.tsx', import.meta.url)),
+    'browser-error-log-protocol': fileURLToPath(new URL('./packages/protocol/src/index.ts', import.meta.url)),
+    'browser-error-log': fileURLToPath(new URL('./packages/browser/src/index.ts', import.meta.url)),
+    'browser-error-log-react': fileURLToPath(new URL('./packages/react/src/index.tsx', import.meta.url)),
   } },
   plugins: [localCollector(Boolean(externalCollector))],
   server: { port: 4317, strictPort: true, ...(externalCollector ? { proxy: { '/api': { target: externalCollector, changeOrigin: true } } } : {}) },

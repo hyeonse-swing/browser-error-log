@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { EVENT_LABELS, type ErrorEventRecord, type EventFilter, type EventType } from '@browser-error-log/protocol';
+import { EVENT_LABELS, type ErrorEventRecord, type EventFilter, type EventType } from 'browser-error-log-protocol';
 import { AnalyticsCharts } from './Charts';
 import { buildAnalytics } from './analytics';
 import { eventDataSource, viewerConfig } from './data-source';

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { ErrorEventRecord } from '@browser-error-log/protocol';
+import type { ErrorEventRecord } from 'browser-error-log-protocol';
 import { App } from './App';
 import { Dashboard } from './Dashboard';
 import { eventDataSource } from './data-source';

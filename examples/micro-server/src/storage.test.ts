@@ -2,7 +2,7 @@
 import { appendFile, mkdtemp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ErrorEventRecord } from '@browser-error-log/protocol';
+import type { ErrorEventRecord } from 'browser-error-log-protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createStorage } from './storage.ts';
 import type { MicroStorage, StorageOptions } from './types.ts';

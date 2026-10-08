@@ -12,7 +12,7 @@ The SQLite defaults are seven days from receipt, 10,000 events, and a 64 MiB mai
 
 | Area | Candidate work | Reason to consider it |
 | --- | --- | --- |
-| Release readiness | Select a license, confirm package scope/name and repository URL, review artifacts, decide versioning | Enable a real open-source and npm release; [readiness checklist](releasing.md) |
+| Release readiness | Validate the MIT package artifacts and chosen unscoped names, then publish and verify `0.1.0` | Complete a real source and npm release; [readiness checklist](releasing.md) |
 | SDK reliability | Bound repeated identical errors, distinguish drop causes, test supported browser and WebView versions | Make high-volume failure behavior easier to understand |
 | Privacy controls | Document tested application-specific filters and a server-side removal point | Reduce accidental collection of identifiers in paths, messages, stacks, or context |
 | Diagnostics | Add private source-map handling and careful event grouping | Connect deployed stacks to source and group repeat failures without hiding distinct causes |

@@ -3,7 +3,7 @@ import { constants } from 'node:fs';
 import { lstat, open } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
-import type { EventFilter, EventType } from '@browser-error-log/protocol';
+import type { EventFilter, EventType } from 'browser-error-log-protocol';
 import { isEventRecord } from '../../../apps/local-collector/store.ts';
 import type { MicroConfig, MicroStorage } from './types.ts';
 

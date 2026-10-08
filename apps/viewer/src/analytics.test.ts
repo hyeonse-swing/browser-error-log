@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ErrorEventRecord } from '@browser-error-log/protocol';
+import type { ErrorEventRecord } from 'browser-error-log-protocol';
 import { buildAnalytics } from './analytics';
 
 function event(overrides: Partial<ErrorEventRecord> = {}): ErrorEventRecord {

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import type { BrowserErrorLogClient } from '@browser-error-log/browser';
+import type { BrowserErrorLogClient } from 'browser-error-log';
 
 export interface ErrorBoundaryProps {
   client: BrowserErrorLogClient;

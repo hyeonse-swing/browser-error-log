@@ -1,4 +1,4 @@
-import { EVENT_LABELS, type ErrorEventRecord, type EventType } from '@browser-error-log/protocol';
+import { EVENT_LABELS, type ErrorEventRecord, type EventType } from 'browser-error-log-protocol';
 
 export type Breakdown = { key: string; label: string; count: number };
 export type TrendBucket = { from: number; to: number; count: number; types: Record<EventType, number> };
