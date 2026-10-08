@@ -1,5 +1,7 @@
 # browser-error-log-react
 
+English | [한국어](https://github.com/hyeonse-swing/browser-error-log/blob/main/packages/react/README.ko.md)
+
 A React Error Boundary for Browser Error Log. It forwards render errors and React component stacks to an existing browser SDK client, so React errors use the same collector and collection policies as the rest of your app.
 
 The declared React peer range is `>=18 <20`; this range is not a claim of verification against every React version or framework.
@@ -12,7 +14,7 @@ In a React app, install the browser SDK and adapter:
 npm install browser-error-log browser-error-log-react
 ```
 
-React must already be installed in your app. The adapter does not bundle React. For local source-checkout tarballs before publication, follow the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md) to install protocol, browser, and React tarballs together.
+React must already be installed in your app. The adapter does not bundle React. For local source-checkout development, follow the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md) to install protocol, browser, and React tarballs together.
 
 ## Use in your browser entry point
 

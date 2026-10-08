@@ -1,5 +1,7 @@
 # browser-error-log
 
+English | [한국어](https://github.com/hyeonse-swing/browser-error-log/blob/main/packages/browser/README.ko.md)
+
 A small browser error SDK for a collector you control. Use your own backend or the repository's self-hosted Node.js collector, which stores events in SQLite or rotating JSONL files.
 
 ## Why use it?
@@ -16,7 +18,7 @@ A small browser error SDK for a collector you control. Use your own backend or t
 npm install browser-error-log
 ```
 
-The `browser-error-log-protocol` dependency resolves from npm. For a local source checkout before publication, use Node.js 24, `npm ci`, and `npm run check:package`, then install the protocol and browser tarballs together as shown in the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md).
+The `browser-error-log-protocol` dependency resolves from npm. For local source-checkout development, use Node.js 24, `npm ci`, and `npm run check:package`, then install the protocol and browser tarballs together as shown in the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md).
 
 ## Connect in three steps
 

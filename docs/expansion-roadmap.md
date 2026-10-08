@@ -1,12 +1,14 @@
 # Project roadmap
 
+English | [한국어](ko/expansion-roadmap.md)
+
 This roadmap describes possible public-project improvements. It does not announce a deployment, release date, vendor choice, or committed feature. The current behavior is documented in the [README](../README.md), [SDK guide](personal-sdk.md), [micro server guide](micro-server.md), and [v1 contract](integration.md).
 
 ## Current baseline
 
 The browser SDK captures global JavaScript exceptions, unhandled promises, fetch/XHR failures, selected HTTP responses, and manual errors. It has bounded buffering, per-attempt timeouts, and limited retries. The optional React adapter catches render errors. The viewer offers filters, timeline/detail, charts over fetched records, and local JSON import/export. A single-process micro server persists SQLite records or rotating JSONL logs. Development demo collectors use memory only.
 
-The MIT-licensed `0.1.0` browser SDK, React adapter, and protocol packages are published on npm. The source remains available in the GitHub repository; an npm publication is separate from a GitHub release or tag. See the [release guide](releasing.md) for verification and future-release steps.
+The MIT-licensed `0.1.0` browser SDK, React adapter, and protocol packages are published on npm. The `0.1.1` i18n update is pending publication. The source remains available in the GitHub repository; an npm publication is separate from a GitHub release or tag. See the [release guide](releasing.md) for verification and future-release steps.
 
 The SQLite defaults are seven days from receipt, 10,000 events, and a 64 MiB main database file. JSONL defaults to three 8 MiB files and has no online query API. The viewer limits fetched analysis to 100 pages and 10,000 unique events; capped results are explicitly partial. These limits make the starter deployment understandable, but they are not a guarantee of complete capture or suitability for every workload.
 

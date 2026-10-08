@@ -31,6 +31,16 @@ const index = await readFile('dist/viewer/index.html', 'utf8');
 await writeFile(`${out}/public/index.html`, index.replace('</head>',
   `<script>window.__ERROR_LOG_VIEWER_CONFIG__={mode:'live',title:'Browser Error Log'};</script></head>`));
 await cp('packages/browser/dist/index.js', `${out}/public/sdk.js`);
+await build({
+  entryPoints: ['examples/micro-server/src/install.ts'],
+  outfile: `${out}/public/install.js`,
+  bundle: true,
+  platform: 'browser',
+  target: 'es2022',
+  format: 'esm',
+  tsconfig: 'tsconfig.json',
+  logLevel: 'warning',
+});
 for (const name of ['install.html', 'demo.html']) {
   await cp('examples/micro-server/install.html', `${out}/public/${name}`);
 }

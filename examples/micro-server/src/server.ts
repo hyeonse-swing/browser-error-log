@@ -133,7 +133,7 @@ async function staticFile(res: ServerResponse, config: MicroConfig, rawPath: str
   if (!decoded.startsWith('/') || decoded.startsWith('//') || decoded.includes('\\') || decoded.includes('\0')) return json(res, 404, { error: 'Not found' });
   const parts = decoded.slice(1).split('/');
   if (parts.some(part => !part || part.startsWith('.') || part === '..')) return json(res, 404, { error: 'Not found' });
-  if (config.mode === 'jsonl' && !['install.html', 'demo.html', 'sdk.js'].includes(parts.join('/'))) {
+  if (config.mode === 'jsonl' && !['install.html', 'demo.html', 'sdk.js', 'install.js'].includes(parts.join('/'))) {
     return json(res, 404, { error: 'Not found' });
   }
   const mime = MIME_TYPES[extname(parts.at(-1)!)];
@@ -265,7 +265,7 @@ export function createMicroServer(config: MicroConfig, storage: MicroStorage): S
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.end('<!doctype html><html lang="en"><meta charset="utf-8"><title>Browser Error Log</title><h1>Browser Error Log</h1><p>JSONL log-only mode is enabled. The event query API and live viewer are unavailable.</p><p><a href="/install.html">Connect the SDK</a></p></html>');
+        res.end('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Browser Error Log</title><label for="language"><span data-i18n="language">Language</span> <select id="language"><option value="en">English</option><option value="ko">한국어</option></select></label><h1>Browser Error Log</h1><p data-i18n="logOnly">JSONL log-only mode is enabled. The event query API and live viewer are unavailable.</p><p><a href="/install.html" data-i18n="heading">Connect the SDK</a></p><script type="module" src="/install.js"></script></html>');
         return;
       }
       return staticFile(res, config, target.split('?')[0]);

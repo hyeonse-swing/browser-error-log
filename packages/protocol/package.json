@@ -1,6 +1,6 @@
 {
   "name": "browser-error-log-protocol",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Versioned event and query contracts for Browser Error Log collectors and viewers.",
   "keywords": [
     "error-monitoring",
@@ -24,6 +24,7 @@
   "files": [
     "dist",
     "README.md",
+    "README.ko.md",
     "LICENSE"
   ],
   "repository": {

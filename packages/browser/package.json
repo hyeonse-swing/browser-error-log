@@ -1,6 +1,6 @@
 {
   "name": "browser-error-log",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A small, framework-independent browser error SDK for a collector you control.",
   "keywords": [
     "browser",
@@ -23,11 +23,12 @@
     }
   },
   "dependencies": {
-    "browser-error-log-protocol": "0.1.0"
+    "browser-error-log-protocol": "0.1.1"
   },
   "files": [
     "dist",
     "README.md",
+    "README.ko.md",
     "LICENSE"
   ],
   "repository": {

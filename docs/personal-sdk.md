@@ -1,8 +1,10 @@
 # Install and connect the browser SDK
 
+English | [한국어](ko/personal-sdk.md)
+
 The SDK accepts an `endpoint` or a custom `transport`. React is optional. For persistent storage, start with the [self-hosting guide](micro-server.md).
 
-The `0.1.0` SDK packages are available on npm under MIT. In the consuming app, install the browser SDK:
+The verified MIT-licensed `0.1.0` SDK packages are available on npm. The `0.1.1` i18n update is prepared locally and is not yet published. In the consuming app, install the browser SDK:
 
 ```sh
 npm install browser-error-log
@@ -25,23 +27,23 @@ npm ci
 npm run check:package
 ```
 
-The script builds three tarballs in `output/packages/` and installs them into isolated consumers to check browser-only installation, TypeScript declarations, ESM/CJS exports, and SSR imports. This path is for local development and does not publish anything.
+The script builds three `0.1.1` tarballs in `output/packages/` and installs them into isolated consumers to check browser-only installation, TypeScript declarations, ESM/CJS exports, and SSR imports. This path is for local development and does not publish anything.
 
 In the consuming app, replace `SDK_DIR` with this checkout's absolute path:
 
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.0.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-0.1.0.tgz"
+npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.1.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-0.1.1.tgz"
 ```
 
 For an existing React 18/19 app, add the adapter in the same install:
 
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.0.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-0.1.0.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-react-0.1.0.tgz"
+npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.1.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-0.1.1.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-react-0.1.1.tgz"
 ```
 
 The browser package does not require React. These packages export ESM, CommonJS, and TypeScript declarations for app bundlers; they do not provide a CDN global script.

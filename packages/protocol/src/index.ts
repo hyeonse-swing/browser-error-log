@@ -1,5 +1,5 @@
 export const SCHEMA_VERSION = 1 as const;
-export const SDK_VERSION = '0.1.0';
+export const SDK_VERSION = '0.1.1';
 
 export type EventType = 'javascript' | 'promise' | 'react' | 'console' | 'http' | 'network' | 'manual';
 export type Runtime = 'browser' | 'webview-ios' | 'webview-android' | 'unknown';

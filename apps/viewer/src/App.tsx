@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EVENT_LABELS, type ErrorEventRecord, type EventFilter, type EventType } from 'browser-error-log-protocol';
 import { eventDataSource, viewerConfig } from './data-source';
 import { Dashboard } from './Dashboard';
+import { LanguageSwitcher, useLocale } from '../../i18n/react';
+import { eventLabel, localizeError, numberText, t } from './i18n';
+import type { Locale } from '../../i18n/locale';
 
 type TimeRange = '24h' | '7d' | 'all';
 const eventTypes = Object.keys(EVENT_LABELS) as EventType[];
@@ -25,15 +28,17 @@ function Icon({ name, size = 18 }: { name: 'refresh' | 'search' | 'chevron' | 'c
   return <svg {...common}>{paths[name]}</svg>;
 }
 
-function formatDate(value: string, withYear = false) {
+function formatDate(value: string, locale: Locale, withYear = false) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  const parts = new Intl.DateTimeFormat('en-US', {
+  const parts = new Intl.DateTimeFormat(locale === 'ko' ? 'ko-KR' : 'en-US', {
     year: withYear ? 'numeric' : undefined,
     month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
   }).formatToParts(date);
   const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
-  return `${get('month')}/${get('day')}${withYear ? `/${get('year')}` : ''} ${get('hour')}:${get('minute')}:${get('second')}`;
+  return locale === 'ko'
+    ? `${withYear ? `${get('year')}.` : ''}${get('month')}.${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`
+    : `${get('month')}/${get('day')}${withYear ? `/${get('year')}` : ''} ${get('hour')}:${get('minute')}:${get('second')}`;
 }
 
 function rangeStart(range: TimeRange) {
@@ -59,6 +64,11 @@ function eventKey(event: Pick<ErrorEventRecord, 'project' | 'eventId'>) {
 }
 
 export function App() {
+  const locale = useLocale();
+  useEffect(() => {
+    document.documentElement.lang = locale;
+    document.title = viewerConfig.title || t(locale, 'Browser Error Log');
+  }, [locale]);
   const [activeView, setActiveView] = useState<'dashboard' | 'events'>('dashboard');
   const [project, setProject] = useState('');
   const [environment, setEnvironment] = useState('');
@@ -202,59 +212,59 @@ export function App() {
     setProject(''); setEnvironment(''); setType(''); setTimeRange('24h'); setSearch(''); setQuery('');
   };
 
-  const title = viewerConfig.title || 'Browser Error Log';
+  const title = viewerConfig.title || t(locale, 'Browser Error Log');
   const localMode = viewerConfig.mode !== 'live';
   return <div className="shell">
     <aside className="sidebar">
-      <div className="brand"><span className="brand-mark" aria-hidden="true"><i/><i/><i/></span><div><div className="brand-overline">BROWSER / LOG</div><div className="brand-title">{title}</div></div></div>
-      <div className="side-section-label">WORKSPACE <span>01</span></div>
-      <nav className="side-navigation" aria-label="Monitoring navigation">{([{ value: 'dashboard', label: 'Error Dashboard' }, { value: 'events', label: 'Event Timeline' }] as const).map(view => <button key={view.value} type="button" className={activeView === view.value ? 'side-active' : 'side-inactive'} aria-current={activeView === view.value ? 'page' : undefined} onClick={() => setActiveView(view.value)}><span className="side-active-dot"/>{view.label}</button>)}</nav>
-      <div className="side-bottom"><div className="side-rule"/><div className="side-bottom-heading">Test Tools</div><a href="/demo.html" className="demo-link">Trigger Errors <Icon name="external" size={15}/></a><p>Trigger errors in the browser and inspect the capture flow.</p><div className="side-version">ERROR LOG <span>v0.1</span></div></div>
+      <div className="brand"><span className="brand-mark" aria-hidden="true"><i/><i/><i/></span><div><div className="brand-overline">{t(locale, 'BROWSER / LOG')}</div><div className="brand-title">{title}</div></div></div>
+      <div className="side-section-label">{t(locale, 'WORKSPACE')} <span>01</span></div>
+      <nav className="side-navigation" aria-label={t(locale, 'Monitoring navigation')}>{([{ value: 'dashboard', label: 'Error Dashboard' }, { value: 'events', label: 'Event Timeline' }] as const).map(view => <button key={view.value} type="button" className={activeView === view.value ? 'side-active' : 'side-inactive'} aria-current={activeView === view.value ? 'page' : undefined} onClick={() => setActiveView(view.value)}><span className="side-active-dot"/>{t(locale, view.label)}</button>)}</nav>
+      <div className="side-bottom"><div className="side-rule"/><div className="side-bottom-heading">{t(locale, 'Test Tools')}</div><a href="/demo.html" className="demo-link">{t(locale, 'Trigger Errors')} <Icon name="external" size={15}/></a><p>{t(locale, 'Trigger errors in the browser and inspect the capture flow.')}</p><div className="side-version">{t(locale, 'ERROR LOG')} <span>v0.1</span></div></div>
     </aside>
 
     <main className="workspace">
-      <header className="topbar"><div className="breadcrumb">MONITORING <span>/</span> {activeView === 'dashboard' ? 'OVERVIEW' : 'EVENTS'}</div><div className="topbar-right"><span className={`source-dot ${localMode ? 'is-local' : ''}`}/><span>{localMode ? 'Local Test' : 'Connected Data Source'}</span></div></header>
-      <nav className="view-tabs" aria-label="Select view"><button type="button" aria-current={activeView === 'dashboard' ? 'page' : undefined} onClick={() => setActiveView('dashboard')}>Dashboard</button><button type="button" aria-current={activeView === 'events' ? 'page' : undefined} onClick={() => setActiveView('events')}>Event Timeline</button></nav>
+      <header className="topbar"><div className="breadcrumb">{t(locale, 'MONITORING')} <span>/</span> {t(locale, activeView === 'dashboard' ? 'OVERVIEW' : 'EVENTS')}</div><div className="topbar-right"><LanguageSwitcher/><span className={`source-dot ${localMode ? 'is-local' : ''}`}/><span>{t(locale, localMode ? 'Local Test' : 'Connected Data Source')}</span></div></header>
+      <nav className="view-tabs" aria-label={t(locale, 'Select view')}><button type="button" aria-current={activeView === 'dashboard' ? 'page' : undefined} onClick={() => setActiveView('dashboard')}>{t(locale, 'Dashboard')}</button><button type="button" aria-current={activeView === 'events' ? 'page' : undefined} onClick={() => setActiveView('events')}>{t(locale, 'Event Timeline')}</button></nav>
       <div hidden={activeView !== 'dashboard'}><Dashboard/></div>
       {activeView === 'events' && <>
-      <section className="page-head"><div><div className="eyebrow">EVENT STREAM <span>—</span> 001</div><h1>{title}</h1><p>Explore captured browser errors in chronological order.</p></div><div className="head-actions"><label className="auto-toggle"><input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)}/><span className="toggle-track"/>Auto-refresh <span className="auto-interval">30s</span></label><button className="refresh-button" onClick={() => setRefreshToken((current) => current + 1)} type="button"><Icon name="refresh" size={16}/> Refresh</button></div></section>
-      {localMode && <div className="local-notice"><span className="notice-icon">i</span><span><strong>Local Test</strong> · Stored in memory; cleared on restart</span></div>}
+      <section className="page-head"><div><div className="eyebrow">{t(locale, 'EVENT STREAM')} <span>—</span> 001</div><h1>{title}</h1><p>{t(locale, 'Explore captured browser errors in chronological order.')}</p></div><div className="head-actions"><label className="auto-toggle"><input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)}/><span className="toggle-track"/>{t(locale, 'Auto-refresh')} <span className="auto-interval">{locale === 'ko' ? '30초' : '30s'}</span></label><button className="refresh-button" onClick={() => setRefreshToken((current) => current + 1)} type="button"><Icon name="refresh" size={16}/> {t(locale, 'Refresh')}</button></div></section>
+      {localMode && <div className="local-notice"><span className="notice-icon">i</span><span><strong>{t(locale, 'Local Test')}</strong> · {t(locale, 'Stored in memory; cleared on restart')}</span></div>}
 
-      <section className="filter-bar" aria-label="Event filters">
-        <div className="filter-field project-field"><label htmlFor="project">Project</label><input id="project" list="project-options" placeholder="All projects" value={project} onChange={(event) => setProject(event.target.value)}/><datalist id="project-options">{knownProjects.map((name) => <option key={name} value={name}/>)}</datalist></div>
-        <div className="filter-field env-field"><label htmlFor="environment">Environment</label><input id="environment" list="environment-options" placeholder="All environments" value={environment} onChange={(event) => setEnvironment(event.target.value)}/><datalist id="environment-options">{knownEnvironments.map((name) => <option key={name} value={name}/>)}</datalist></div>
-        <div className="filter-field type-field"><label htmlFor="type">Type</label><select id="type" value={type} onChange={(event) => setType(event.target.value as EventType | '')}><option value="">All types</option>{eventTypes.map((value) => <option key={value} value={value}>{EVENT_LABELS[value]}</option>)}</select></div>
-        <div className="filter-field time-field"><label htmlFor="time-range">Time range</label><select id="time-range" value={timeRange} onChange={(event) => setTimeRange(event.target.value as TimeRange)}>{timeRanges.map((range) => <option key={range.value} value={range.value}>{range.label}</option>)}</select></div>
-        <div className="filter-field search-field"><label htmlFor="search">Search</label><div className="search-wrap"><Icon name="search" size={16}/><input id="search" type="search" placeholder="Search message, page, or ID" value={search} onChange={(event) => setSearch(event.target.value)}/></div></div>
+      <section className="filter-bar" aria-label={t(locale, 'Event filters')}>
+        <div className="filter-field project-field"><label htmlFor="project">{t(locale, 'Project')}</label><input id="project" list="project-options" placeholder={t(locale, 'All projects')} value={project} onChange={(event) => setProject(event.target.value)}/><datalist id="project-options">{knownProjects.map((name) => <option key={name} value={name}/>)}</datalist></div>
+        <div className="filter-field env-field"><label htmlFor="environment">{t(locale, 'Environment')}</label><input id="environment" list="environment-options" placeholder={t(locale, 'All environments')} value={environment} onChange={(event) => setEnvironment(event.target.value)}/><datalist id="environment-options">{knownEnvironments.map((name) => <option key={name} value={name}/>)}</datalist></div>
+        <div className="filter-field type-field"><label htmlFor="type">{t(locale, 'Type')}</label><select id="type" value={type} onChange={(event) => setType(event.target.value as EventType | '')}><option value="">{t(locale, 'All types')}</option>{eventTypes.map((value) => <option key={value} value={value}>{eventLabel(locale, value)}</option>)}</select></div>
+        <div className="filter-field time-field"><label htmlFor="time-range">{t(locale, 'Time range')}</label><select id="time-range" value={timeRange} onChange={(event) => setTimeRange(event.target.value as TimeRange)}>{timeRanges.map((range) => <option key={range.value} value={range.value}>{t(locale, range.label)}</option>)}</select></div>
+        <div className="filter-field search-field"><label htmlFor="search">{t(locale, 'Search')}</label><div className="search-wrap"><Icon name="search" size={16}/><input id="search" type="search" placeholder={t(locale, 'Search message, page, or ID')} value={search} onChange={(event) => setSearch(event.target.value)}/></div></div>
       </section>
 
-      <div className="content-grid"><section className={`event-list ${mobileDetail ? 'mobile-hidden' : ''}`} aria-label="Event list"><div className="panel-heading"><div><span className="section-index">01 / TIMELINE</span><h2>Event list</h2></div><div className="record-count">{events.length}<span>{cursor ? '+' : ''} {events.length === 1 && !cursor ? 'record' : 'records'}</span></div></div>
-        <div className="list-columns"><span>Occurred / type</span><span>Event</span><span>Project / environment</span></div>
-        {loading && <div className="state-box"><span className="loading-mark"/>Loading events</div>}
-        {!loading && listError && events.length === 0 && <div className="state-box state-error"><strong>Could not load events</strong><span>{listError}</span><button type="button" onClick={() => setRefreshToken((current) => current + 1)}>Retry</button></div>}
-        {!loading && !listError && events.length === 0 && <div className="state-box"><span className="empty-glyph">∅</span><strong>No events match your filters</strong><span>Change the filters or trigger an error.</span><button type="button" onClick={clearFilters}>Clear filters</button></div>}
-        {!loading && listError && events.length > 0 && <div className="list-inline-error">{listError}<button type="button" onClick={listErrorSource === 'more' ? loadMore : () => setRefreshToken((current) => current + 1)}>Retry</button></div>}
-        {!loading && events.length > 0 && <div className="rows">{events.map((event, index) => <button type="button" key={eventKey(event)} className={`event-row ${selectedId === eventKey(event) ? 'selected' : ''}`} onClick={() => { setSelectedId(eventKey(event)); setMobileDetail(true); }} style={{ animationDelay: `${Math.min(index, 10) * 25}ms` }}><span className="row-time"><span className="time-value">{formatDate(event.occurredAt)}</span><span className={`type-pill type-${event.type}`}>{EVENT_LABELS[event.type]}</span></span><span className="row-main"><strong title={event.message}>{event.message}</strong><small>{event.name && <span>{event.name} <b>·</b> </span>}{event.page}</small></span><span className="row-origin"><strong>{event.project}</strong><small>{event.environment}</small></span><span className="row-chevron"><Icon name="chevron" size={17}/></span></button>)}</div>}
-        {!loading && cursor && <button className="load-more" type="button" disabled={loadingMore} onClick={loadMore}>{loadingMore ? 'Loading…' : 'Load older events'}<Icon name="chevron" size={16}/></button>}
-        {!loading && events.length > 0 && !cursor && <div className="list-end">You reached the last event <span>— END OF LOG</span></div>}
+      <div className="content-grid"><section className={`event-list ${mobileDetail ? 'mobile-hidden' : ''}`} aria-label={t(locale, 'Event list')}><div className="panel-heading"><div><span className="section-index">{t(locale, '01 / TIMELINE')}</span><h2>{t(locale, 'Event list')}</h2></div><div className="record-count">{events.length}<span>{cursor ? '+' : ''} {locale === 'ko' ? '건' : events.length === 1 && !cursor ? 'record' : 'records'}</span></div></div>
+        <div className="list-columns"><span>{t(locale, 'Occurred / type')}</span><span>{t(locale, 'Event')}</span><span>{t(locale, 'Project / environment')}</span></div>
+        {loading && <div className="state-box"><span className="loading-mark"/>{t(locale, 'Loading events')}</div>}
+        {!loading && listError && events.length === 0 && <div className="state-box state-error"><strong>{t(locale, 'Could not load events')}</strong><span>{localizeError(locale, listError)}</span><button type="button" onClick={() => setRefreshToken((current) => current + 1)}>{t(locale, 'Retry')}</button></div>}
+        {!loading && !listError && events.length === 0 && <div className="state-box"><span className="empty-glyph">∅</span><strong>{t(locale, 'No events match your filters')}</strong><span>{t(locale, 'Change the filters or trigger an error.')}</span><button type="button" onClick={clearFilters}>{t(locale, 'Clear filters')}</button></div>}
+        {!loading && listError && events.length > 0 && <div className="list-inline-error">{localizeError(locale, listError)}<button type="button" onClick={listErrorSource === 'more' ? loadMore : () => setRefreshToken((current) => current + 1)}>{t(locale, 'Retry')}</button></div>}
+        {!loading && events.length > 0 && <div className="rows">{events.map((event, index) => <button type="button" key={eventKey(event)} className={`event-row ${selectedId === eventKey(event) ? 'selected' : ''}`} onClick={() => { setSelectedId(eventKey(event)); setMobileDetail(true); }} style={{ animationDelay: `${Math.min(index, 10) * 25}ms` }}><span className="row-time"><span className="time-value">{formatDate(event.occurredAt, locale)}</span><span className={`type-pill type-${event.type}`}>{eventLabel(locale, event.type)}</span></span><span className="row-main"><strong title={event.message}>{event.message}</strong><small>{event.name && <span>{event.name} <b>·</b> </span>}{event.page}</small></span><span className="row-origin"><strong>{event.project}</strong><small>{event.environment}</small></span><span className="row-chevron"><Icon name="chevron" size={17}/></span></button>)}</div>}
+        {!loading && cursor && <button className="load-more" type="button" disabled={loadingMore} onClick={loadMore}>{t(locale, loadingMore ? 'Loading…' : 'Load older events')}<Icon name="chevron" size={16}/></button>}
+        {!loading && events.length > 0 && !cursor && <div className="list-end">{t(locale, 'You reached the last event')} <span>{t(locale, '— END OF LOG')}</span></div>}
       </section>
 
-      <section className={`detail-panel ${mobileDetail ? 'mobile-visible' : ''}`} aria-label="Event details"><div className="panel-heading detail-heading"><div><span className="section-index">02 / INSPECTOR</span><h2>Event details</h2></div>{selected && <button className="copy-button" type="button" onClick={copyEvent} title="Copy event JSON"><Icon name="copy" size={15}/>{copyState || 'Copy JSON'}</button>}</div><button className="mobile-back" type="button" onClick={() => setMobileDetail(false)}><Icon name="arrow" size={17}/> Back to list</button>
-        {!selectedId && <div className="detail-empty"><span className="detail-empty-icon">↗</span><strong>Select an event</strong><p>Select an event from the list to<br/>see its details here.</p></div>}
-        {selectedId && detailError && !selected && <div className="state-box state-error"><strong>Could not load event details</strong><span>{detailError}</span><button type="button" onClick={() => { setSelectedId(undefined); window.setTimeout(() => setSelectedId(selectedId), 0); }}>Retry</button></div>}
-        {selectedId && detailLoading && !selected && <div className="state-box"><span className="loading-mark"/>Loading event details</div>}
-        {selected && <div className="detail-content"><div className="detail-lead"><div className="detail-kind"><span className="error-square">!</span><span>{EVENT_LABELS[selected.type]}</span><span className="detail-seq">#{selected.sequence}</span></div><h3>{selected.message}</h3><div className="detail-name">{selected.name || selected.type}</div></div>
-          {detailError && <div className="detail-warning">Could not refresh event details: {detailError}</div>}
-          <div className="detail-block"><div className="block-title">Occurrence details <span>01</span></div><dl className="info-grid"><div><dt>Occurred at</dt><dd className="mono">{formatDate(selected.occurredAt, true)}</dd></div><div><dt>Received at</dt><dd className="mono">{selected.receivedAt ? formatDate(selected.receivedAt, true) : '—'}</dd></div><div><dt>Project</dt><dd>{selected.project}</dd></div><div><dt>Environment</dt><dd>{selected.environment}</dd></div><div><dt>Release</dt><dd className="mono">{selected.release || '—'}</dd></div><div><dt>Runtime</dt><dd>{selected.runtime}</dd></div><div><dt>Browser</dt><dd>{selected.browser || '—'}</dd></div><div><dt>SDK</dt><dd className="mono">{selected.sdkVersion}</dd></div></dl></div>
-          <div className="detail-block"><div className="block-title">Location and identifiers <span>02</span></div><dl className="info-grid"><div className="wide"><dt>Page</dt><dd className="breakable">{selected.page}</dd></div><div className="wide"><dt>Event ID</dt><dd className="mono breakable">{selected.eventId}</dd></div><div><dt>View ID</dt><dd className="mono breakable">{selected.viewId}</dd></div><div><dt>Elapsed time</dt><dd className="mono">{selected.elapsedMs.toLocaleString()} ms</dd></div></dl></div>
-          {selected.network && <div className="detail-block"><div className="block-title">Network <span>03</span></div><div className="network-summary"><span className="method-tag">{selected.network.method}</span><span className="network-url">{selected.network.url}</span></div><dl className="info-grid compact"><div><dt>HTTP status</dt><dd className="mono">{selected.network.status ?? 'No response'}</dd></div><div><dt>Duration</dt><dd className="mono">{selected.network.durationMs.toLocaleString()} ms</dd></div></dl></div>}
-          {selected.stack && <div className="detail-block"><div className="block-title">Stack trace</div><pre className="code-block">{selected.stack}</pre></div>}
-          {selected.componentStack && <div className="detail-block"><div className="block-title">Component stack</div><pre className="code-block">{selected.componentStack}</pre></div>}
-          {selected.context && Object.keys(selected.context).length > 0 && <div className="detail-block"><div className="block-title">Additional context</div><dl className="info-grid context-grid">{Object.entries(selected.context).map(([key, value]) => <div key={key}><dt>{key}</dt><dd className="breakable">{value === null ? 'null' : String(value)}</dd></div>)}</dl></div>}
+      <section className={`detail-panel ${mobileDetail ? 'mobile-visible' : ''}`} aria-label={t(locale, 'Event details')}><div className="panel-heading detail-heading"><div><span className="section-index">{t(locale, '02 / INSPECTOR')}</span><h2>{t(locale, 'Event details')}</h2></div>{selected && <button className="copy-button" type="button" onClick={copyEvent} title={t(locale, 'Copy event JSON')}><Icon name="copy" size={15}/>{t(locale, copyState || 'Copy JSON')}</button>}</div><button className="mobile-back" type="button" onClick={() => setMobileDetail(false)}><Icon name="arrow" size={17}/> {t(locale, 'Back to list')}</button>
+        {!selectedId && <div className="detail-empty"><span className="detail-empty-icon">↗</span><strong>{t(locale, 'Select an event')}</strong><p>{t(locale, 'Select an event from the list to')}<br/>{t(locale, 'see its details here.')}</p></div>}
+        {selectedId && detailError && !selected && <div className="state-box state-error"><strong>{t(locale, 'Could not load event details')}</strong><span>{localizeError(locale, detailError)}</span><button type="button" onClick={() => { setSelectedId(undefined); window.setTimeout(() => setSelectedId(selectedId), 0); }}>{t(locale, 'Retry')}</button></div>}
+        {selectedId && detailLoading && !selected && <div className="state-box"><span className="loading-mark"/>{t(locale, 'Loading event details')}</div>}
+        {selected && <div className="detail-content"><div className="detail-lead"><div className="detail-kind"><span className="error-square">!</span><span>{eventLabel(locale, selected.type)}</span><span className="detail-seq">#{selected.sequence}</span></div><h3>{selected.message}</h3><div className="detail-name">{selected.name || selected.type}</div></div>
+          {detailError && <div className="detail-warning">{t(locale, 'Could not refresh event details:')} {localizeError(locale, detailError)}</div>}
+          <div className="detail-block"><div className="block-title">{t(locale, 'Occurrence details')} <span>01</span></div><dl className="info-grid"><div><dt>{t(locale, 'Occurred at')}</dt><dd className="mono">{formatDate(selected.occurredAt, locale, true)}</dd></div><div><dt>{t(locale, 'Received at')}</dt><dd className="mono">{selected.receivedAt ? formatDate(selected.receivedAt, locale, true) : '—'}</dd></div><div><dt>{t(locale, 'Project')}</dt><dd>{selected.project}</dd></div><div><dt>{t(locale, 'Environment')}</dt><dd>{selected.environment}</dd></div><div><dt>{t(locale, 'Release')}</dt><dd className="mono">{selected.release || '—'}</dd></div><div><dt>{t(locale, 'Runtime')}</dt><dd>{selected.runtime}</dd></div><div><dt>{t(locale, 'Browser')}</dt><dd>{selected.browser || '—'}</dd></div><div><dt>SDK</dt><dd className="mono">{selected.sdkVersion}</dd></div></dl></div>
+          <div className="detail-block"><div className="block-title">{t(locale, 'Location and identifiers')} <span>02</span></div><dl className="info-grid"><div className="wide"><dt>{t(locale, 'Page')}</dt><dd className="breakable">{selected.page}</dd></div><div className="wide"><dt>{t(locale, 'Event ID')}</dt><dd className="mono breakable">{selected.eventId}</dd></div><div><dt>{t(locale, 'View ID')}</dt><dd className="mono breakable">{selected.viewId}</dd></div><div><dt>{t(locale, 'Elapsed time')}</dt><dd className="mono">{numberText(locale, selected.elapsedMs)} ms</dd></div></dl></div>
+          {selected.network && <div className="detail-block"><div className="block-title">{t(locale, 'Network')} <span>03</span></div><div className="network-summary"><span className="method-tag">{selected.network.method}</span><span className="network-url">{selected.network.url}</span></div><dl className="info-grid compact"><div><dt>{t(locale, 'HTTP status')}</dt><dd className="mono">{selected.network.status ?? t(locale, 'No response')}</dd></div><div><dt>{t(locale, 'Duration')}</dt><dd className="mono">{numberText(locale, selected.network.durationMs)} ms</dd></div></dl></div>}
+          {selected.stack && <div className="detail-block"><div className="block-title">{t(locale, 'Stack trace')}</div><pre className="code-block">{selected.stack}</pre></div>}
+          {selected.componentStack && <div className="detail-block"><div className="block-title">{t(locale, 'Component stack')}</div><pre className="code-block">{selected.componentStack}</pre></div>}
+          {selected.context && Object.keys(selected.context).length > 0 && <div className="detail-block"><div className="block-title">{t(locale, 'Additional context')}</div><dl className="info-grid context-grid">{Object.entries(selected.context).map(([key, value]) => <div key={key}><dt>{key}</dt><dd className="breakable">{value === null ? 'null' : String(value)}</dd></div>)}</dl></div>}
         </div>}
       </section></div>
       </>}
-      <footer className="footer"><span>BROWSER / LOG</span><span>Times are shown in your browser’s local time.</span></footer>
+      <footer className="footer"><span>{t(locale, 'BROWSER / LOG')}</span><span>{t(locale, 'Times are shown in your browser’s local time.')}</span></footer>
     </main>
   </div>;
 }

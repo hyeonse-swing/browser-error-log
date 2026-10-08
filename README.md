@@ -1,8 +1,10 @@
 # Browser Error Log
 
+English | [한국어](README.ko.md)
+
 Capture browser failures on infrastructure you control. This project includes a framework-independent browser SDK, a React Error Boundary, a small self-hosted collector, and a viewer. A Node.js 24 process can persist events in SQLite and serve the viewer. You choose where records live, how long they remain, and who can read them. The public event types and transport hook also support a backend you own.
 
-The browser SDK, React adapter, and protocol are available on npm at `0.1.0` under the MIT license. The collector and viewer run on your own infrastructure; see the [release guide](docs/releasing.md) for package details.
+The browser SDK, React adapter, and protocol are available on npm at the verified `0.1.0` MIT release. The `0.1.1` i18n update is being prepared and is not yet published. The collector and viewer run on your own infrastructure; see the [release guide](docs/releasing.md) for package details.
 
 ## Start with persistent storage
 
@@ -15,7 +17,7 @@ npm ci
 npm run micro
 ```
 
-Open the [viewer](http://127.0.0.1:4319/) and [connection example](http://127.0.0.1:4319/install.html). The collector accepts `POST http://127.0.0.1:4319/api/events` and stores records in `.data/micro-server/events.sqlite`. Send an example error, then refresh the viewer and select `my-web`. The default listener is local to your machine. After the first build, `npm run start:micro` restarts it using the same data directory.
+Open the [viewer](http://127.0.0.1:4319/) and [connection example](http://127.0.0.1:4319/install.html). Their language selector defaults to English and remembers your choice when browser storage is available. The collector accepts `POST http://127.0.0.1:4319/api/events` and stores records in `.data/micro-server/events.sqlite`. Send an example error, then refresh the viewer and select `my-web`. The default listener is local to your machine. After the first build, `npm run start:micro` restarts it using the same data directory.
 
 SQLite defaults to seven days from server receipt, 10,000 events, and a 64 MiB limit for the main database file. Journal files and backups need additional space. [Self-hosting options](docs/micro-server.md) covers JSONL, external HTTPS access, and limits.
 
@@ -72,7 +74,7 @@ Infrastructure is not included. Hosting, servers, databases, storage, bandwidth,
 
 ## Other paths
 
-`npm run dev` starts a memory-only local demo at `http://127.0.0.1:4317/`; sample records are synthetic and collected events disappear on restart. `npm run collector` starts a separate memory-only collector on port 4318. Use `npm run micro` for file-backed records. Read the [v1 integration contract](docs/integration.md), [backend contract](docs/server-request.md), and [roadmap](docs/expansion-roadmap.md) for more detail.
+`npm run dev` starts a memory-only local demo at `http://127.0.0.1:4317/`; sample records are synthetic and collected events disappear on restart. The viewer, demo, and install example have an English-default language selector that remembers your choice when browser storage is available. `npm run collector` starts a separate memory-only collector on port 4318. Use `npm run micro` for file-backed records. Read the [v1 integration contract](docs/integration.md), [backend contract](docs/server-request.md), and [roadmap](docs/expansion-roadmap.md) for more detail.
 
 | Path | Purpose |
 | --- | --- |

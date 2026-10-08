@@ -1,5 +1,7 @@
 # Self-host the micro server
 
+English | [한국어](ko/micro-server.md)
+
 The micro server is a single-process Node.js 24 example that receives SDK events and writes to a disk you control. SQLite mode serves the included viewer and query API. JSONL mode keeps bounded rotating logs for later offline analysis. The server uses Node built-ins at runtime; no managed database or queue is bundled.
 
 ## Storage modes

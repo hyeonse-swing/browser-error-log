@@ -6,6 +6,7 @@ import { App } from './App';
 import { Dashboard } from './Dashboard';
 import { eventDataSource } from './data-source';
 import { loadHistory, type HistoryResult } from './history';
+import { setLocale } from '../../i18n/locale';
 
 vi.mock('./data-source', () => ({
   eventDataSource: { listEvents: vi.fn(), getEvent: vi.fn() },
@@ -36,6 +37,8 @@ describe('dashboard request lifecycle', () => {
   let root: Root;
 
   beforeEach(() => {
+    setLocale('en');
+    window.localStorage.clear();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     container = document.createElement('div');
     document.body.append(container);
@@ -49,6 +52,7 @@ describe('dashboard request lifecycle', () => {
     await act(async () => { root.unmount(); });
     container.remove();
     vi.useRealTimers();
+    setLocale('en');
   });
 
   it('keeps an invalid custom-range error after a previous request resolves late', async () => {
@@ -99,5 +103,54 @@ describe('dashboard request lifecycle', () => {
       from: '2026-10-01T02:00:00.000Z', limit: 30,
     });
     expect(container.querySelector('.event-list')).not.toBeNull();
+  });
+
+  it('switches visible dashboard labels and counts without rerunning the query', async () => {
+    vi.mocked(loadHistory).mockResolvedValue({ events: [event()], truncated: false, duplicates: 0 });
+    vi.mocked(eventDataSource.listEvents).mockResolvedValue({ events: [event()] });
+    vi.mocked(eventDataSource.getEvent).mockResolvedValue(event());
+    await act(async () => { root.render(<App/>); });
+    expect(container.querySelector('.dash-summary')?.textContent).toContain('1 event');
+    expect(container.querySelector('h1')?.textContent).toBe('Error Dashboard');
+    expect(container.querySelector('.chart-top-errors')?.textContent).toContain('late old result');
+    expect(loadHistory).toHaveBeenCalledTimes(1);
+
+    const project = container.querySelector<HTMLInputElement>('.dash-filters input[list="dash-projects"]')!;
+    await act(async () => { changeValue(project, 'web'); });
+
+    await act(async () => { changeValue(container.querySelector<HTMLSelectElement>('.language-switcher select')!, 'ko'); });
+    expect(container.querySelector('h1')?.textContent).toBe('오류 대시보드');
+    expect(container.querySelector('.dash-summary')?.textContent).toContain('1건');
+    expect(document.documentElement.lang).toBe('ko');
+    expect(document.title).toBe('브라우저 오류 기록');
+    expect(project.value).toBe('web');
+    expect(container.querySelector('.chart-top-errors')?.textContent).toContain('late old result');
+    expect(loadHistory).toHaveBeenCalledTimes(1);
+    expect(window.localStorage.getItem('browser-error-log.language')).toBe('ko');
+
+    await act(async () => { container.querySelectorAll<HTMLButtonElement>('.side-navigation button')[1].click(); });
+    expect(container.querySelector('.event-list')).not.toBeNull();
+    expect(container.querySelector('.event-list')?.textContent).toContain('이벤트 목록');
+  });
+
+  it('translates an already-visible import error when the language changes', async () => {
+    vi.mocked(loadHistory).mockRejectedValue(new Error('Import files cannot exceed 10 MiB.'));
+    await act(async () => { root.render(<App/>); });
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Import files cannot exceed 10 MiB.');
+    await act(async () => { changeValue(container.querySelector<HTMLSelectElement>('.language-switcher select')!, 'ko'); });
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('가져오기 파일은 10 MiB를 넘을 수 없습니다.');
+    expect(loadHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it('translates an already-visible timeline request error without refetching', async () => {
+    vi.mocked(loadHistory).mockResolvedValue({ events: [], truncated: false, duplicates: 0 });
+    vi.mocked(eventDataSource.listEvents).mockRejectedValue(new Error('Request failed. (HTTP 503)'));
+    await act(async () => { root.render(<App/>); });
+    await act(async () => { container.querySelectorAll<HTMLButtonElement>('.side-navigation button')[1].click(); });
+    expect(container.querySelector('.state-error')?.textContent).toContain('Request failed. (HTTP 503)');
+    expect(eventDataSource.listEvents).toHaveBeenCalledTimes(1);
+    await act(async () => { changeValue(container.querySelector<HTMLSelectElement>('.language-switcher select')!, 'ko'); });
+    expect(container.querySelector('.state-error')?.textContent).toContain('요청에 실패했습니다. (HTTP 503)');
+    expect(eventDataSource.listEvents).toHaveBeenCalledTimes(1);
   });
 });

@@ -234,6 +234,22 @@ a {
   line-height: var(--leading-caption);
 }
 
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-8);
+  white-space: nowrap;
+}
+
+.language-switcher select {
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--color-ash);
+  border-radius: 4px;
+  padding: 4px;
+  font: inherit;
+}
+
 .source-dot.is-local {
   background: var(--color-success);
 }
@@ -1123,6 +1139,9 @@ a {
 }
 
 @media(max-width:650px) {
+  .language-switcher span {
+    display: none;
+  }
   .workspace {
     padding: 0 var(--spacing-12);
   }

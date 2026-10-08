@@ -58,6 +58,7 @@ describe('micro-server HTTP boundary', () => {
     await writeFile(join(folder, 'install.html'), '<!doctype html><title>install</title>');
     await writeFile(join(folder, 'demo.html'), '<!doctype html><title>demo</title>');
     await writeFile(join(folder, 'sdk.js'), 'export const sdk = true;');
+    await writeFile(join(folder, 'install.js'), 'export const languages = ["en", "ko"];');
   });
 
   afterEach(async () => {
@@ -194,6 +195,8 @@ describe('micro-server HTTP boundary', () => {
     expect(home.status).toBe(200);
     expect(await home.text()).toContain('JSONL log-only mode');
     expect((await fetch(`${base}/index.html`, { headers: auth })).status).toBe(404);
-    for (const asset of ['install.html', 'demo.html', 'sdk.js']) expect((await fetch(`${base}/${asset}`, { headers: auth })).status).toBe(200);
+    for (const asset of ['install.html', 'demo.html', 'sdk.js', 'install.js']) expect((await fetch(`${base}/${asset}`, { headers: auth })).status).toBe(200);
+    expect((await fetch(`${base}/install.js`)).status).toBe(401);
+    expect((await fetch(`${base}/install.js`, { headers: auth })).headers.get('content-type')).toContain('javascript');
   });
 });

@@ -83,6 +83,13 @@ try {
   await stop();
 
   await start('jsonl');
+  const installPage = await fetch(`${address}/install.html`, { headers: auth });
+  assert.equal(installPage.status, 200);
+  assert.match(await installPage.text(), /src="\/install.js"/);
+  const installScript = await fetch(`${address}/install.js`, { headers: auth });
+  assert.equal(installScript.status, 200);
+  assert.match(installScript.headers.get('content-type'), /javascript/);
+  assert.match(await installScript.text(), /browser-error-log.language/);
   await send();
   await send();
   assert.equal((await fetch(`${address}/api/events`, { headers: auth })).status, 501);

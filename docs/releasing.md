@@ -1,5 +1,7 @@
 # npm release
 
+English | [한국어](ko/releasing.md)
+
 The [GitHub repository](https://github.com/hyeonse-swing/browser-error-log) holds the MIT-licensed source. Version `0.1.0` of `browser-error-log-protocol`, `browser-error-log`, and `browser-error-log-react` is published on npm. The workspace root and apps remain private; only the three SDK packages are published. A GitHub release or tag has not been created as part of this npm publication.
 
 ## Verified `0.1.0` packages
@@ -12,7 +14,13 @@ Published on October 8, 2026:
 | [browser-error-log-react](https://www.npmjs.com/package/browser-error-log-react/v/0.1.0) | Optional React Error Boundary |
 | [browser-error-log-protocol](https://www.npmjs.com/package/browser-error-log-protocol/v/0.1.0) | Event and query contracts |
 
-All three registry artifacts match the reviewed tarballs' SHA-512 integrity values. Fresh installations passed TypeScript, ESM, CommonJS, and SSR smoke checks, including a browser-only install without React. Local checks passed 74 tests, package checks, and the built micro server checks. Use the following commands to reproduce local validation:
+All three `0.1.0` registry artifacts match the reviewed tarballs' SHA-512 integrity values. Fresh installations passed TypeScript, ESM, CommonJS, and SSR smoke checks, including a browser-only install without React. The `0.1.0` local release checks passed 74 tests, package checks, and the built micro server checks.
+
+## `0.1.1` i18n release candidate
+
+The pending `0.1.1` update adds an English-default language selector to the viewer, demo, and install example. It remembers the selected language when browser storage is available. English and Korean documentation are linked in both directions. The SDK runtime API and v1 event schema are unchanged; `sdkVersion` identifies the new package release. Local i18n checks passed 81 tests. This is a local result, **not** evidence that `0.1.1` is available on npm.
+
+Use these commands to reproduce local validation before publication:
 
 ```sh
 npm ci
@@ -21,11 +29,11 @@ npm run check:package
 npm run check:micro
 ```
 
-The published install paths are `npm install browser-error-log` and, for React, `npm install browser-error-log browser-error-log-react`. The protocol package resolves transitively unless a consumer imports it directly. For local development, `check:package` still builds `browser-error-log-protocol-0.1.0.tgz`, `browser-error-log-0.1.0.tgz`, and `browser-error-log-react-0.1.0.tgz` under `output/packages/`; see the [SDK guide](personal-sdk.md).
+The currently published install paths are `npm install browser-error-log` and, for React, `npm install browser-error-log browser-error-log-react`; until the new release is verified, npm may resolve `0.1.0`. The protocol package resolves transitively unless a consumer imports it directly. In this `0.1.1` source checkout, `check:package` builds `browser-error-log-protocol-0.1.1.tgz`, `browser-error-log-0.1.1.tgz`, and `browser-error-log-react-0.1.1.tgz` under `output/packages/`; see the [SDK guide](personal-sdk.md). Do not use local tarballs as proof of registry publication.
 
 ## Future releases
 
-Npm versions are immutable. Do not attempt to republish `0.1.0`; choose a new version for any subsequent release.
+Npm versions are immutable. Do not attempt to republish `0.1.0` or any version after it is published; choose a new version for each subsequent release.
 
 1. Confirm the MIT license still covers the included source and assets. Keep `company/`, local data, secrets, logs, and verification artifacts out of package tarballs.
 2. Update and inspect package metadata, README content, dependency versions, and tarball files. Keep the workspace root and apps private.

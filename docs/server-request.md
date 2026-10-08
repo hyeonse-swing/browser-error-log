@@ -1,5 +1,7 @@
 # Self-owned backend contract
 
+English | [한국어](ko/server-request.md)
+
 The included [micro server](micro-server.md) is the shortest path to persistent local records. Use this document when you need an independent backend, a different database, or existing service authorization. It describes implementation responsibilities against the current [v1 SDK and viewer contract](integration.md); it is not a claim that a production backend has been deployed.
 
 ## Required for the current viewer

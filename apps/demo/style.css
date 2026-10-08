@@ -13,9 +13,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-button, a { font: inherit; }
+button, a, select { font: inherit; }
 button, a.primary { cursor: pointer; }
-button:focus-visible, a:focus-visible {
+button:focus-visible, a:focus-visible, select:focus-visible {
   outline: 2px solid var(--color-electric-blue);
   outline-offset: 2px;
 }
@@ -42,6 +42,9 @@ header {
   font-weight: var(--font-weight-semibold);
 }
 .brand:hover { color: var(--color-electric-blue); }
+.demo-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--spacing-12); }
+.language-switcher { display: inline-flex; align-items: center; gap: var(--spacing-8); font-size: var(--text-caption); }
+.language-switcher select { padding: var(--spacing-8); color: inherit; background: var(--surface-card); border: 1px solid var(--color-ash); border-radius: var(--radius-buttons); }
 
 .badge, .eyebrow, .number {
   font-family: var(--font-geist-mono);
@@ -222,6 +225,7 @@ footer small {
 button:disabled { opacity: 0.45; cursor: default; }
 
 @media (max-width: 650px) {
+  header { flex-wrap: wrap; }
   main { padding: var(--spacing-24) var(--spacing-16); }
   .intro { padding-top: var(--spacing-28); }
   .intro h1 {

@@ -4,6 +4,9 @@ import { AnalyticsCharts } from './Charts';
 import { buildAnalytics } from './analytics';
 import { eventDataSource, viewerConfig } from './data-source';
 import { filterHistory, loadHistory, MAX_HISTORY_EVENTS, MAX_IMPORT_BYTES, parseHistoryJson, serializeHistory, type HistoryResult } from './history';
+import { useLocale } from '../../i18n/react';
+import type { Locale } from '../../i18n/locale';
+import { countText, eventLabel, localizeError, numberText, t } from './i18n';
 import './dashboard.css';
 
 type Period = '24h' | '7d' | '30d' | 'all' | 'custom';
@@ -37,10 +40,11 @@ function toFilter(controls: Controls, source: Source): EventFilter {
   return { project: controls.project.trim() || undefined, environment: controls.environment.trim() || undefined, type: controls.type || undefined, query: controls.query.trim() || undefined, from, to };
 }
 
-const dateLabel = (value: string | number) => new Date(value).toLocaleString('en-US', { hour12: false });
+const dateLabel = (value: string | number, locale: Locale) => new Date(value).toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US', { hour12: false });
 const messageOf = (error: unknown) => error instanceof Error ? error.message : 'Could not load data.';
 
 function EventDialog({ event, onClose }: { event: ErrorEventRecord; onClose: () => void }) {
+  const locale = useLocale();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = ref.current!;
@@ -48,23 +52,24 @@ function EventDialog({ event, onClose }: { event: ErrorEventRecord; onClose: () 
     return () => dialog.close();
   }, []);
   return <dialog ref={ref} className="dash-dialog" aria-labelledby="historical-event-title" onCancel={onClose}>
-    <header><div><span className="section-index">EVENT DETAIL</span><h2 id="historical-event-title">Representative error event</h2></div><button type="button" onClick={onClose} autoFocus aria-label="Close details">Close ×</button></header>
+    <header><div><span className="section-index">{t(locale, 'EVENT DETAIL')}</span><h2 id="historical-event-title">{t(locale, 'Representative error event')}</h2></div><button type="button" onClick={onClose} autoFocus aria-label={t(locale, 'Close details')}>{t(locale, 'Close ×')}</button></header>
     <div className="dash-dialog-body">
-      <span className={`type-pill type-${event.type}`}>{EVENT_LABELS[event.type]}</span><h3>{event.message}</h3>
+      <span className={`type-pill type-${event.type}`}>{eventLabel(locale, event.type)}</span><h3>{event.message}</h3>
       <dl className="dash-detail-grid">
-        <div><dt>Occurred at</dt><dd>{dateLabel(event.occurredAt)}</dd></div><div><dt>Received at</dt><dd>{event.receivedAt ? dateLabel(event.receivedAt) : 'No record'}</dd></div>
-        <div><dt>Project / environment</dt><dd>{event.project} / {event.environment || 'Unspecified'}</dd></div><div><dt>Release / Runtime</dt><dd>{event.release || 'Unspecified'} / {event.runtime}</dd></div>
-        <div><dt>Page</dt><dd>{event.page}</dd></div><div><dt>Event ID</dt><dd>{event.eventId}</dd></div>
+        <div><dt>{t(locale, 'Occurred at')}</dt><dd>{dateLabel(event.occurredAt, locale)}</dd></div><div><dt>{t(locale, 'Received at')}</dt><dd>{event.receivedAt ? dateLabel(event.receivedAt, locale) : t(locale, 'No record')}</dd></div>
+        <div><dt>{t(locale, 'Project / environment')}</dt><dd>{event.project} / {event.environment || t(locale, 'Unspecified')}</dd></div><div><dt>{t(locale, 'Release / Runtime')}</dt><dd>{event.release || t(locale, 'Unspecified')} / {event.runtime}</dd></div>
+        <div><dt>{t(locale, 'Page')}</dt><dd>{event.page}</dd></div><div><dt>{t(locale, 'Event ID')}</dt><dd>{event.eventId}</dd></div>
       </dl>
-      {event.network && <section><h4>Network</h4><p>{event.network.method} {event.network.url}</p><p>Response {event.network.status || 'None'} · {event.network.durationMs.toLocaleString()} ms</p></section>}
-      {event.stack && <section><h4>Stack trace</h4><pre className="code-block">{event.stack}</pre></section>}
-      {event.componentStack && <section><h4>Component stack</h4><pre className="code-block">{event.componentStack}</pre></section>}
-      {event.context && <section><h4>Additional context</h4><pre className="code-block">{JSON.stringify(event.context, null, 2)}</pre></section>}
+      {event.network && <section><h4>{t(locale, 'Network')}</h4><p>{event.network.method} {event.network.url}</p><p>{t(locale, 'Response')} {event.network.status || t(locale, 'None')} · {numberText(locale, event.network.durationMs)} ms</p></section>}
+      {event.stack && <section><h4>{t(locale, 'Stack trace')}</h4><pre className="code-block">{event.stack}</pre></section>}
+      {event.componentStack && <section><h4>{t(locale, 'Component stack')}</h4><pre className="code-block">{event.componentStack}</pre></section>}
+      {event.context && <section><h4>{t(locale, 'Additional context')}</h4><pre className="code-block">{JSON.stringify(event.context, null, 2)}</pre></section>}
     </div>
   </dialog>;
 }
 
 export function Dashboard() {
+  const locale = useLocale();
   const [controls, setControls] = useState<Controls>(initialControls);
   const [source, setSource] = useState<Source>({ kind: 'api' });
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -163,35 +168,35 @@ export function Dashboard() {
   function submit(event: FormEvent) { event.preventDefault(); void runQuery(controls, source); }
   const analytics = useMemo(() => loaded ? buildAnalytics(loaded.events, loaded.filter) : null, [loaded]);
   return <div className="dashboard">
-    <section className="dash-heading"><div><span className="eyebrow">ERROR MONITORING / OVERVIEW</span><h1>Error Dashboard</h1><p>See when, where, and which errors increased.</p></div><div className="dash-file-actions">
-      <input ref={fileInput} type="file" accept=".json,application/json" className="dash-file-input" aria-label="Historical data JSON file" onChange={event => { const file = event.target.files?.[0]; if (file) void importFile(file); event.target.value = ''; }}/>
-      <button className="dash-button" type="button" onClick={() => fileInput.current?.click()}>Import JSON</button><button className="dash-button" type="button" disabled={!loaded?.events.length || loading} onClick={exportJson}>Save query data ↓</button>
+    <section className="dash-heading"><div><span className="eyebrow">{t(locale, 'ERROR MONITORING / OVERVIEW')}</span><h1>{t(locale, 'Error Dashboard')}</h1><p>{t(locale, 'See when, where, and which errors increased.')}</p></div><div className="dash-file-actions">
+      <input ref={fileInput} type="file" accept=".json,application/json" className="dash-file-input" aria-label={t(locale, 'Historical data JSON file')} onChange={event => { const file = event.target.files?.[0]; if (file) void importFile(file); event.target.value = ''; }}/>
+      <button className="dash-button" type="button" onClick={() => fileInput.current?.click()}>{t(locale, 'Import JSON')}</button><button className="dash-button" type="button" disabled={!loaded?.events.length || loading} onClick={exportJson}>{t(locale, 'Save query data ↓')}</button>
     </div></section>
 
-    <div className="dash-source"><span className={`dash-source-badge ${source.kind === 'file' ? 'file' : ''}`}>{source.kind === 'file' ? 'JSON FILE' : 'API SOURCE'}</span><span>{source.kind === 'file' ? source.name : localMode ? 'Local test data · cleared on restart' : 'Connected service data'}</span>{source.kind === 'file' && <button type="button" onClick={switchToApi}>Return to API</button>}</div>
+    <div className="dash-source"><span className={`dash-source-badge ${source.kind === 'file' ? 'file' : ''}`}>{t(locale, source.kind === 'file' ? 'JSON FILE' : 'API SOURCE')}</span><span>{source.kind === 'file' ? source.name : t(locale, localMode ? 'Local test data · cleared on restart' : 'Connected service data')}</span>{source.kind === 'file' && <button type="button" onClick={switchToApi}>{t(locale, 'Return to API')}</button>}</div>
     <form className="dash-filters" onSubmit={submit}>
       <div className="dash-filter-row">
-        <label>Project<input list="dash-projects" placeholder="All projects" value={controls.project} onChange={event => update('project', event.target.value)}/><datalist id="dash-projects">{knownProjects.map(value => <option key={value} value={value}/>)}</datalist></label>
-        <label>Environment<input list="dash-environments" placeholder="All environments" value={controls.environment} onChange={event => update('environment', event.target.value)}/><datalist id="dash-environments">{knownEnvironments.map(value => <option key={value} value={value}/>)}</datalist></label>
-        <label>Error types<select value={controls.type} onChange={event => update('type', event.target.value as Controls['type'])}><option value="">All types</option>{Object.entries(EVENT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-        <label>Query period<select value={controls.period} onChange={event => update('period', event.target.value as Period)}><option value="24h">Last 24 hours</option><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="all">All time</option><option value="custom">Custom range</option></select></label>
-        <label className="dash-search">Search<input type="search" placeholder="Message, page, release" value={controls.query} onChange={event => update('query', event.target.value)}/></label>
+        <label>{t(locale, 'Project')}<input list="dash-projects" placeholder={t(locale, 'All projects')} value={controls.project} onChange={event => update('project', event.target.value)}/><datalist id="dash-projects">{knownProjects.map(value => <option key={value} value={value}/>)}</datalist></label>
+        <label>{t(locale, 'Environment')}<input list="dash-environments" placeholder={t(locale, 'All environments')} value={controls.environment} onChange={event => update('environment', event.target.value)}/><datalist id="dash-environments">{knownEnvironments.map(value => <option key={value} value={value}/>)}</datalist></label>
+        <label>{t(locale, 'Error types')}<select value={controls.type} onChange={event => update('type', event.target.value as Controls['type'])}><option value="">{t(locale, 'All types')}</option>{Object.entries(EVENT_LABELS).map(([value, label]) => <option key={value} value={value}>{eventLabel(locale, value as EventType)}</option>)}</select></label>
+        <label>{t(locale, 'Query period')}<select value={controls.period} onChange={event => update('period', event.target.value as Period)}><option value="24h">{t(locale, 'Last 24 hours')}</option><option value="7d">{t(locale, 'Last 7 days')}</option><option value="30d">{t(locale, 'Last 30 days')}</option><option value="all">{t(locale, 'All time')}</option><option value="custom">{t(locale, 'Custom range')}</option></select></label>
+        <label className="dash-search">{t(locale, 'Search')}<input type="search" placeholder={t(locale, 'Message, page, release')} value={controls.query} onChange={event => update('query', event.target.value)}/></label>
       </div>
-      {controls.period === 'custom' && <div className="dash-date-row"><label>Start time<input type="datetime-local" required value={controls.from} onChange={event => update('from', event.target.value)}/></label><span>—</span><label>End time<input type="datetime-local" required value={controls.to} onChange={event => update('to', event.target.value)}/></label><small>{timezone}</small></div>}
-      <div className="dash-query-row"><span>{dirty ? 'Filters changed. Run the query to apply them.' : source.kind === 'file' ? 'This file is analyzed in your browser and is not sent to the server.' : 'Load stored events for the selected period.'}</span><button className="dash-button primary" type="submit">{loading ? 'Run again' : 'Query'} ↗</button></div>
+      {controls.period === 'custom' && <div className="dash-date-row"><label>{t(locale, 'Start time')}<input type="datetime-local" required value={controls.from} onChange={event => update('from', event.target.value)}/></label><span>—</span><label>{t(locale, 'End time')}<input type="datetime-local" required value={controls.to} onChange={event => update('to', event.target.value)}/></label><small>{timezone}</small></div>}
+      <div className="dash-query-row"><span>{t(locale, dirty ? 'Filters changed. Run the query to apply them.' : source.kind === 'file' ? 'This file is analyzed in your browser and is not sent to the server.' : 'Load stored events for the selected period.')}</span><button className="dash-button primary" type="submit">{t(locale, loading ? 'Run again' : 'Query')} ↗</button></div>
     </form>
 
-    {error && <div className="dash-error" role="alert"><strong>Query status</strong><span>{error}</span><button className="dash-button" type="button" onClick={() => void runQuery(controls, source)}>Retry</button></div>}
-    {loading && <div className="dash-loading" role="status"><span className="loading-mark"/><strong>Loading events</strong><span>{progress.toLocaleString()} {progress === 1 ? 'event' : 'events'} checked</span><button type="button" onClick={() => { generation.current++; controller.current?.abort(); setLoading(false); setError('Loading was canceled. Run the query to start again.'); }}>Cancel</button></div>}
+    {error && <div className="dash-error" role="alert"><strong>{t(locale, 'Query status')}</strong><span>{localizeError(locale, error)}</span><button className="dash-button" type="button" onClick={() => void runQuery(controls, source)}>{t(locale, 'Retry')}</button></div>}
+    {loading && <div className="dash-loading" role="status"><span className="loading-mark"/><strong>{t(locale, 'Loading events')}</strong><span>{locale === 'ko' ? `${countText(locale, progress, 'event', 'events')} 확인` : `${countText(locale, progress, 'event', 'events')} checked`}</span><button type="button" onClick={() => { generation.current++; controller.current?.abort(); setLoading(false); setError('Loading was canceled. Run the query to start again.'); }}>{t(locale, 'Cancel')}</button></div>}
     {loaded && analytics && <>
-      <div className="dash-summary"><span><strong>{loaded.events.length.toLocaleString('en-US')} {loaded.events.length === 1 ? 'event' : 'events'}</strong> · {loaded.sourceLabel} {loaded.duplicates > 0 && `· ${loaded.duplicates.toLocaleString('en-US')} ${loaded.duplicates === 1 ? 'duplicate' : 'duplicates'} excluded`}</span><span>Queried at {dateLabel(loaded.loadedAt)}</span></div>
-      <div className="dash-range">{loaded.events.length > 0 || loaded.filter.from ? `${dateLabel(analytics.from)} — ${dateLabel(analytics.to)}` : 'No occurrence time to show'} · {timezone}</div>
-      {loaded.truncated && <div className="dash-error" role="status"><strong>Only some events were included</strong><span>{loaded.sourceKind === 'file' ? 'This export contains only some events.' : `The browser query limit (${MAX_HISTORY_EVENTS.toLocaleString()} events or 100 pages) was reached.`} The charts use the events retrieved. Narrow the time range or project and run the query again.</span></div>}
-      {loaded.events.length === 0 && <div className="dash-empty"><strong>No errors match the selected filters</strong><p>Change the time range or filters, or import historical JSON.</p></div>}
+      <div className="dash-summary"><span><strong>{countText(locale, loaded.events.length, 'event', 'events')}</strong> · {t(locale, loaded.sourceLabel)} {loaded.duplicates > 0 && (locale === 'ko' ? `· 중복 ${countText(locale, loaded.duplicates, 'event', 'events')} 제외` : `· ${countText(locale, loaded.duplicates, 'duplicate', 'duplicates')} excluded`)}</span><span>{t(locale, 'Queried at')} {dateLabel(loaded.loadedAt, locale)}</span></div>
+      <div className="dash-range">{loaded.events.length > 0 || loaded.filter.from ? `${dateLabel(analytics.from, locale)} — ${dateLabel(analytics.to, locale)}` : t(locale, 'No occurrence time to show')} · {timezone}</div>
+      {loaded.truncated && <div className="dash-error" role="status"><strong>{t(locale, 'Only some events were included')}</strong><span>{loaded.sourceKind === 'file' ? t(locale, 'This export contains only some events.') : locale === 'ko' ? `브라우저 조회 한도(${numberText(locale, MAX_HISTORY_EVENTS)}건 또는 100페이지)에 도달했습니다.` : `The browser query limit (${numberText(locale, MAX_HISTORY_EVENTS)} events or 100 pages) was reached.`} {t(locale, 'The charts use the events retrieved. Narrow the time range or project and run the query again.')}</span></div>}
+      {loaded.events.length === 0 && <div className="dash-empty"><strong>{t(locale, 'No errors match the selected filters')}</strong><p>{t(locale, 'Change the time range or filters, or import historical JSON.')}</p></div>}
       <AnalyticsCharts data={analytics} onSelectError={setSelected}/>
-      <p className="dash-footnote">These counts exclude duplicate errors. Total requests and visitors are not collected, so they do not represent error rates or affected users.</p>
+      <p className="dash-footnote">{t(locale, 'These counts exclude duplicate errors. Total requests and visitors are not collected, so they do not represent error rates or affected users.')}</p>
     </>}
-    <details className="dash-help"><summary>How to load historical data</summary><p>The API queries by occurrence time. A connected server must provide persistent storage and history. The development demo keeps up to 2,000 events in memory and clears them on restart.</p><p>Import a file saved from this page, a v1 event array, or a JSON object in the <code>{'{ "schemaVersion": 1, "events": [...] }'}</code> format. The limit is 10 MiB and 10,000 events. Refreshing clears file analysis; import the file again to restore it.</p><a href="/history-example.json" download>Download sample history JSON ↓</a></details>
+    <details className="dash-help"><summary>{t(locale, 'How to load historical data')}</summary><p>{t(locale, 'The API queries by occurrence time. A connected server must provide persistent storage and history. The development demo keeps up to 2,000 events in memory and clears them on restart.')}</p><p>{t(locale, 'Import a file saved from this page, a v1 event array, or a JSON object in the')} <code>{'{ "schemaVersion": 1, "events": [...] }'}</code> {t(locale, 'format. The limit is 10 MiB and 10,000 events. Refreshing clears file analysis; import the file again to restore it.')}</p><a href="/history-example.json" download>{t(locale, 'Download sample history JSON ↓')}</a></details>
     {selected && <EventDialog event={selected} onClose={() => setSelected(null)}/>}
   </div>;
 }

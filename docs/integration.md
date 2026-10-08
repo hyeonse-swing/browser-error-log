@@ -1,5 +1,7 @@
 # v1 integration contract
 
+English | [한국어](ko/integration.md)
+
 This is the current browser SDK and viewer contract. The included [micro server](micro-server.md) implements it with SQLite. Operators can also build a backend using the types in `packages/protocol`.
 
 ## Ingest events
@@ -15,7 +17,7 @@ The default SDK sends `POST application/json` to its configured `endpoint` with 
     "project": "my-web",
     "environment": "staging",
     "release": "build-id",
-    "sdkVersion": "0.1.0",
+    "sdkVersion": "0.1.1",
     "occurredAt": "2026-10-02T07:00:00.000Z",
     "viewId": "document-instance-id",
     "sequence": 1,
