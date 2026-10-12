@@ -63,6 +63,12 @@ npm run check:micro
 
 워크플로에서 릴리스 검사 7개, 애플리케이션 테스트 96개, 타입 검사, 빌드, 패키지·마이크로 서버 검사가 통과했습니다. 레지스트리에서 새로 설치한 TypeScript·ESM·CommonJS·SSR 검사와 React 없는 브라우저 전용 설치도 통과했습니다.
 
+## 검증된 `0.1.4` 자동 릴리스
+
+2026년 10월 12일 [후속 릴리스](https://github.com/hyeonse-swing/browser-error-log/actions/runs/38191998049)에서 세 패키지 모두 `0.1.4`로 게시됐습니다. 릴리스 검사 9개, 애플리케이션 테스트 96개, 타입 검사, 빌드, 패키지·마이크로 서버 검사와 레지스트리 새 설치 검사가 통과했습니다. 검증 당시 세 패키지 모두 npm의 `latest` 버전이었고 provenance 증명이 포함되어 있었으며, 다운로드한 tarball의 SHA-512가 `v0.1.4`에 기록한 값과 일치했습니다.
+
+이 릴리스부터 게시 성공 후 준비 단계를 명시적으로 실행하며, 다음 릴리스를 허용하기 전에 GitHub API로 해당 게시 작업의 성공을 확인합니다. [자동 후속 검사](https://github.com/hyeonse-swing/browser-error-log/actions/runs/38192593921)도 성공했고, 추가 SDK 변경이 없어 버전을 올리지 않고 종료했습니다.
+
 ## main 푸시 후 자동 릴리스
 
 SDK 변경을 `main`에 푸시하면 [Prepare npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/prepare.yml)가 시작됩니다. 이전 릴리스 이후 패키지·빌드 관련 변경을 확인하고 공통 patch 버전을 올린 뒤 릴리스 검사를 실행합니다. 루트 README, 가이드, 뷰어만 바뀐 경우에는 SDK를 게시하지 않습니다.

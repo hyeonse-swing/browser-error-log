@@ -63,6 +63,12 @@ The first automatic release completed on October 12, 2026. A `main` push generat
 
 The workflow passed 7 release tests, 96 application tests, typecheck, builds, package and micro-server checks, and fresh registry installation checks for TypeScript, ESM, CommonJS, SSR, and a browser-only installation without React.
 
+## Verified `0.1.4` automated release
+
+The [follow-up release](https://github.com/hyeonse-swing/browser-error-log/actions/runs/38191998049) published all three `0.1.4` packages on October 12, 2026. It passed 9 release tests, 96 application tests, typecheck, builds, package and micro-server checks, and fresh registry consumer checks. Registry verification confirmed all three as npm `latest`, with provenance attestations and downloaded tarballs matching the SHA-512 values in `v0.1.4`.
+
+This release explicitly dispatches preparation after successful publication and verifies the originating publish job through the GitHub API before allowing another release. The [automatic follow-up check](https://github.com/hyeonse-swing/browser-error-log/actions/runs/38192593921) succeeded and skipped a version bump because no further SDK changes were present.
+
 ## Automatic releases from main
 
 Push SDK changes to `main` to start [Prepare npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/prepare.yml). The workflow checks for package or build changes since the previous release, increases the shared patch version, and runs the release checks. Changes limited to the root README, guides, or viewer do not publish an SDK release.
