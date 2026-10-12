@@ -4,9 +4,19 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-  workflow_run:
-    workflows: [Publish npm release]
-    types: [completed]
+    inputs:
+      verified_release_tag:
+        description: Tag whose npm packages passed the publisher's registry and consumer checks
+        required: false
+        type: string
+      publish_run_id:
+        description: Publisher workflow run ID for this tag
+        required: false
+        type: string
+      publish_run_attempt:
+        description: Publisher workflow run attempt for this tag
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -18,7 +28,7 @@ concurrency:
 
 jobs:
   prepare:
-    if: github.repository == 'hyeonse-swing/browser-error-log' && github.ref == 'refs/heads/main' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    if: github.repository == 'hyeonse-swing/browser-error-log' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:

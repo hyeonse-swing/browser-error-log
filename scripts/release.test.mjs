@@ -9,8 +9,9 @@ import {
   isReleaseRelevantPath, isStalePush, nextPatch, readTagManifest, setVersion,
 } from './release-common.mjs';
 import {
-  lookupExactVersion, releaseRegistryState, waitForRegistryPackage,
+  lookupExactVersion, releaseAdvanceState, releaseRegistryState, waitForRegistryPackage,
 } from './release-registry.mjs';
+import { isSuccessfulTaggedPublishRun, verifiedPublishAttempt } from './release-github.mjs';
 
 test('docs-only changes skip; packed package docs and release inputs trigger', () => {
   for (const path of ['README.md', 'docs/releasing.md', 'docs/ko/releasing.md', 'apps/viewer/src/App.tsx']) {
@@ -100,6 +101,76 @@ test('partial release resumes exact missing package; integrity mismatch fails be
     ...Object.fromEntries(PACKAGES.map(pkg => [pkg.name, { integrity }])),
     'browser-error-log': { integrity: 'sha512-wrong' },
   }, manifest), /immutable release tag/);
+});
+
+test('publisher follow-up advances only the current tag after every registry digest matches', async () => {
+  const complete = async url => {
+    const name = decodeURIComponent(new URL(url).pathname.split('/')[1]);
+    return response(200, metadata(name));
+  };
+  const input = { tag: 'v0.1.3', manifest, successfulRun: false,
+    eventName: 'workflow_dispatch', inputTag: 'v0.1.3', verifiedAttempt: true, fetchImpl: complete };
+  assert.deepEqual(await releaseAdvanceState(input), { ready: true, missing: [] });
+  assert.deepEqual(await releaseAdvanceState({ ...input, successfulRun: true, inputTag: null }),
+    { ready: true, missing: [] });
+
+  const noFetch = async () => { throw Error('registry should not be queried without release proof'); };
+  for (const changed of [
+    { inputTag: 'v0.1.2' },
+    { inputTag: null },
+    { eventName: 'push' },
+    { verifiedAttempt: false },
+    { tag: 'v0.1.4', manifest: { ...manifest, version: '0.1.4' } },
+  ]) {
+    assert.deepEqual(await releaseAdvanceState({ ...input, ...changed, fetchImpl: noFetch }),
+      { ready: false, missing: null });
+  }
+
+  const partial = await releaseAdvanceState({ ...input, fetchImpl: async url => {
+    const name = decodeURIComponent(new URL(url).pathname.split('/')[1]);
+    return name === 'browser-error-log-react' ? response(404) : response(200, metadata(name));
+  } });
+  assert.deepEqual(partial, { ready: false, missing: ['browser-error-log-react'] });
+  await assert.rejects(releaseAdvanceState({ ...input, fetchImpl: async url => {
+    const name = decodeURIComponent(new URL(url).pathname.split('/')[1]);
+    return response(200, metadata(name, '0.1.3', 'sha512-wrong'));
+  } }), /integrity mismatch/);
+});
+
+test('publisher proof requires this tag, commit, workflow and successful job in the latest attempt', async () => {
+  const run = {
+    id: 42, run_attempt: 2, event: 'workflow_dispatch', path: '.github/workflows/publish.yml',
+    repository: { full_name: 'hyeonse-swing/browser-error-log' },
+    head_repository: { full_name: 'hyeonse-swing/browser-error-log' },
+    head_branch: 'v0.1.3', head_sha: 'tag-commit',
+  };
+  const job = { name: 'publish', status: 'completed', conclusion: 'success',
+    run_id: 42, run_attempt: 2, head_branch: 'v0.1.3', head_sha: 'tag-commit' };
+  const proof = { tag: 'v0.1.3', headSha: 'tag-commit', runId: '42', attempt: '2' };
+  const api = (candidateRun = run, candidateJob = job) => async path =>
+    path.includes('/jobs?') ? { total_count: 1, jobs: [candidateJob] } : candidateRun;
+  assert.equal(await verifiedPublishAttempt({ ...proof, api: api() }), true);
+  assert.equal(isSuccessfulTaggedPublishRun({ ...run, status: 'completed', conclusion: 'success' },
+    'v0.1.3', 'tag-commit'), true);
+  assert.equal(isSuccessfulTaggedPublishRun({ ...run, status: 'completed', conclusion: 'success', head_branch: 'main' },
+    'v0.1.3', 'tag-commit'), false);
+  assert.equal(isSuccessfulTaggedPublishRun({ ...run, status: 'completed', conclusion: 'success', path: '.github/workflows/other.yml' },
+    'v0.1.3', 'tag-commit'), false);
+  for (const changed of [
+    { head_sha: 'another-commit' }, { head_branch: 'v0.1.2' },
+    { path: '.github/workflows/other.yml' }, { event: 'push' },
+    { run_attempt: 1 }, { repository: { full_name: 'someone/else' } },
+  ]) {
+    assert.equal(await verifiedPublishAttempt({ ...proof, api: api({ ...run, ...changed }) }), false);
+  }
+  for (const changed of [
+    { conclusion: 'failure' }, { status: 'in_progress' }, { run_attempt: 1 },
+    { head_sha: 'another-commit' }, { name: 'catchup' },
+  ]) {
+    assert.equal(await verifiedPublishAttempt({ ...proof, api: api(run, { ...job, ...changed }) }), false);
+  }
+  assert.equal(await verifiedPublishAttempt({ ...proof, attempt: '1', api: api() }), false);
+  assert.equal(await verifiedPublishAttempt({ ...proof, runId: 'invalid', api: async () => { throw Error('unexpected API call'); } }), false);
 });
 
 test('registry visibility retries 404, then verifies digest; server errors do not retry', async () => {

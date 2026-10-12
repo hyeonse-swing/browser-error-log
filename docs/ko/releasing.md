@@ -2,7 +2,7 @@
 
 [English](../releasing.md) | 한국어
 
-[GitHub 저장소](https://github.com/hyeonse-swing/browser-error-log)에 MIT 라이선스 소스가 있습니다. 브라우저 SDK, 프로토콜, React 어댑터의 `0.1.2` 버전이 npm에 게시되어 있습니다. SDK 패키지 3개 모두 `0.1.0`도 게시되었고, 브라우저 SDK와 프로토콜은 `0.1.1`도 게시되었습니다. `browser-error-log-react@0.1.1`은 게시되지 않았으며, `0.1.2` 이전 React 어댑터의 최신 공개 버전은 `0.1.0`이었습니다. workspace 루트와 앱은 private입니다. npm 게시와 GitHub 릴리스·태그는 별개입니다.
+[GitHub 저장소](https://github.com/hyeonse-swing/browser-error-log)에 MIT 라이선스 소스가 있습니다. 브라우저 SDK, 프로토콜, React 어댑터는 npm에 게시되어 있으며, 아래 릴리스 기록에 검증한 버전을 정리합니다. SDK 패키지 3개 모두 `0.1.0`이 게시되었고, 브라우저 SDK와 프로토콜은 `0.1.1`도 게시되었습니다. `browser-error-log-react@0.1.1`은 게시되지 않았으며, `0.1.2` 이전 React 어댑터의 최신 공개 버전은 `0.1.0`이었습니다. workspace 루트와 앱은 private입니다. npm 게시와 GitHub 릴리스·태그는 별개입니다.
 
 ## 검증된 `0.1.0` 패키지
 
@@ -57,6 +57,12 @@ npm run check:micro
 
 최신 브라우저 SDK는 `npm install browser-error-log`로 설치하고 프로토콜 의존성은 자동으로 설치됩니다. React에는 `npm install browser-error-log browser-error-log-react`를 사용하세요. `0.1.2` workspace의 `check:package`는 `output/packages/`에 `browser-error-log-protocol-0.1.2.tgz`, `browser-error-log-0.1.2.tgz`, `browser-error-log-react-0.1.2.tgz`를 만듭니다. [SDK 가이드](personal-sdk.md)를 참고하세요. 로컬 tarball만으로 레지스트리 게시가 증명되지는 않습니다.
 
+## 검증된 `0.1.3` 자동 릴리스
+
+첫 자동 릴리스는 2026년 10월 12일 완료됐습니다. `main` 푸시로 `0.1.3` 버전 커밋과 태그를 생성한 뒤, [GitHub Actions가 세 패키지를 모두 게시](https://github.com/hyeonse-swing/browser-error-log/actions/runs/38190950148)했습니다. 인증은 npm Trusted Publishing을 사용했습니다. 다운로드한 세 tarball 모두 `v0.1.3`에 기록한 SHA-512와 일치하며, npm에 provenance 증명이 포함되어 있습니다.
+
+워크플로에서 릴리스 검사 7개, 애플리케이션 테스트 96개, 타입 검사, 빌드, 패키지·마이크로 서버 검사가 통과했습니다. 레지스트리에서 새로 설치한 TypeScript·ESM·CommonJS·SSR 검사와 React 없는 브라우저 전용 설치도 통과했습니다.
+
 ## main 푸시 후 자동 릴리스
 
 SDK 변경을 `main`에 푸시하면 [Prepare npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/prepare.yml)가 시작됩니다. 이전 릴리스 이후 패키지·빌드 관련 변경을 확인하고 공통 patch 버전을 올린 뒤 릴리스 검사를 실행합니다. 루트 README, 가이드, 뷰어만 바뀐 경우에는 SDK를 게시하지 않습니다.
@@ -65,7 +71,7 @@ SDK 변경을 `main`에 푸시하면 [Prepare npm release](https://github.com/hy
 
 인증에는 GitHub OIDC 기반의 [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)을 사용합니다. 각 패키지는 `hyeonse-swing/browser-error-log` 저장소, `publish.yml` 워크플로, `npm` 환경에 직접 게시 권한으로 연결됩니다. GitHub의 해당 환경에는 `v*` 태그만 허용하며, 저장소 ruleset으로 해당 태그의 변경·삭제를 막습니다. npm 토큰 시크릿은 필요하지 않습니다. Trusted Publisher 연결을 변경할 때에는 npm이 유지관리자에게 2단계 인증을 요청할 수 있습니다.
 
-게시가 중간에 멈추면 원래 태그로 실패한 게시 워크플로를 다시 실행합니다. 이미 게시된 패키지는 무결성을 확인하고, 없는 패키지만 게시합니다. 해당 태그를 옮기거나 같은 버전의 소스를 바꾸지 마세요. 미완료 릴리스가 있으면 준비 단계는 버전을 추가로 올리지 않습니다. 게시가 성공하면 준비 단계가 다시 실행되어 그동안 들어온 SDK 변경을 확인합니다. 같은 검사를 수동으로 시작할 수도 있습니다.
+게시가 중간에 멈추면 원래 태그로 실패한 게시 워크플로를 다시 실행합니다. 이미 게시된 패키지는 무결성을 확인하고, 없는 패키지만 게시합니다. 해당 태그를 옮기거나 같은 버전의 소스를 바꾸지 마세요. 미완료 릴리스가 있으면 준비 단계는 버전을 추가로 올리지 않습니다. 레지스트리·새 설치 검증이 성공하면 게시 워크플로가 준비 단계를 명시적으로 다시 실행해 그동안 들어온 SDK 변경을 확인합니다. 이때 해당 태그의 게시 작업이 성공했고 모든 패키지가 태그에 기록된 파일과 일치해야 다음 버전으로 진행합니다. 같은 검사를 수동으로 시작할 수도 있습니다.
 
 ```sh
 # vX.Y.Z를 실패한 릴리스의 기존 태그로 바꿉니다.

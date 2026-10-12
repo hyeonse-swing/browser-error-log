@@ -36,6 +36,14 @@ export async function releaseRegistryState(manifest, fetchImpl = fetch) {
   return { missing, complete: missing.length === 0 };
 }
 
+export async function releaseAdvanceState({ tag, manifest, successfulRun, eventName, inputTag, verifiedAttempt, fetchImpl = fetch }) {
+  if (tag !== `v${manifest.version}`) throw new Error('Release tag and integrity manifest differ');
+  const proof = successfulRun || (eventName === 'workflow_dispatch' && inputTag === tag && verifiedAttempt === true);
+  if (!proof) return { ready: false, missing: null };
+  const registry = await releaseRegistryState(manifest, fetchImpl);
+  return { ready: registry.complete, missing: registry.missing };
+}
+
 export async function waitForRegistryPackage(name, manifest, { fetchImpl = fetch, sleepImpl = sleep } = {}) {
   // A successful npm publish may take a short time to become visible through
   // the registry API. Only a real 404 is retried; auth/server/network errors fail.

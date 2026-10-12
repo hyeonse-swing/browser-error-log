@@ -5,7 +5,8 @@ import {
   REPOSITORY, UNTAGGED_BASELINE, assertVersions, createTagManifest, decideRelease,
   git, isStalePush, nextPatch, packRelease, readTagManifest, run, setVersion,
 } from './release-common.mjs';
-import { releaseRegistryState } from './release-registry.mjs';
+import { releaseAdvanceState } from './release-registry.mjs';
+import { isSuccessfulTaggedPublishRun, verifiedPublishAttempt } from './release-github.mjs';
 
 if (process.env.GITHUB_REPOSITORY !== REPOSITORY || process.env.GITHUB_REF !== 'refs/heads/main') {
   throw new Error('Release preparation is allowed only on this repository main branch');
@@ -19,8 +20,8 @@ const dispatch = (workflow, ref) => run('gh', [
   'api', '--method', 'POST', `repos/${REPOSITORY}/actions/workflows/${workflow}/dispatches`,
   '-f', `ref=${ref}`,
 ]);
-const completedRun = process.env.GITHUB_EVENT_NAME === 'workflow_run'
-  ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')).workflow_run : null;
+const inputs = process.env.GITHUB_EVENT_NAME === 'workflow_dispatch'
+  ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')).inputs ?? {} : {};
 
 git(['fetch', '--tags', 'origin', 'main']);
 const remoteMain = git(['rev-parse', 'refs/remotes/origin/main']);
@@ -42,13 +43,15 @@ if (hasTag) {
   const manifest = readTagManifest(tag);
   const response = gh([`repos/${REPOSITORY}/actions/workflows/publish.yml/runs?event=workflow_dispatch&per_page=100`]);
   const runs = response.workflow_runs.filter(run => run.head_sha === base);
-  published = runs.some(run => run.conclusion === 'success')
-    || (completedRun?.conclusion === 'success' && completedRun.head_sha === base);
-  if (published) {
-    const registry = await releaseRegistryState(manifest);
-    published = registry.complete;
-    if (!published) console.log(`Release ${tag} is incomplete on npm: ${registry.missing.join(', ')}`);
-  }
+  const verifiedAttempt = inputs.verified_release_tag === tag && await verifiedPublishAttempt({
+    tag, headSha: base, runId: inputs.publish_run_id, attempt: inputs.publish_run_attempt,
+    api: path => gh([path]),
+  });
+  const advance = await releaseAdvanceState({ tag, manifest,
+    successfulRun: runs.some(run => isSuccessfulTaggedPublishRun(run, tag, base)),
+    eventName: process.env.GITHUB_EVENT_NAME, inputTag: inputs.verified_release_tag, verifiedAttempt });
+  published = advance.ready;
+  if (advance.missing?.length) console.log(`Release ${tag} is incomplete on npm: ${advance.missing.join(', ')}`);
   if (!published) {
     if (!runs.some(run => run.status !== 'completed')) {
       dispatch('publish.yml', tag);

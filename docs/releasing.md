@@ -2,7 +2,7 @@
 
 English | [한국어](ko/releasing.md)
 
-The [GitHub repository](https://github.com/hyeonse-swing/browser-error-log) holds the MIT-licensed source. The browser SDK, protocol, and React adapter are published on npm at `0.1.2`. All three also have a published `0.1.0` version; the browser SDK and protocol have published `0.1.1` versions, while `browser-error-log-react@0.1.1` was never published. Before `0.1.2`, the React adapter's latest public version was `0.1.0`. The workspace root and apps remain private. npm publication is separate from a GitHub release or tag.
+The [GitHub repository](https://github.com/hyeonse-swing/browser-error-log) holds the MIT-licensed source. The browser SDK, protocol, and React adapter are published on npm; the release history below records verified versions. All three have a published `0.1.0` version; the browser SDK and protocol have published `0.1.1` versions, while `browser-error-log-react@0.1.1` was never published. Before `0.1.2`, the React adapter's latest public version was `0.1.0`. The workspace root and apps remain private. npm publication is separate from a GitHub release or tag.
 
 ## Verified `0.1.0` packages
 
@@ -57,6 +57,12 @@ npm run check:micro
 
 Install the latest browser SDK with `npm install browser-error-log`; its protocol dependency resolves transitively. For React, use `npm install browser-error-log browser-error-log-react`. The `0.1.2` workspace's `check:package` builds `browser-error-log-protocol-0.1.2.tgz`, `browser-error-log-0.1.2.tgz`, and `browser-error-log-react-0.1.2.tgz` under `output/packages/`; see the [SDK guide](personal-sdk.md). Local tarballs alone do not prove registry publication.
 
+## Verified `0.1.3` automated release
+
+The first automatic release completed on October 12, 2026. A `main` push generated the `0.1.3` version commit and tag, then [GitHub Actions published all three packages](https://github.com/hyeonse-swing/browser-error-log/actions/runs/38190950148) using npm Trusted Publishing. All three downloaded tarballs match the SHA-512 values recorded in `v0.1.3`, and npm includes their provenance attestations.
+
+The workflow passed 7 release tests, 96 application tests, typecheck, builds, package and micro-server checks, and fresh registry installation checks for TypeScript, ESM, CommonJS, SSR, and a browser-only installation without React.
+
 ## Automatic releases from main
 
 Push SDK changes to `main` to start [Prepare npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/prepare.yml). The workflow checks for package or build changes since the previous release, increases the shared patch version, and runs the release checks. Changes limited to the root README, guides, or viewer do not publish an SDK release.
@@ -65,7 +71,7 @@ Preparation commits the synchronized package versions, dependency pins, lockfile
 
 Publishing uses [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) with GitHub OIDC. Each package is connected to `hyeonse-swing/browser-error-log`, workflow `publish.yml`, environment `npm`, with direct publishing allowed. The GitHub environment permits only `v*` tags, and a repository ruleset blocks updates and deletion of those tags. No npm token secret is needed. Maintainers may need npm 2FA when changing the trusted publisher connection.
 
-If publication stops partway, rerun the failed publishing workflow using the original tag. It checks the integrity of already published packages and publishes only missing packages. Do not move the tag or change the source for that version. Preparation will not increment past an unfinished release. A successful publication automatically starts another preparation check to pick up SDK changes that arrived meanwhile. The same checks can also be started manually:
+If publication stops partway, rerun the failed publishing workflow using the original tag. It checks the integrity of already published packages and publishes only missing packages. Do not move the tag or change the source for that version. Preparation will not increment past an unfinished release. After registry and fresh-install verification succeeds, the publisher explicitly dispatches another preparation check to pick up SDK changes that arrived meanwhile. That check verifies the tagged publish job succeeded and every package matches the tag manifest before advancing. The same checks can also be started manually:
 
 ```sh
 # Replace vX.Y.Z with the existing failed release tag.
