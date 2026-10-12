@@ -9,14 +9,22 @@ export interface ErrorBoundaryProps {
 
 interface ErrorBoundaryState { error: Error | null }
 
+function normalizeError(error: unknown): Error {
+  try {
+    return error instanceof Error ? error : new Error(String(error));
+  } catch {
+    return new Error('Unknown render error');
+  }
+}
+
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { error: null };
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { error };
+  static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
+    return { error: normalizeError(error) };
   }
 
-  componentDidCatch(error: Error, info: React.ErrorInfo): void {
+  componentDidCatch(error: unknown, info: React.ErrorInfo): void {
     try {
       this.props.client.captureException(error, {
         type: 'react',

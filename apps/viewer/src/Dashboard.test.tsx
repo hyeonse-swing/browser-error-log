@@ -37,6 +37,9 @@ describe('dashboard request lifecycle', () => {
   let root: Root;
 
   beforeEach(() => {
+    // Keep the fixed fixture inside the default seven-day query window.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-03T00:00:00.000Z'));
     setLocale('en');
     window.localStorage.clear();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });

@@ -54,7 +54,7 @@ export function Root() {
 }
 ```
 
-위 `App`은 앱 컴포넌트입니다. fallback은 React 노드 또는 오류와 reset 콜백을 받는 함수입니다. reset은 Boundary의 오류 상태를 지우고 자식을 다시 렌더링하므로 원인 상태가 그대로라면 다시 실패할 수 있습니다. fallback이 없으면 실패한 Boundary는 아무것도 렌더링하지 않습니다.
+위 `App`은 앱 컴포넌트입니다. fallback은 React 노드 또는 `Error`와 reset 콜백을 받는 함수입니다. `null`·`false`처럼 Error가 아닌 값도 fallback에서는 `Error`로 변환하며 원래 던진 값은 SDK에 그대로 전달합니다. reset은 Boundary의 오류 상태를 지우고 자식을 다시 렌더링하므로 원인 상태가 그대로라면 다시 실패할 수 있습니다. fallback이 없으면 실패한 Boundary는 아무것도 렌더링하지 않습니다.
 
 SSR 프레임워크에서는 클라이언트 진입점을 사용하세요. 서버에서 SDK를 import할 수는 있지만 서버 오류를 수집하지 않습니다. 이 Boundary는 React가 `componentDidCatch`에 전달한 오류를 처리합니다. 앱에서 처리한 오류에는 `captureException`을 사용하고 전역 JavaScript·Promise·네트워크 오류에는 기본 SDK를 사용하세요. 네이티브 크래시나 서버 오류 처리기는 아닙니다.
 

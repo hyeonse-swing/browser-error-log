@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { appendFile, mkdtemp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { appendFile, mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ErrorEventRecord } from 'browser-error-log-protocol';
@@ -157,6 +157,19 @@ describe('SQLite micro storage', () => {
 });
 
 describe('JSONL micro storage', () => {
+  it('rejects preexisting logs outside a lowered file-size or file-count cap', async () => {
+    const sizeSettings = await options({ logFileBytes: 512 });
+    const oversized = `${'x'.repeat(512)}\n`;
+    await writeFile(join(sizeSettings.dataDir, 'events.jsonl'), oversized);
+    await expect(storage('jsonl', sizeSettings)).rejects.toThrow('Existing JSONL logs exceed configured limits');
+    expect(await readFile(join(sizeSettings.dataDir, 'events.jsonl'), 'utf8')).toBe(oversized);
+
+    const countSettings = await options({ logFiles: 2 });
+    await writeFile(join(countSettings.dataDir, 'events.2.jsonl'), '{}\n');
+    await expect(storage('jsonl', countSettings)).rejects.toThrow('Existing JSONL logs exceed configured limits');
+    expect(await readFile(join(countSettings.dataDir, 'events.2.jsonl'), 'utf8')).toBe('{}\n');
+  });
+
   it('appends normalized duplicate lines and rejects queries', async () => {
     const settings = await options();
     const log = await storage('jsonl', settings);

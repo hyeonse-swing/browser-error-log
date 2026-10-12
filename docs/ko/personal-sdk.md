@@ -4,19 +4,21 @@
 
 SDK는 `endpoint` 또는 사용자 지정 `transport`로 연결합니다. React는 선택 사항입니다. 영속 저장을 시작하려면 [자체 호스팅 가이드](micro-server.md)를 참고하세요.
 
-검증된 MIT 라이선스 `0.1.0` SDK 패키지는 npm에서 설치할 수 있습니다. 다국어 지원 `0.1.1`은 로컬에서 준비 중이며 아직 게시되지 않았습니다. 대상 앱에서 브라우저 SDK를 설치합니다.
+MIT 라이선스 브라우저 SDK와 프로토콜 `0.1.1`은 npm에 게시되어 있습니다. React 어댑터의 최신 게시 버전은 `0.1.0`이며 `0.1.2` 유지보수 릴리스는 준비 중입니다. 대상 앱에서 브라우저 SDK를 설치합니다.
 
 ```sh
 npm install browser-error-log
 ```
 
-기존 React 18/19 앱에는 어댑터도 설치합니다.
+기존 React 18/19 앱은 `0.1.2` 검증 전까지 게시된 `0.1.0` 조합을 설치합니다.
 
 ```sh
-npm install browser-error-log browser-error-log-react
+npm install browser-error-log@0.1.0 browser-error-log-react@0.1.0
 ```
 
 `browser-error-log-protocol`은 공개 타입이나 상수를 앱에서 직접 import하지 않으면 의존성으로 설치됩니다.
+
+영어·한국어 선택기는 이 저장소에서 빌드하는 뷰어·데모·설치 예제의 기능입니다. SDK만 설치해도 앱에 언어 선택기가 추가되지는 않습니다. v1 이벤트 스키마는 그대로이며 `sdkVersion`은 설치된 SDK 릴리스를 식별합니다.
 
 ## 선택 사항: 소스에서 로컬 tarball 만들기
 
@@ -27,23 +29,23 @@ npm ci
 npm run check:package
 ```
 
-스크립트는 `output/packages/`에 `0.1.1` tarball 3개를 만들고 독립 consumer에 설치하여 React 없는 브라우저 설치, TypeScript 타입 선언, ESM/CJS export, SSR import를 확인합니다. 로컬 개발 경로이며 npm에 게시하지 않습니다.
+`0.1.2` workspace의 스크립트는 `output/packages/`에 `0.1.2` tarball 3개를 만들고 독립 consumer에 설치하여 React 없는 브라우저 설치, TypeScript 타입 선언, ESM/CJS export, SSR import를 확인합니다. 로컬 개발 경로이며 npm에 게시하지 않습니다.
 
 대상 앱에서 `SDK_DIR`을 이 저장소의 절대 경로로 바꾸세요.
 
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.1.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-0.1.1.tgz"
+npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.2.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-0.1.2.tgz"
 ```
 
 기존 React 18/19 앱에는 3개 tarball을 같은 명령으로 설치합니다.
 
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.1.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-0.1.1.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-react-0.1.1.tgz"
+npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.2.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-0.1.2.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-react-0.1.2.tgz"
 ```
 
 기본 브라우저 패키지에는 React가 필요하지 않습니다. 앱 번들러용 ESM, CommonJS, TypeScript 선언을 제공하지만 CDN 전역 스크립트는 제공하지 않습니다.

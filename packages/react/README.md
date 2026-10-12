@@ -54,7 +54,7 @@ export function Root() {
 }
 ```
 
-`App` above is your application component. The fallback can be a React node or a function receiving the error and a reset callback. Reset clears the boundary's error state and retries rendering its children; fix the underlying state if rendering would fail again. With no fallback, a failed boundary renders nothing.
+`App` above is your application component. The fallback can be a React node or a function receiving an `Error` and a reset callback. Non-Error throws, including `null` and `false`, are normalized for the fallback; the original thrown value is still forwarded to the SDK. Reset clears the boundary's error state and retries rendering its children; fix the underlying state if rendering would fail again. With no fallback, a failed boundary renders nothing.
 
 Use a client entry point in SSR frameworks. Importing the SDK on the server is safe but does not collect server errors. This boundary handles errors React passes to `componentDidCatch`; use `captureException` for handled errors and the base SDK for global JavaScript, promise, and network error capture. It is not native crash monitoring or a server-side error handler.
 

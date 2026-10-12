@@ -143,6 +143,26 @@ describe('browser error client', () => {
     expect(event.page).toBe('https://example.com/page');
   });
 
+  it.each([
+    ['Request /api/users?token=private failed', 'Request /api/users failed'],
+    ['Request api/users?token=private failed', 'Request api/users failed'],
+    ['GET users?token=private, then retry', 'GET users, then retry'],
+    ['GET ?token=private failed', 'GET [redacted query] failed'],
+    ['GET [/api/users?token=private], then retry', 'GET [/api/users], then retry'],
+    ['GET /reset#token=private. Retry', 'GET /reset. Retry'],
+    ['ratio 1/2?maybe and ratio1/2?maybe', 'ratio 1/2?maybe and ratio1/2?maybe'],
+  ])('sanitizes relative URL text: %s', async (message, expected) => {
+    const instance = client();
+    instance.captureException(new Error(message), {
+      context: { request: '/api/users?api_key=hidden' },
+    });
+    await instance.flush();
+    const event = captured[0].events[0];
+    expect(JSON.stringify(event)).not.toMatch(/token=private|api_key=hidden/);
+    expect(event.message).toBe(expected);
+    expect(event.context?.request).toBe('/api/users');
+  });
+
   it('drops records when a privacy hook throws', async () => {
     const beforeSend = client({ beforeSend: () => { throw new Error('unsafe transform'); } });
     beforeSend.captureException(new Error('private path'));

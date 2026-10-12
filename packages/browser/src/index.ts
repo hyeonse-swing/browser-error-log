@@ -273,6 +273,15 @@ class Client implements BrowserErrorLogClient {
     let value = safeString(input);
     if (replaceUrls) {
       value = value.replace(/https?:\/\/[^\s<>"'()[\]]+/gi, match => this.cleanUrl(match));
+      value = value.replace(/(^|[\s"'(\[=])((?:\/(?!\/)|\.{1,2}\/)[^\s<>"'()[\]?#]*[?#][^\s<>"'()[\]]+|[a-z][\w.-]*(?:\/[^\s<>"'()[\]?#]*)?(?:\?[a-z0-9_.-]+=[^\s<>"'()[\]]+|#[^\s<>"'()[\]]+)|\?[a-z0-9_.-]+=[^\s<>"'()[\]]+)/gi,
+        (_match, prefix: string, url: string) => {
+          const punctuation = /[.,;!]+$/.exec(url)?.[0] ?? '';
+          const core = url.slice(0, url.length - punctuation.length);
+          const cleaned = this.options.sanitizeUrl
+            ? this.cleanUrl(core)
+            : core.startsWith('?') ? '[redacted query]' : this.cleanText(core.split(/[?#]/, 1)[0], 1024, false);
+          return `${prefix}${cleaned}${punctuation}`;
+        });
     }
     return value
       .replace(/\bBearer\s+[A-Za-z0-9._~+\/-]+/gi, 'Bearer [REDACTED]')
@@ -324,7 +333,7 @@ class Client implements BrowserErrorLogClient {
       project: this.cleanText(this.options.project, 80),
       environment: this.cleanText(this.options.environment ?? 'development', 80),
       release: this.cleanText(this.options.release ?? 'unknown', 120),
-      sdkVersion: '0.1.1',
+      sdkVersion: '0.1.2',
       occurredAt: new Date().toISOString(),
       viewId: this.viewId,
       sequence: ++this.sequence,

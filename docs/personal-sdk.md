@@ -4,19 +4,21 @@ English | [한국어](ko/personal-sdk.md)
 
 The SDK accepts an `endpoint` or a custom `transport`. React is optional. For persistent storage, start with the [self-hosting guide](micro-server.md).
 
-The verified MIT-licensed `0.1.0` SDK packages are available on npm. The `0.1.1` i18n update is prepared locally and is not yet published. In the consuming app, install the browser SDK:
+The MIT-licensed `0.1.1` browser SDK and protocol are available on npm. The React adapter's latest published version is `0.1.0`; the `0.1.2` maintenance release is pending. In the consuming app, install the browser SDK:
 
 ```sh
 npm install browser-error-log
 ```
 
-For an existing React 18/19 app, also install the adapter:
+For an existing React 18/19 app, install the matching published `0.1.0` pair until `0.1.2` is verified:
 
 ```sh
-npm install browser-error-log browser-error-log-react
+npm install browser-error-log@0.1.0 browser-error-log-react@0.1.0
 ```
 
 For ordinary app integration, you do not need a separate protocol install. `browser-error-log-protocol` is installed automatically with the SDK and contains the shared event types and constants. Install it directly only when importing those contracts in your own collector or viewer. It is not an error collector or a server.
+
+The English/Korean selector is part of the viewer, demo, and install example built from this repository. Installing the SDK alone does not add a language selector to your app. The v1 event schema is unchanged; `sdkVersion` identifies the installed SDK release.
 
 ## Optional: build local tarballs from source
 
@@ -27,23 +29,23 @@ npm ci
 npm run check:package
 ```
 
-The script builds three `0.1.1` tarballs in `output/packages/` and installs them into isolated consumers to check browser-only installation, TypeScript declarations, ESM/CJS exports, and SSR imports. This path is for local development and does not publish anything.
+The `0.1.2` workspace's script builds three `0.1.2` tarballs in `output/packages/` and installs them into isolated consumers to check browser-only installation, TypeScript declarations, ESM/CJS exports, and SSR imports. This path is for local development and does not publish anything.
 
 In the consuming app, replace `SDK_DIR` with this checkout's absolute path:
 
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.1.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-0.1.1.tgz"
+npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.2.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-0.1.2.tgz"
 ```
 
 For an existing React 18/19 app, add the adapter in the same install:
 
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.1.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-0.1.1.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-react-0.1.1.tgz"
+npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.2.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-0.1.2.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-react-0.1.2.tgz"
 ```
 
 The browser package does not require React. These packages export ESM, CommonJS, and TypeScript declarations for app bundlers; they do not provide a CDN global script.

@@ -1,4 +1,4 @@
-import { mkdir, open, rename, rm } from 'node:fs/promises';
+import { lstat, mkdir, open, readdir, rename, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { ErrorEventRecord, EventFilter, EventPage } from 'browser-error-log-protocol';
@@ -288,7 +288,26 @@ class JsonlStorage implements MicroStorage {
     }
   }
 
-  async initialize(): Promise<void> { await this.recoverTail(); }
+  async initialize(): Promise<void> {
+    // A lower limit on restart must not leave old files outside the configured cap.
+    // Reject them instead of silently deleting acknowledged logs.
+    for (const name of await readdir(this.options.dataDir)) {
+      const match = /^events(?:\.(\d+))?\.jsonl$/.exec(name);
+      if (!match) continue;
+      const index = match[1] === undefined ? 0 : Number(match[1]);
+      if (!Number.isSafeInteger(index) || index >= this.options.logFiles ||
+          name !== (index === 0 ? 'events.jsonl' : `events.${index}.jsonl`)) {
+        throw new Error('Existing JSONL logs exceed configured limits');
+      }
+      const file = await lstat(this.file(index));
+      if (!file.isFile() || (index > 0 && file.size > this.options.logFileBytes)) {
+        throw new Error('Existing JSONL logs exceed configured limits');
+      }
+    }
+    if (await this.recoverTail() > this.options.logFileBytes) {
+      throw new Error('Existing JSONL logs exceed configured limits');
+    }
+  }
 
   private async rotate(): Promise<void> {
     await rm(this.file(this.options.logFiles - 1), { force: true });

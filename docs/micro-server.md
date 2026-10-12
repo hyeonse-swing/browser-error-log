@@ -13,6 +13,8 @@ The micro server is a single-process Node.js 24 example that receives SDK events
 
 Both modes need a persistent data directory to survive restarts. SQLite's 64 MiB limit applies to the main database file; rollback journal, OS files, backups, and proxy logs require additional disk. JSONL rotation discards the oldest files. Retries can leave duplicate lines in JSONL; export deduplicates by `(project, eventId)`.
 
+If you lower the JSONL file size or file count limits, startup rejects existing logs that exceed the new limits instead of deleting acknowledged records. Stop the collector and archive the existing logs outside its data directory, or restore the previous limits, before restarting. An incomplete final line in the active file is still discarded during recovery.
+
 ## Run locally
 
 From the repository root:

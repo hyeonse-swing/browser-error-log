@@ -4,7 +4,7 @@ English | [한국어](README.ko.md)
 
 Capture browser failures on infrastructure you control. This project includes a framework-independent browser SDK, a React Error Boundary, a small self-hosted collector, and a viewer. A Node.js 24 process can persist events in SQLite and serve the viewer. You choose where records live, how long they remain, and who can read them. The public event types and transport hook also support a backend you own.
 
-The browser SDK, React adapter, and protocol are available on npm at the verified `0.1.0` MIT release. The `0.1.1` i18n update is being prepared and is not yet published. The collector and viewer run on your own infrastructure; see the [release guide](docs/releasing.md) for package details.
+The MIT-licensed browser SDK and protocol are available on npm at `0.1.1`; the React adapter's latest published version is `0.1.0`. A `0.1.2` maintenance release is being prepared and is not yet published. The collector and viewer run on your own infrastructure; see the [release guide](docs/releasing.md) for package details. The English/Korean language selector belongs to the viewer, demo, and install example built from this repository; installing the SDK alone does not add that UI to an app.
 
 ## Start with persistent storage
 
@@ -29,10 +29,10 @@ In another web app, install the SDK:
 npm install browser-error-log
 ```
 
-For an existing React 18/19 app, add the adapter:
+For an existing React 18/19 app, use the published `0.1.0` pair until the maintenance release is verified:
 
 ```sh
-npm install browser-error-log browser-error-log-react
+npm install browser-error-log@0.1.0 browser-error-log-react@0.1.0
 ```
 
 For a standard integration, install only `browser-error-log`. It automatically installs `browser-error-log-protocol`, the shared event types and constants used by SDKs and collectors. The protocol package does not capture errors or run a server. Add `browser-error-log-react` only when you need a React Error Boundary. The [SDK guide](docs/personal-sdk.md) also covers local source-checkout tarballs.
