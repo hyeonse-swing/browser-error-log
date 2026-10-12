@@ -57,7 +57,25 @@ npm run check:micro
 
 최신 브라우저 SDK는 `npm install browser-error-log`로 설치하고 프로토콜 의존성은 자동으로 설치됩니다. React에는 `npm install browser-error-log browser-error-log-react`를 사용하세요. `0.1.2` workspace의 `check:package`는 `output/packages/`에 `browser-error-log-protocol-0.1.2.tgz`, `browser-error-log-0.1.2.tgz`, `browser-error-log-react-0.1.2.tgz`를 만듭니다. [SDK 가이드](personal-sdk.md)를 참고하세요. 로컬 tarball만으로 레지스트리 게시가 증명되지는 않습니다.
 
-## 다음 릴리스
+## main 푸시 후 자동 릴리스
+
+SDK 변경을 `main`에 푸시하면 [Prepare npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/prepare.yml)가 시작됩니다. 이전 릴리스 이후 패키지·빌드 관련 변경을 확인하고 공통 patch 버전을 올린 뒤 릴리스 검사를 실행합니다. 루트 README, 가이드, 뷰어만 바뀐 경우에는 SDK를 게시하지 않습니다.
+
+준비 단계는 패키지 버전, 의존성 고정 버전, lockfile, SDK 버전 값을 함께 커밋하고 해당 커밋에 `vX.Y.Z` 태그를 붙여 푸시합니다. 이어서 그 태그로 [Publish npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/publish.yml)를 실행합니다. 게시 단계는 정확히 그 소스를 다시 빌드·검사하고 프로토콜 → 브라우저 SDK → React 어댑터 순서로 게시한 뒤 레지스트리 파일과 새 설치를 검증합니다. 태그는 릴리스 버전을 예약하며, 게시 워크플로가 성공해야 릴리스 완료입니다.
+
+인증에는 GitHub OIDC 기반의 [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)을 사용합니다. 각 패키지는 `hyeonse-swing/browser-error-log` 저장소, `publish.yml` 워크플로, `npm` 환경에 직접 게시 권한으로 연결됩니다. GitHub의 해당 환경에는 `v*` 태그만 허용하며, 저장소 ruleset으로 해당 태그의 변경·삭제를 막습니다. npm 토큰 시크릿은 필요하지 않습니다. Trusted Publisher 연결을 변경할 때에는 npm이 유지관리자에게 2단계 인증을 요청할 수 있습니다.
+
+게시가 중간에 멈추면 원래 태그로 실패한 게시 워크플로를 다시 실행합니다. 이미 게시된 패키지는 무결성을 확인하고, 없는 패키지만 게시합니다. 해당 태그를 옮기거나 같은 버전의 소스를 바꾸지 마세요. 미완료 릴리스가 있으면 준비 단계는 버전을 추가로 올리지 않습니다. 게시가 성공하면 준비 단계가 다시 실행되어 그동안 들어온 SDK 변경을 확인합니다. 같은 검사를 수동으로 시작할 수도 있습니다.
+
+```sh
+# vX.Y.Z를 실패한 릴리스의 기존 태그로 바꿉니다.
+gh workflow run publish.yml --repo hyeonse-swing/browser-error-log --ref vX.Y.Z
+gh workflow run prepare.yml --repo hyeonse-swing/browser-error-log --ref main
+```
+
+저장소 About의 웹사이트와 README 배지는 npm에 연결됩니다. GitHub의 Packages 사이드바는 별도 레지스트리인 GitHub Packages용이며, 이 패키지들은 npmjs.org에 게시합니다.
+
+## 수동 릴리스 체크리스트
 
 npm의 게시된 버전은 변경할 수 없습니다. `0.1.0`이나 이후 게시한 버전을 다시 게시하지 말고 다음 릴리스마다 새 버전을 사용하세요.
 

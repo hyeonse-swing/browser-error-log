@@ -57,7 +57,25 @@ npm run check:micro
 
 Install the latest browser SDK with `npm install browser-error-log`; its protocol dependency resolves transitively. For React, use `npm install browser-error-log browser-error-log-react`. The `0.1.2` workspace's `check:package` builds `browser-error-log-protocol-0.1.2.tgz`, `browser-error-log-0.1.2.tgz`, and `browser-error-log-react-0.1.2.tgz` under `output/packages/`; see the [SDK guide](personal-sdk.md). Local tarballs alone do not prove registry publication.
 
-## Future releases
+## Automatic releases from main
+
+Push SDK changes to `main` to start [Prepare npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/prepare.yml). The workflow checks for package or build changes since the previous release, increases the shared patch version, and runs the release checks. Changes limited to the root README, guides, or viewer do not publish an SDK release.
+
+Preparation commits the synchronized package versions, dependency pins, lockfile, and SDK version values, then pushes a `vX.Y.Z` tag pointing to that commit. It starts [Publish npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/publish.yml) on the tag. The publisher rebuilds and checks that exact source, publishes protocol → browser SDK → React adapter, and verifies the registry artifacts and fresh installations. A tag reserves the release version; the publishing workflow must finish successfully before the release is complete.
+
+Publishing uses [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) with GitHub OIDC. Each package is connected to `hyeonse-swing/browser-error-log`, workflow `publish.yml`, environment `npm`, with direct publishing allowed. The GitHub environment permits only `v*` tags, and a repository ruleset blocks updates and deletion of those tags. No npm token secret is needed. Maintainers may need npm 2FA when changing the trusted publisher connection.
+
+If publication stops partway, rerun the failed publishing workflow using the original tag. It checks the integrity of already published packages and publishes only missing packages. Do not move the tag or change the source for that version. Preparation will not increment past an unfinished release. A successful publication automatically starts another preparation check to pick up SDK changes that arrived meanwhile. The same checks can also be started manually:
+
+```sh
+# Replace vX.Y.Z with the existing failed release tag.
+gh workflow run publish.yml --repo hyeonse-swing/browser-error-log --ref vX.Y.Z
+gh workflow run prepare.yml --repo hyeonse-swing/browser-error-log --ref main
+```
+
+The repository's About website and README badge link to npm. GitHub's Packages sidebar lists GitHub Packages, a separate registry; these packages are published to npmjs.org.
+
+## Manual release checklist
 
 Npm versions are immutable. Do not attempt to republish `0.1.0` or any version after it is published; choose a new version for each subsequent release.
 

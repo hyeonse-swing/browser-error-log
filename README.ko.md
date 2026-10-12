@@ -2,9 +2,11 @@
 
 [English](README.md) | 한국어
 
+[![npm version](https://img.shields.io/npm/v/browser-error-log.svg)](https://www.npmjs.com/package/browser-error-log)
+
 브라우저 오류를 직접 관리하는 인프라에 기록합니다. 프레임워크에 종속되지 않는 브라우저 SDK, React Error Boundary, 작은 자체 호스팅 수집기와 뷰어를 제공합니다. Node.js 24 프로세스 하나로 SQLite에 이벤트를 저장하고 뷰어를 제공할 수 있습니다. 데이터 위치, 보관 기간, 조회 권한은 운영자가 결정합니다. 공개 이벤트 타입과 전송 훅을 사용해 자체 백엔드에 연결할 수도 있습니다.
 
-MIT 라이선스 브라우저 SDK, 프로토콜, React 어댑터의 `0.1.2` 버전을 npm에서 설치할 수 있습니다. 수집기와 뷰어는 운영자의 인프라에서 실행합니다. 패키지 정보는 [릴리스 가이드](docs/ko/releasing.md)를 참고하세요. 영어·한국어 선택기는 이 저장소에서 빌드하는 뷰어·데모·설치 예제의 기능이며 SDK만 설치해도 앱에 해당 UI가 추가되지는 않습니다. GitHub 소스 릴리스나 태그는 npm 게시와 별개입니다.
+MIT 라이선스 브라우저 SDK, 프로토콜, React 어댑터를 npm에서 설치할 수 있습니다: [browser-error-log](https://www.npmjs.com/package/browser-error-log), [browser-error-log-react](https://www.npmjs.com/package/browser-error-log-react), [browser-error-log-protocol](https://www.npmjs.com/package/browser-error-log-protocol). 수집기와 뷰어는 운영자의 인프라에서 실행합니다. 패키지 정보와 `main` 자동 게시 절차는 [릴리스 가이드](docs/ko/releasing.md)를 참고하세요. 영어·한국어 선택기는 이 저장소에서 빌드하는 뷰어·데모·설치 예제의 기능이며 SDK만 설치해도 앱에 해당 UI가 추가되지는 않습니다. GitHub 소스 릴리스나 태그는 npm 게시와 별개입니다.
 
 ## 영구 저장으로 시작하기
 

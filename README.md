@@ -2,9 +2,11 @@
 
 English | [한국어](README.ko.md)
 
+[![npm version](https://img.shields.io/npm/v/browser-error-log.svg)](https://www.npmjs.com/package/browser-error-log)
+
 Capture browser failures on infrastructure you control. This project includes a framework-independent browser SDK, a React Error Boundary, a small self-hosted collector, and a viewer. A Node.js 24 process can persist events in SQLite and serve the viewer. You choose where records live, how long they remain, and who can read them. The public event types and transport hook also support a backend you own.
 
-The MIT-licensed browser SDK, protocol, and React adapter are available on npm at `0.1.2`. The collector and viewer run on your own infrastructure; see the [release guide](docs/releasing.md) for package details. The English/Korean language selector belongs to the viewer, demo, and install example built from this repository; installing the SDK alone does not add that UI to an app.
+The MIT-licensed browser SDK, protocol, and React adapter are available on npm: [browser-error-log](https://www.npmjs.com/package/browser-error-log), [browser-error-log-react](https://www.npmjs.com/package/browser-error-log-react), and [browser-error-log-protocol](https://www.npmjs.com/package/browser-error-log-protocol). The collector and viewer run on your own infrastructure; see the [release guide](docs/releasing.md) for package details and automatic publishing from `main`. The English/Korean language selector belongs to the viewer, demo, and install example built from this repository; installing the SDK alone does not add that UI to an app.
 
 ## Start with persistent storage
 
