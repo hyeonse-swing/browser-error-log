@@ -4,7 +4,7 @@
 
 브라우저 오류를 직접 관리하는 인프라에 기록합니다. 프레임워크에 종속되지 않는 브라우저 SDK, React Error Boundary, 작은 자체 호스팅 수집기와 뷰어를 제공합니다. Node.js 24 프로세스 하나로 SQLite에 이벤트를 저장하고 뷰어를 제공할 수 있습니다. 데이터 위치, 보관 기간, 조회 권한은 운영자가 결정합니다. 공개 이벤트 타입과 전송 훅을 사용해 자체 백엔드에 연결할 수도 있습니다.
 
-MIT 라이선스 브라우저 SDK와 프로토콜은 npm에서 `0.1.1`을 설치할 수 있고 React 어댑터의 최신 게시 버전은 `0.1.0`입니다. `0.1.2` 유지보수 릴리스는 준비 중이며 아직 게시되지 않았습니다. 수집기와 뷰어는 운영자의 인프라에서 실행합니다. 패키지 정보는 [릴리스 가이드](docs/ko/releasing.md)를 참고하세요. 영어·한국어 선택기는 이 저장소에서 빌드하는 뷰어·데모·설치 예제의 기능이며 SDK만 설치해도 앱에 해당 UI가 추가되지는 않습니다. GitHub 소스 릴리스나 태그는 npm 게시와 별개입니다.
+MIT 라이선스 브라우저 SDK, 프로토콜, React 어댑터의 `0.1.2` 버전을 npm에서 설치할 수 있습니다. 수집기와 뷰어는 운영자의 인프라에서 실행합니다. 패키지 정보는 [릴리스 가이드](docs/ko/releasing.md)를 참고하세요. 영어·한국어 선택기는 이 저장소에서 빌드하는 뷰어·데모·설치 예제의 기능이며 SDK만 설치해도 앱에 해당 UI가 추가되지는 않습니다. GitHub 소스 릴리스나 태그는 npm 게시와 별개입니다.
 
 ## 영구 저장으로 시작하기
 
@@ -29,10 +29,10 @@ SQLite 기본값은 서버 수신 시점부터 7일, 이벤트 10,000건, DB 본
 npm install browser-error-log
 ```
 
-기존 React 18/19 앱은 유지보수 릴리스가 검증되기 전까지 게시된 `0.1.0` 조합을 사용합니다.
+기존 React 18/19 앱에는 브라우저 SDK와 선택적 React 어댑터를 설치합니다.
 
 ```sh
-npm install browser-error-log@0.1.0 browser-error-log-react@0.1.0
+npm install browser-error-log browser-error-log-react
 ```
 
 일반적인 앱 연결에는 `browser-error-log`만 설치하면 됩니다. SDK와 수집기가 공유하는 이벤트 타입·상수 패키지인 `browser-error-log-protocol`은 자동으로 설치됩니다. protocol 자체는 오류를 수집하거나 서버를 실행하지 않습니다. React Error Boundary가 필요할 때만 `browser-error-log-react`를 추가하세요. 소스 체크아웃의 로컬 tarball 경로도 [SDK 가이드](docs/ko/personal-sdk.md)에 설명합니다.

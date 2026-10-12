@@ -4,16 +4,16 @@
 
 SDK는 `endpoint` 또는 사용자 지정 `transport`로 연결합니다. React는 선택 사항입니다. 영속 저장을 시작하려면 [자체 호스팅 가이드](micro-server.md)를 참고하세요.
 
-MIT 라이선스 브라우저 SDK와 프로토콜 `0.1.1`은 npm에 게시되어 있습니다. React 어댑터의 최신 게시 버전은 `0.1.0`이며 `0.1.2` 유지보수 릴리스는 준비 중입니다. 대상 앱에서 브라우저 SDK를 설치합니다.
+MIT 라이선스 브라우저 SDK, 프로토콜, React 어댑터의 `0.1.2` 버전이 npm에 게시되어 있습니다. 대상 앱에서 브라우저 SDK를 설치합니다.
 
 ```sh
 npm install browser-error-log
 ```
 
-기존 React 18/19 앱은 `0.1.2` 검증 전까지 게시된 `0.1.0` 조합을 설치합니다.
+기존 React 18/19 앱에는 브라우저 SDK와 선택적 React 어댑터를 설치합니다.
 
 ```sh
-npm install browser-error-log@0.1.0 browser-error-log-react@0.1.0
+npm install browser-error-log browser-error-log-react
 ```
 
 `browser-error-log-protocol`은 공개 타입이나 상수를 앱에서 직접 import하지 않으면 의존성으로 설치됩니다.

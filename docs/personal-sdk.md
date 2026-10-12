@@ -4,16 +4,16 @@ English | [한국어](ko/personal-sdk.md)
 
 The SDK accepts an `endpoint` or a custom `transport`. React is optional. For persistent storage, start with the [self-hosting guide](micro-server.md).
 
-The MIT-licensed `0.1.1` browser SDK and protocol are available on npm. The React adapter's latest published version is `0.1.0`; the `0.1.2` maintenance release is pending. In the consuming app, install the browser SDK:
+The MIT-licensed `0.1.2` browser SDK, protocol, and React adapter are available on npm. In the consuming app, install the browser SDK:
 
 ```sh
 npm install browser-error-log
 ```
 
-For an existing React 18/19 app, install the matching published `0.1.0` pair until `0.1.2` is verified:
+For an existing React 18/19 app, install the browser SDK and optional React adapter:
 
 ```sh
-npm install browser-error-log@0.1.0 browser-error-log-react@0.1.0
+npm install browser-error-log browser-error-log-react
 ```
 
 For ordinary app integration, you do not need a separate protocol install. `browser-error-log-protocol` is installed automatically with the SDK and contains the shared event types and constants. Install it directly only when importing those contracts in your own collector or viewer. It is not an error collector or a server.

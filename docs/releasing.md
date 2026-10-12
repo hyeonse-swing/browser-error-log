@@ -2,7 +2,7 @@
 
 English | [한국어](ko/releasing.md)
 
-The [GitHub repository](https://github.com/hyeonse-swing/browser-error-log) holds the MIT-licensed source. All three SDK packages have a published `0.1.0` version. The browser SDK and protocol also have published `0.1.1` versions; `browser-error-log-react@0.1.1` was never published and its latest public version is `0.1.0`. A `0.1.2` maintenance release is being prepared but is not yet published. The workspace root and apps remain private. npm publication is separate from a GitHub release or tag.
+The [GitHub repository](https://github.com/hyeonse-swing/browser-error-log) holds the MIT-licensed source. The browser SDK, protocol, and React adapter are published on npm at `0.1.2`. All three also have a published `0.1.0` version; the browser SDK and protocol have published `0.1.1` versions, while `browser-error-log-react@0.1.1` was never published. Before `0.1.2`, the React adapter's latest public version was `0.1.0`. The workspace root and apps remain private. npm publication is separate from a GitHub release or tag.
 
 ## Verified `0.1.0` packages
 
@@ -27,16 +27,24 @@ The two linked `0.1.1` versions are visible in the npm registry. Do not infer th
 
 The repository's viewer, demo, and install example have an English-default language selector that remembers the selected language when browser storage is available. English and Korean documentation are linked in both directions. This UI is built from the source repository and is **not** part of the browser SDK runtime.
 
-## Pending `0.1.2` maintenance release
+## Published `0.1.2` maintenance release
 
-`0.1.2` is a candidate, not a published or registry-verified release. Its maintenance changes are:
+All three `0.1.2` packages are published and verified in the npm registry:
+
+| Package | Purpose |
+| --- | --- |
+| [browser-error-log](https://www.npmjs.com/package/browser-error-log/v/0.1.2) | Browser SDK |
+| [browser-error-log-react](https://www.npmjs.com/package/browser-error-log-react/v/0.1.2) | Optional React Error Boundary |
+| [browser-error-log-protocol](https://www.npmjs.com/package/browser-error-log-protocol/v/0.1.2) | Event and query contracts |
+
+The registry artifacts match the reviewed tarballs' SHA-512 integrity values. Fresh registry installations passed TypeScript, ESM, CommonJS, and SSR smoke checks, including a browser-only installation without React. The maintenance changes are:
 
 - The browser SDK strips query strings from relative URL-like values in error text and context while retaining relative paths. This includes slash-containing and bare sibling paths, query-only references, and bracket or fragment cases. It is best-effort masking, not guaranteed anonymization.
 - The React Error Boundary gives its fallback an `Error` even when a component throws `null`, `undefined`, `false`, `0`, an empty string, or another non-`Error` value, including one whose `toString` throws. It still forwards the original thrown value to `captureException`.
 - JSONL startup rejects preexisting logs that exceed a lowered file-size or file-count cap without deleting previously acknowledged records. Recovery of a truncated final line remains supported.
 - A dashboard test freezes its clock so its fixture does not depend on the current date; this does not change runtime behavior.
 
-`npm run check` passed typecheck, 96 tests across 12 files, and the build; the browser SDK gzip size was 4,934 of the 20,480-byte budget. `npm run check:package` passed isolated `0.1.2` tarball installation and TypeScript, ESM, CommonJS, SSR, and browser-only checks without React. The built micro-server smoke check passed. Registry publication and verification are still pending.
+`npm run check` passed typecheck, 96 tests across 12 files, and the build; the browser SDK gzip size was 4,934 of the 20,480-byte budget. `npm run check:package` passed isolated `0.1.2` tarball installation and TypeScript, ESM, CommonJS, SSR, and browser-only checks without React. The built micro-server smoke check passed.
 
 Release validation commands:
 
@@ -47,7 +55,7 @@ npm run check:package
 npm run check:micro
 ```
 
-For the currently published browser SDK, use `npm install browser-error-log`; its protocol dependency resolves transitively. For React, use the matching published `0.1.0` pair: `npm install browser-error-log@0.1.0 browser-error-log-react@0.1.0`. The `0.1.2` workspace's `check:package` builds `browser-error-log-protocol-0.1.2.tgz`, `browser-error-log-0.1.2.tgz`, and `browser-error-log-react-0.1.2.tgz` under `output/packages/`; see the [SDK guide](personal-sdk.md). Local tarballs alone do not prove registry publication.
+Install the latest browser SDK with `npm install browser-error-log`; its protocol dependency resolves transitively. For React, use `npm install browser-error-log browser-error-log-react`. The `0.1.2` workspace's `check:package` builds `browser-error-log-protocol-0.1.2.tgz`, `browser-error-log-0.1.2.tgz`, and `browser-error-log-react-0.1.2.tgz` under `output/packages/`; see the [SDK guide](personal-sdk.md). Local tarballs alone do not prove registry publication.
 
 ## Future releases
 
