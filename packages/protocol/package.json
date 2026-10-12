@@ -1,6 +1,6 @@
 {
   "name": "browser-error-log-protocol",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Versioned event and query contracts for Browser Error Log collectors and viewers.",
   "keywords": [
     "error-monitoring",
