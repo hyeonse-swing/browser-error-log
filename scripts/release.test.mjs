@@ -6,12 +6,14 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   PACKAGES, assertTarballsMatchManifest, assertVersions, decideRelease,
-  isReleaseRelevantPath, isStalePush, nextPatch, readTagManifest, setVersion,
+  isReleaseRelevantPath, isStalePush, nextPatch, nextVersion, readTagManifest,
+  rejectUnappliedManualBump, selectReleaseBump, setVersion,
 } from './release-common.mjs';
 import {
   lookupExactVersion, releaseAdvanceState, releaseRegistryState, waitForRegistryPackage,
 } from './release-registry.mjs';
 import { isSuccessfulTaggedPublishRun, verifiedPublishAttempt } from './release-github.mjs';
+import { buildGithubReleaseNotes, ensureGithubRelease } from './release-github-release.mjs';
 
 test('docs-only changes skip; packed package docs and release inputs trigger', () => {
   for (const path of ['README.md', 'docs/releasing.md', 'docs/ko/releasing.md', 'apps/viewer/src/App.tsx']) {
@@ -24,6 +26,33 @@ test('docs-only changes skip; packed package docs and release inputs trigger', (
   assert.equal(decideRelease({ tagExists: false, published: true, paths: ['README.md'] }), 'skip');
   assert.equal(decideRelease({ tagExists: true, published: true, paths: ['packages/browser/src/index.ts'] }), 'bump');
   assert.equal(decideRelease({ tagExists: true, published: false, paths: ['packages/browser/src/index.ts'] }), 'resume');
+  assert.equal(decideRelease({ tagExists: true, published: true, paths: ['README.md'], bump: 'minor' }), 'bump');
+  assert.equal(decideRelease({ tagExists: true, published: false, paths: ['README.md'], bump: 'major' }), 'resume');
+});
+
+test('only manual dispatch may select minor or major; automatic changes remain patch', () => {
+  assert.equal(selectReleaseBump('push', 'major'), 'patch');
+  assert.equal(selectReleaseBump('workflow_dispatch'), 'patch');
+  assert.equal(selectReleaseBump('workflow_dispatch', 'minor'), 'minor');
+  assert.equal(selectReleaseBump('workflow_dispatch', 'major'), 'major');
+  assert.equal(selectReleaseBump('workflow_dispatch', 'minor', '1'), 'minor');
+  assert.equal(selectReleaseBump('workflow_dispatch', 'patch', '2'), 'patch');
+  assert.equal(selectReleaseBump('push', 'major', '2'), 'patch');
+  for (const bump of ['minor', 'major']) {
+    assert.throws(() => selectReleaseBump('workflow_dispatch', bump, '2'),
+      /cannot be rerun.*existing publisher.*new workflow_dispatch/);
+  }
+  assert.throws(() => selectReleaseBump('workflow_dispatch', 'custom'), /Invalid manual release bump/);
+  assert.equal(nextVersion('0.1.4', 'minor'), '0.2.0');
+  assert.equal(nextVersion('0.1.4', 'major'), '1.0.0');
+  assert.equal(nextVersion('0.1.4', 'patch'), '0.1.5');
+  assert.throws(() => nextVersion('0.1.4', 'custom'), /Invalid version or bump/);
+  assert.doesNotThrow(() => rejectUnappliedManualBump('patch', 'prior release incomplete'));
+  for (const bump of ['minor', 'major']) {
+    assert.throws(() => rejectUnappliedManualBump(bump, 'prior release incomplete'),
+      new RegExp(`Manual ${bump} request was not applied.*rerun`));
+    assert.throws(() => rejectUnappliedManualBump(bump, 'main advanced'), /main advanced.*rerun/);
+  }
 });
 
 test('stale main events cannot reserve a release version', () => {
@@ -51,6 +80,24 @@ test('one patch bump synchronizes manifests, lockfile, pins and runtime literals
   assert.match(readFileSync(join(scratch, 'packages/protocol/README.md'), 'utf8'),
     new RegExp(`browser-error-log-protocol-${next.replaceAll('.', '\\.')}\\.tgz`));
   assert.throws(() => setVersion(next, scratch), /single patch bump/);
+});
+
+test('minor and major bumps synchronize every version location without reusing a patch', () => {
+  for (const bump of ['minor', 'major']) {
+    const scratch = mkdtempSync(join(tmpdir(), `browser-error-log-${bump}-`));
+    for (const file of [
+      'package.json', 'package-lock.json', 'apps/viewer/package.json',
+      ...PACKAGES.map(pkg => `${pkg.path}/package.json`),
+      'packages/browser/src/index.ts', 'packages/protocol/src/index.ts',
+      'packages/protocol/README.md', 'packages/protocol/README.ko.md',
+    ]) cpSync(file, join(scratch, file), { recursive: true });
+    const current = assertVersions(scratch);
+    const next = nextVersion(current, bump);
+    assert.throws(() => setVersion(next, scratch), /single patch bump/);
+    setVersion(next, scratch, bump);
+    assert.equal(assertVersions(scratch), next);
+    assert.throws(() => setVersion(next, scratch, bump), new RegExp(`single ${bump} bump`));
+  }
 });
 
 const integrity = 'sha512-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==';
@@ -137,25 +184,26 @@ test('publisher follow-up advances only the current tag after every registry dig
   } }), /integrity mismatch/);
 });
 
-test('publisher proof requires this tag, commit, workflow and successful job in the latest attempt', async () => {
+test('publisher proof requires this tag, commit, workflow and both successful jobs in the latest attempt', async () => {
   const run = {
     id: 42, run_attempt: 2, event: 'workflow_dispatch', path: '.github/workflows/publish.yml',
     repository: { full_name: 'hyeonse-swing/browser-error-log' },
     head_repository: { full_name: 'hyeonse-swing/browser-error-log' },
-    head_branch: 'v0.1.3', head_sha: 'tag-commit',
+    head_branch: 'v0.1.5', head_sha: 'tag-commit',
   };
   const job = { name: 'publish', status: 'completed', conclusion: 'success',
-    run_id: 42, run_attempt: 2, head_branch: 'v0.1.3', head_sha: 'tag-commit' };
-  const proof = { tag: 'v0.1.3', headSha: 'tag-commit', runId: '42', attempt: '2' };
-  const api = (candidateRun = run, candidateJob = job) => async path =>
-    path.includes('/jobs?') ? { total_count: 1, jobs: [candidateJob] } : candidateRun;
+    run_id: 42, run_attempt: 2, head_branch: 'v0.1.5', head_sha: 'tag-commit' };
+  const releaseJob = { ...job, name: 'github_release' };
+  const proof = { tag: 'v0.1.5', headSha: 'tag-commit', runId: '42', attempt: '2' };
+  const api = (candidateRun = run, jobs = [job, releaseJob]) => async path =>
+    path.includes('/jobs?') ? { total_count: jobs.length, jobs } : candidateRun;
   assert.equal(await verifiedPublishAttempt({ ...proof, api: api() }), true);
   assert.equal(isSuccessfulTaggedPublishRun({ ...run, status: 'completed', conclusion: 'success' },
-    'v0.1.3', 'tag-commit'), true);
+    'v0.1.5', 'tag-commit'), true);
   assert.equal(isSuccessfulTaggedPublishRun({ ...run, status: 'completed', conclusion: 'success', head_branch: 'main' },
-    'v0.1.3', 'tag-commit'), false);
+    'v0.1.5', 'tag-commit'), false);
   assert.equal(isSuccessfulTaggedPublishRun({ ...run, status: 'completed', conclusion: 'success', path: '.github/workflows/other.yml' },
-    'v0.1.3', 'tag-commit'), false);
+    'v0.1.5', 'tag-commit'), false);
   for (const changed of [
     { head_sha: 'another-commit' }, { head_branch: 'v0.1.2' },
     { path: '.github/workflows/other.yml' }, { event: 'push' },
@@ -167,10 +215,56 @@ test('publisher proof requires this tag, commit, workflow and successful job in 
     { conclusion: 'failure' }, { status: 'in_progress' }, { run_attempt: 1 },
     { head_sha: 'another-commit' }, { name: 'catchup' },
   ]) {
-    assert.equal(await verifiedPublishAttempt({ ...proof, api: api(run, { ...job, ...changed }) }), false);
+    assert.equal(await verifiedPublishAttempt({ ...proof, api: api(run, [{ ...job, ...changed }, releaseJob]) }), false);
+    assert.equal(await verifiedPublishAttempt({ ...proof, api: api(run, [job, { ...releaseJob, ...changed }]) }), false);
   }
+  assert.equal(await verifiedPublishAttempt({ ...proof, api: api(run, [job]) }), false);
   assert.equal(await verifiedPublishAttempt({ ...proof, attempt: '1', api: api() }), false);
   assert.equal(await verifiedPublishAttempt({ ...proof, runId: 'invalid', api: async () => { throw Error('unexpected API call'); } }), false);
+  const legacySha = 'e711a54ea73294daf771921c95b3d5a61d08b0dd';
+  const legacyRun = { ...run, head_branch: 'v0.1.4', head_sha: legacySha };
+  const legacyJob = { ...job, head_branch: 'v0.1.4', head_sha: legacySha };
+  assert.equal(await verifiedPublishAttempt({ tag: 'v0.1.4', headSha: legacySha,
+    runId: '42', attempt: '2', api: api(legacyRun, [legacyJob]) }), true);
+  assert.equal(await verifiedPublishAttempt({ tag: 'v0.1.4', headSha: 'different',
+    runId: '42', attempt: '2', api: api({ ...legacyRun, head_sha: 'different' }, [{ ...legacyJob, head_sha: 'different' }]) }), false);
+});
+
+test('GitHub Release notes contain source commits, all package versions and exact compare link', () => {
+  const previousRef = 'v0.1.4';
+  const tag = 'v0.1.5';
+  const sha = 'a'.repeat(40);
+  const notes = buildGithubReleaseNotes({ tag, previousRef,
+    commits: [{ sha, subject: 'fix: capture [network] failures' }] });
+  assert.ok(notes.includes(String.raw`fix: capture \[network\] failures`));
+  assert.match(notes, new RegExp(`github.com/hyeonse-swing/browser-error-log/commit/${sha}`));
+  for (const pkg of PACKAGES) assert.ok(notes.includes(`www.npmjs.com/package/${pkg.name}/v/0.1.5`));
+  assert.ok(notes.includes('github.com/hyeonse-swing/browser-error-log/compare/v0.1.4...v0.1.5'));
+  assert.match(buildGithubReleaseNotes({ tag, previousRef, commits: [] }), /No source commits/);
+});
+
+test('GitHub Release creation is idempotent and rejects drafts or mismatched notes', () => {
+  const tag = 'v0.1.5';
+  const notes = 'expected notes\n';
+  const release = { tag_name: tag, draft: false, published_at: '2026-10-12T00:00:00Z', body: notes };
+  let current = null;
+  let creates = 0;
+  const lookup = () => current;
+  const create = () => { creates++; current = release; };
+  const args = { tag, notes, lookup, create };
+  assert.equal(ensureGithubRelease(args), 'created');
+  assert.equal(ensureGithubRelease(args), 'already published');
+  assert.equal(creates, 1);
+  current = { ...release, draft: true };
+  assert.throws(() => ensureGithubRelease(args), /expected notes/);
+  current = { ...release, body: 'other notes' };
+  assert.throws(() => ensureGithubRelease(args), /expected notes/);
+  current = null;
+  assert.throws(() => ensureGithubRelease({ ...args, create: () => { throw Error('permission denied'); } }), /permission denied/);
+  assert.equal(ensureGithubRelease({ ...args, create: () => {
+    current = release;
+    throw Error('already exists');
+  } }), 'already published');
 });
 
 test('registry visibility retries 404, then verifies digest; server errors do not retry', async () => {

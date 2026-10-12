@@ -17,7 +17,7 @@ The default SDK sends `POST application/json` to its configured `endpoint` with 
     "project": "my-web",
     "environment": "staging",
     "release": "build-id",
-    "sdkVersion": "0.1.1",
+    "sdkVersion": "<installed-sdk-version>",
     "occurredAt": "2026-10-02T07:00:00.000Z",
     "viewId": "document-instance-id",
     "sequence": 1,
@@ -30,7 +30,7 @@ The default SDK sends `POST application/json` to its configured `endpoint` with 
 }
 ```
 
-Optional fields are `name`, `stack`, `componentStack`, `browser`, `context`, and `network`. Context values are strings, finite numbers, booleans, or null. Network data contains `method`, `url`, `durationMs`, and optionally `status`. Event times use ISO UTC; the server may add `receivedAt`. `project` and `Origin` are public client claims, not authentication.
+`sdkVersion` is a placeholder in this example; the SDK sets it to its installed package version. Optional fields are `name`, `stack`, `componentStack`, `browser`, `context`, and `network`. Context values are strings, finite numbers, booleans, or null. Network data contains `method`, `url`, `durationMs`, and optionally `status`. Event times use ISO UTC; the server may add `receivedAt`. `project` and `Origin` are public client claims, not authentication.
 
 A 2xx response acknowledges the whole batch; the SDK ignores its body. It retries 429, 5xx, and network failures up to twice after the first attempt, with the same event IDs. Other 4xx responses are permanent failures. The default per-attempt timeout is five seconds. The SDK cannot interpret partial acceptance; a backend should validate and durably write each batch atomically before 2xx and deduplicate by `(project, eventId)`.
 

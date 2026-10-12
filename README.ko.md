@@ -87,4 +87,11 @@ SDK는 URL의 쿼리·해시·사용자 정보를 제거하고 흔한 민감정�
 | `apps/demo`, `apps/local-collector` | 메모리 전용 로컬 개발 예제 |
 | `examples/micro-server` | 파일 기반 SQLite 또는 JSONL 수집기 |
 
-코드와 빌드 예제는 `npm run check`, `npm run check:package`, `npm run check:micro`로 검증합니다. 외부 TLS, 특정 배포 환경, 실제 기기 동작은 해당 환경에서 별도 확인해야 합니다.
+코드와 빌드 예제는 `npm run check`, `npm run check:package`, `npm run check:micro`로 검증합니다. 실제 Chromium·WebKit 전송 검사는 테스트 브라우저를 한 번 설치한 뒤 실행합니다.
+
+```sh
+npx playwright install --with-deps chromium webkit
+npm run check:browser
+```
+
+브라우저 검사는 런타임 오류, 처리되지 않은 Promise 거부, HTTP 요청 실패를 빌드된 SDK로 수집해 임시 로컬 수집기에 전달합니다. `main` 대상 PR에서는 [Verify changes](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/ci.yml)가 이 검사들을 실행합니다. 자동 patch·수동 minor/major 릴리스와 GitHub 릴리스 노트는 [릴리스 가이드](docs/ko/releasing.md)에 있습니다. 외부 TLS, 특정 배포 환경, 실제 기기 동작은 해당 환경에서 별도 확인해야 합니다.

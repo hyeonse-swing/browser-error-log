@@ -73,11 +73,11 @@ npm run check:micro
 
 SDK 변경을 `main`에 푸시하면 [Prepare npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/prepare.yml)가 시작됩니다. 이전 릴리스 이후 패키지·빌드 관련 변경을 확인하고 공통 patch 버전을 올린 뒤 릴리스 검사를 실행합니다. 루트 README, 가이드, 뷰어만 바뀐 경우에는 SDK를 게시하지 않습니다.
 
-준비 단계는 패키지 버전, 의존성 고정 버전, lockfile, SDK 버전 값을 함께 커밋하고 해당 커밋에 `vX.Y.Z` 태그를 붙여 푸시합니다. 이어서 그 태그로 [Publish npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/publish.yml)를 실행합니다. 게시 단계는 정확히 그 소스를 다시 빌드·검사하고 프로토콜 → 브라우저 SDK → React 어댑터 순서로 게시한 뒤 레지스트리 파일과 새 설치를 검증합니다. 태그는 릴리스 버전을 예약하며, 게시 워크플로가 성공해야 릴리스 완료입니다.
+준비 단계는 패키지 버전, 의존성 고정 버전, lockfile, SDK 버전 값을 함께 커밋하고 해당 커밋에 `vX.Y.Z` 태그를 붙여 푸시합니다. 이어서 그 태그로 [Publish npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/publish.yml)를 실행합니다. 게시 단계는 정확히 그 소스를 다시 빌드·검사하고 프로토콜 → 브라우저 SDK → React 어댑터 순서로 게시한 뒤 레지스트리 파일과 새 설치를 검증합니다. 검증 후 별도 작업이 기존 태그의 [GitHub Release](https://github.com/hyeonse-swing/browser-error-log/releases)를 만들고 커밋 기반 변경 내역, 비교 링크, 세 npm 패키지 링크를 기록합니다. 같은 릴리스를 다시 실행하면 기존 GitHub Release를 재사용합니다. 태그는 릴리스 버전을 예약하며, 게시 워크플로가 성공해야 릴리스 완료입니다.
 
 인증에는 GitHub OIDC 기반의 [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)을 사용합니다. 각 패키지는 `hyeonse-swing/browser-error-log` 저장소, `publish.yml` 워크플로, `npm` 환경에 직접 게시 권한으로 연결됩니다. GitHub의 해당 환경에는 `v*` 태그만 허용하며, 저장소 ruleset으로 해당 태그의 변경·삭제를 막습니다. npm 토큰 시크릿은 필요하지 않습니다. Trusted Publisher 연결을 변경할 때에는 npm이 유지관리자에게 2단계 인증을 요청할 수 있습니다.
 
-게시가 중간에 멈추면 원래 태그로 실패한 게시 워크플로를 다시 실행합니다. 이미 게시된 패키지는 무결성을 확인하고, 없는 패키지만 게시합니다. 해당 태그를 옮기거나 같은 버전의 소스를 바꾸지 마세요. 미완료 릴리스가 있으면 준비 단계는 버전을 추가로 올리지 않습니다. 레지스트리·새 설치 검증이 성공하면 게시 워크플로가 준비 단계를 명시적으로 다시 실행해 그동안 들어온 SDK 변경을 확인합니다. 이때 해당 태그의 게시 작업이 성공했고 모든 패키지가 태그에 기록된 파일과 일치해야 다음 버전으로 진행합니다. 같은 검사를 수동으로 시작할 수도 있습니다.
+게시가 중간에 멈추면 원래 태그로 실패한 게시 워크플로를 다시 실행합니다. 이미 게시된 패키지는 무결성을 확인하고, 없는 패키지만 게시합니다. 해당 태그를 옮기거나 같은 버전의 소스를 바꾸지 마세요. 미완료 릴리스가 있으면 준비 단계는 버전을 추가로 올리지 않습니다. npm 검증과 GitHub Release 생성이 성공하면 게시 워크플로가 준비 단계를 명시적으로 다시 실행해 그동안 들어온 SDK 변경을 확인합니다. 이때 해당 태그의 npm 게시·GitHub Release 작업이 모두 성공했고 모든 패키지가 태그에 기록된 파일과 일치해야 다음 버전으로 진행합니다. 같은 검사를 수동으로 시작할 수도 있습니다.
 
 ```sh
 # vX.Y.Z를 실패한 릴리스의 기존 태그로 바꿉니다.
@@ -85,7 +85,27 @@ gh workflow run publish.yml --repo hyeonse-swing/browser-error-log --ref vX.Y.Z
 gh workflow run prepare.yml --repo hyeonse-swing/browser-error-log --ref main
 ```
 
-저장소 About의 웹사이트와 README 배지는 npm에 연결됩니다. GitHub의 Packages 사이드바는 별도 레지스트리인 GitHub Packages용이며, 이 패키지들은 npmjs.org에 게시합니다.
+저장소 About의 웹사이트와 README 배지는 npm에 연결됩니다. GitHub Releases에서는 저장소의 버전 기록을 확인할 수 있습니다. GitHub의 Packages 사이드바는 별도 레지스트리인 GitHub Packages용이며, 이 패키지들은 npmjs.org에 게시합니다.
+
+## 수동 minor·major 릴리스
+
+기본 동작은 자동 patch 릴리스입니다. minor 또는 major 버전을 의도적으로 선택하려면 `main`에서 `release_bump` 입력으로 준비 단계를 실행합니다.
+
+```sh
+gh workflow run prepare.yml --repo hyeonse-swing/browser-error-log --ref main -f release_bump=minor
+# major 릴리스가 필요한 경우:
+gh workflow run prepare.yml --repo hyeonse-swing/browser-error-log --ref main -f release_bump=major
+```
+
+minor는 minor 버전을 올리고 patch를 0으로, major는 major 버전을 올리고 minor·patch를 0으로 만듭니다. 명시적인 수동 요청은 새 SDK 파일 변경이 없어도 릴리스를 만듭니다. 이전 릴리스 완료 여부를 확인하고 동일한 검사, 버전 동기화, 변경 불가 태그 기반 게시 절차를 거칩니다. 이전 릴리스가 미완료이면 필요할 때 게시를 재개하고, 완료 후 수동 버전 증가를 다시 요청해야 한다고 알립니다. 푸시와 자동 후속 실행은 patch를 사용합니다. 공개 API를 변경할 때에는 호환성을 직접 판단해야 하며, 워크플로가 diff만으로 호환성을 추론하지는 않습니다.
+
+수동 minor·major는 위 명령으로 매번 새 준비 실행을 요청합니다. 같은 요청이 다른 버전까지 예약하지 않도록 기존 준비 실행의 재실행은 거절합니다. 원래 실행에서 이미 태그를 만들었다면 해당 태그의 게시를 재개한 뒤 새 버전을 요청하세요.
+
+## PR·브라우저 검사
+
+[Verify changes](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/ci.yml)는 `main` 대상 PR에서 실행되며 수동으로 실행할 수도 있습니다. 릴리스 로직, TypeScript, 애플리케이션 테스트, 빌드, 패키지 consumer, 마이크로 서버, 실제 Chromium·WebKit 전송을 검사합니다. 작업에는 저장소 읽기 권한만 있으며 패키지를 게시하지 않습니다. 브라우저 검사 실패 시 증거 파일을 워크플로 아티팩트로 7일간 보관합니다.
+
+로컬에서는 `npx playwright install --with-deps chromium webkit` 후 `npm run check:browser`로 실행합니다. SDK와 수집기를 빌드하고 임시 로컬 데이터를 사용해 런타임 오류, 처리되지 않은 Promise 거부, HTTP 실패가 수집기에 도착하는지 검사합니다. 이 브라우저 엔진 검사로 실제 기기나 WebView 호환성까지 검증한 것은 아닙니다.
 
 ## 수동 릴리스 체크리스트
 

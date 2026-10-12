@@ -31,19 +31,42 @@ export function isReleaseRelevantPath(path) {
     || /^scripts\/release[^/]*\.mjs$/.test(path);
 }
 
-export function nextPatch(version) {
+export function nextVersion(version, bump = 'patch') {
   const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version);
-  if (!match || !Number.isSafeInteger(Number(match[3]) + 1)) throw new Error(`Invalid patch version: ${version}`);
-  return `${match[1]}.${match[2]}.${Number(match[3]) + 1}`;
+  if (!match || !['patch', 'minor', 'major'].includes(bump)) {
+    throw new Error(`Invalid version or bump: ${version} (${bump})`);
+  }
+  const [major, minor, patch] = match.slice(1).map(Number);
+  if (![major, minor, patch].every(Number.isSafeInteger)) throw new Error(`Invalid version: ${version}`);
+  const next = bump === 'major' ? [major + 1, 0, 0]
+    : bump === 'minor' ? [major, minor + 1, 0] : [major, minor, patch + 1];
+  if (!next.every(Number.isSafeInteger)) throw new Error(`Version overflow: ${version} (${bump})`);
+  return next.join('.');
+}
+
+export const nextPatch = version => nextVersion(version, 'patch');
+
+export function selectReleaseBump(eventName, input, attempt = '1') {
+  if (eventName !== 'workflow_dispatch') return 'patch';
+  const bump = input ?? 'patch';
+  if (!['patch', 'minor', 'major'].includes(bump)) throw new Error(`Invalid manual release bump: ${bump}`);
+  if (bump !== 'patch' && String(attempt) !== '1') {
+    throw new Error(`Manual ${bump} request cannot be rerun; inspect or resume the existing publisher, or start a new workflow_dispatch for an intentional bump.`);
+  }
+  return bump;
+}
+
+export function rejectUnappliedManualBump(bump, reason) {
+  if (bump !== 'patch') throw new Error(`Manual ${bump} request was not applied: ${reason}; rerun the request.`);
 }
 
 export function isStalePush(eventName, eventSha, remoteSha, localSha) {
   return localSha !== remoteSha || (eventName === 'push' && eventSha !== remoteSha);
 }
 
-export function decideRelease({ tagExists, published, paths }) {
+export function decideRelease({ tagExists, published, paths, bump = 'patch' }) {
   if (tagExists && !published) return 'resume';
-  return paths.some(isReleaseRelevantPath) ? 'bump' : 'skip';
+  return bump !== 'patch' || paths.some(isReleaseRelevantPath) ? 'bump' : 'skip';
 }
 
 const readJson = path => JSON.parse(readFileSync(path, 'utf8'));
@@ -98,9 +121,11 @@ function replaceExactlyOnce(source, pattern, replacement, label) {
   return source.replace(pattern, replacement);
 }
 
-export function setVersion(next, root = '.') {
+export function setVersion(next, root = '.', bump = 'patch') {
   const previous = assertVersions(root);
-  if (nextPatch(previous) !== next) throw new Error(`Only a single patch bump is allowed: ${previous} -> ${next}`);
+  if (nextVersion(previous, bump) !== next) {
+    throw new Error(`Only a single ${bump} bump is allowed: ${previous} -> ${next}`);
+  }
   for (const path of versionFiles) {
     const file = resolve(root, path);
     const data = readJson(file);

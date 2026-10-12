@@ -5,6 +5,15 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      release_bump:
+        description: Version bump for a manual release (automatic main pushes always use patch)
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
       verified_release_tag:
         description: Tag whose npm packages passed the publisher's registry and consumer checks
         required: false

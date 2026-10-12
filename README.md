@@ -87,4 +87,11 @@ Infrastructure is not included. Hosting, servers, databases, storage, bandwidth,
 | `apps/demo`, `apps/local-collector` | Local development examples; memory only |
 | `examples/micro-server` | File-backed SQLite or JSONL collector |
 
-Run `npm run check`, `npm run check:package`, and `npm run check:micro` to validate code and built examples. External TLS, a specific deployment, and real device behavior require separate checks in that environment.
+Run `npm run check`, `npm run check:package`, and `npm run check:micro` to validate code and built examples. For actual Chromium and WebKit delivery checks, install the test browsers once and run:
+
+```sh
+npx playwright install --with-deps chromium webkit
+npm run check:browser
+```
+
+The browser suite sends runtime errors, unhandled promise rejections, and failed HTTP requests through the built SDK to a temporary local collector. Pull requests to `main` run these checks in [Verify changes](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/ci.yml). See the [release guide](docs/releasing.md) for automatic patch releases, manual minor/major releases, and GitHub release notes. External TLS, a specific deployment, and real device behavior require separate checks in that environment.

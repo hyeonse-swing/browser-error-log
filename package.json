@@ -19,12 +19,14 @@
     "start:micro": "node dist/micro-server/server.mjs",
     "export:logs": "node dist/micro-server/export.mjs",
     "check:package": "npm run build:sdk && node scripts/verify-package.mjs",
+    "check:browser": "npm run build:micro && playwright test",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm test && npm run build",
     "preview": "vite preview --host 127.0.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

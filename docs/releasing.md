@@ -73,11 +73,11 @@ This release explicitly dispatches preparation after successful publication and 
 
 Push SDK changes to `main` to start [Prepare npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/prepare.yml). The workflow checks for package or build changes since the previous release, increases the shared patch version, and runs the release checks. Changes limited to the root README, guides, or viewer do not publish an SDK release.
 
-Preparation commits the synchronized package versions, dependency pins, lockfile, and SDK version values, then pushes a `vX.Y.Z` tag pointing to that commit. It starts [Publish npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/publish.yml) on the tag. The publisher rebuilds and checks that exact source, publishes protocol → browser SDK → React adapter, and verifies the registry artifacts and fresh installations. A tag reserves the release version; the publishing workflow must finish successfully before the release is complete.
+Preparation commits the synchronized package versions, dependency pins, lockfile, and SDK version values, then pushes a `vX.Y.Z` tag pointing to that commit. It starts [Publish npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/publish.yml) on the tag. The publisher rebuilds and checks that exact source, publishes protocol → browser SDK → React adapter, and verifies the registry artifacts and fresh installations. After verification, a separate job creates a [GitHub Release](https://github.com/hyeonse-swing/browser-error-log/releases) for that existing tag with commit-based changes, a comparison link, and all three npm package links. Rerunning the same release reuses its existing GitHub Release. A tag reserves the release version; the publishing workflow must finish successfully before the release is complete.
 
 Publishing uses [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) with GitHub OIDC. Each package is connected to `hyeonse-swing/browser-error-log`, workflow `publish.yml`, environment `npm`, with direct publishing allowed. The GitHub environment permits only `v*` tags, and a repository ruleset blocks updates and deletion of those tags. No npm token secret is needed. Maintainers may need npm 2FA when changing the trusted publisher connection.
 
-If publication stops partway, rerun the failed publishing workflow using the original tag. It checks the integrity of already published packages and publishes only missing packages. Do not move the tag or change the source for that version. Preparation will not increment past an unfinished release. After registry and fresh-install verification succeeds, the publisher explicitly dispatches another preparation check to pick up SDK changes that arrived meanwhile. That check verifies the tagged publish job succeeded and every package matches the tag manifest before advancing. The same checks can also be started manually:
+If publication stops partway, rerun the failed publishing workflow using the original tag. It checks the integrity of already published packages and publishes only missing packages. Do not move the tag or change the source for that version. Preparation will not increment past an unfinished release. After npm verification and GitHub Release creation succeed, the publisher explicitly dispatches another preparation check to pick up SDK changes that arrived meanwhile. That check verifies the tagged publish and GitHub Release jobs succeeded and every package matches the tag manifest before advancing. The same checks can also be started manually:
 
 ```sh
 # Replace vX.Y.Z with the existing failed release tag.
@@ -85,7 +85,27 @@ gh workflow run publish.yml --repo hyeonse-swing/browser-error-log --ref vX.Y.Z
 gh workflow run prepare.yml --repo hyeonse-swing/browser-error-log --ref main
 ```
 
-The repository's About website and README badge link to npm. GitHub's Packages sidebar lists GitHub Packages, a separate registry; these packages are published to npmjs.org.
+The repository's About website and README badge link to npm. GitHub Releases provide version history in the repository. GitHub's Packages sidebar lists GitHub Packages, a separate registry; these packages are published to npmjs.org.
+
+## Manual minor and major releases
+
+The default remains automatic patch releases. To intentionally choose a minor or major release, dispatch preparation on `main` with `release_bump`:
+
+```sh
+gh workflow run prepare.yml --repo hyeonse-swing/browser-error-log --ref main -f release_bump=minor
+# Or, for a major release:
+gh workflow run prepare.yml --repo hyeonse-swing/browser-error-log --ref main -f release_bump=major
+```
+
+A minor release increments the minor version and resets patch to zero; a major release increments major and resets minor and patch to zero. These explicit manual requests also release when there are no new SDK file changes. They still require the previous release to be complete and run the same validation, version synchronization, and immutable-tag publication. If a previous release is unfinished, preparation resumes it when needed and reports that the manual bump must be requested again after completion. Pushes and automatic follow-up runs use patch. Changing a public API requires a deliberate compatibility decision; the workflow does not infer compatibility from a diff.
+
+Each manual minor/major request starts a new preparation run with the commands above. Re-running a previous preparation attempt is rejected to prevent the same request from reserving another version. If the original run already created a tag, resume its publisher with that tag before requesting a new version.
+
+## Pull-request and browser checks
+
+[Verify changes](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/ci.yml) runs on pull requests to `main` and can also be dispatched manually. It checks release logic, TypeScript, application tests, builds, packaged consumers, the micro server, and real Chromium/WebKit delivery. The job has read-only repository permissions and does not publish packages. Failed browser runs retain their evidence as workflow artifacts for seven days.
+
+Run the browser checks locally with `npx playwright install --with-deps chromium webkit`, then `npm run check:browser`. The suite builds the SDK and collector, uses temporary local data, and verifies runtime errors, unhandled promise rejections, and HTTP failures arrive at the collector. These browser-engine checks do not establish real-device or WebView compatibility.
 
 ## Manual release checklist
 

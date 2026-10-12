@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   REPOSITORY, UNTAGGED_BASELINE, assertVersions, createTagManifest, decideRelease,
-  git, isStalePush, nextPatch, packRelease, readTagManifest, run, setVersion,
+  git, isStalePush, nextVersion, packRelease, readTagManifest, rejectUnappliedManualBump,
+  run, selectReleaseBump, setVersion,
 } from './release-common.mjs';
 import { releaseAdvanceState } from './release-registry.mjs';
 import { isSuccessfulTaggedPublishRun, verifiedPublishAttempt } from './release-github.mjs';
@@ -22,11 +23,13 @@ const dispatch = (workflow, ref) => run('gh', [
 ]);
 const inputs = process.env.GITHUB_EVENT_NAME === 'workflow_dispatch'
   ? JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')).inputs ?? {} : {};
+const bump = selectReleaseBump(process.env.GITHUB_EVENT_NAME, inputs.release_bump, process.env.GITHUB_RUN_ATTEMPT);
 
 git(['fetch', '--tags', 'origin', 'main']);
 const remoteMain = git(['rev-parse', 'refs/remotes/origin/main']);
 const localHead = git(['rev-parse', 'HEAD']);
 if (isStalePush(process.env.GITHUB_EVENT_NAME, process.env.GITHUB_SHA, remoteMain, localHead)) {
+  rejectUnappliedManualBump(bump, 'main advanced');
   console.log('Stale main event or checkout; a newer main event will inspect all changes.');
   process.exit(0);
 }
@@ -59,6 +62,7 @@ if (hasTag) {
     } else {
       console.log(`Release ${tag} is still running; source changes remain queued on main.`);
     }
+    rejectUnappliedManualBump(bump, `finish ${tag} first`);
     process.exit(0);
   }
 } else {
@@ -70,17 +74,17 @@ if (hasTag) {
 }
 
 const paths = git(['diff', '--name-only', `${base}..HEAD`]).split('\n').filter(Boolean);
-const decision = decideRelease({ tagExists: hasTag, published, paths });
+const decision = decideRelease({ tagExists: hasTag, published, paths, bump });
 if (decision === 'skip') {
   console.log(`No SDK release changes since ${hasTag ? tag : 'verified 0.1.2 baseline'}; skip.`);
   process.exit(0);
 }
 
-const next = nextPatch(version);
+const next = nextVersion(version, bump);
 const nextTag = `v${next}`;
 if (git(['tag', '--list', nextTag])) throw new Error(`${nextTag} already exists; refusing to reuse a release tag`);
 console.log(`Preparing ${nextTag} from ${localHead}.`);
-setVersion(next);
+setVersion(next, '.', bump);
 run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund']);
 run('node', ['--test', 'scripts/release.test.mjs']);
 run('npm', ['run', 'check']);

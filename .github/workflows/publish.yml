@@ -38,9 +38,30 @@ jobs:
           npm run check:package
           npm run check:micro
           node scripts/release-publish.mjs
-  catchup:
+  github_release:
     needs: publish
     if: needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Create or verify GitHub Release for published tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-github-release.mjs
+  catchup:
+    needs: [publish, github_release]
+    if: needs.publish.result == 'success' && needs.github_release.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -52,5 +73,6 @@ jobs:
         run: |
           gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/prepare.yml/dispatches" \
             -f ref=main -f "inputs[verified_release_tag]=$GITHUB_REF_NAME" \
+            -f "inputs[release_bump]=patch" \
             -f "inputs[publish_run_id]=$GITHUB_RUN_ID" \
             -f "inputs[publish_run_attempt]=$GITHUB_RUN_ATTEMPT"

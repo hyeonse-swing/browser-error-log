@@ -4,7 +4,7 @@
 
 SDK는 `endpoint` 또는 사용자 지정 `transport`로 연결합니다. React는 선택 사항입니다. 영속 저장을 시작하려면 [자체 호스팅 가이드](micro-server.md)를 참고하세요.
 
-MIT 라이선스 브라우저 SDK, 프로토콜, React 어댑터의 `0.1.2` 버전이 npm에 게시되어 있습니다. 대상 앱에서 브라우저 SDK를 설치합니다.
+MIT 라이선스 브라우저 SDK, 프로토콜, React 어댑터가 npm에 게시되어 있습니다. 현재 버전은 각 패키지 페이지에서 확인하세요: [브라우저 SDK](https://www.npmjs.com/package/browser-error-log), [프로토콜](https://www.npmjs.com/package/browser-error-log-protocol), [React 어댑터](https://www.npmjs.com/package/browser-error-log-react). 대상 앱에서 브라우저 SDK를 설치합니다.
 
 ```sh
 npm install browser-error-log
@@ -29,23 +29,25 @@ npm ci
 npm run check:package
 ```
 
-`0.1.2` workspace의 스크립트는 `output/packages/`에 `0.1.2` tarball 3개를 만들고 독립 consumer에 설치하여 React 없는 브라우저 설치, TypeScript 타입 선언, ESM/CJS export, SSR import를 확인합니다. 로컬 개발 경로이며 npm에 게시하지 않습니다.
+스크립트는 현재 체크아웃 버전의 tarball 3개를 `output/packages/`에 만들고 독립 consumer에 설치하여 React 없는 브라우저 설치, TypeScript 타입 선언, ESM/CJS export, SSR import를 확인합니다. 로컬 개발 경로이며 npm에 게시하지 않습니다.
 
 대상 앱에서 `SDK_DIR`을 이 저장소의 절대 경로로 바꾸세요.
 
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.2.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-0.1.2.tgz"
+SDK_VERSION="$(node -p 'require(process.argv[1]).version' "$SDK_DIR/package.json")"
+npm install "$SDK_DIR/output/packages/browser-error-log-protocol-$SDK_VERSION.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-$SDK_VERSION.tgz"
 ```
 
 기존 React 18/19 앱에는 3개 tarball을 같은 명령으로 설치합니다.
 
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-0.1.2.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-0.1.2.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-react-0.1.2.tgz"
+SDK_VERSION="$(node -p 'require(process.argv[1]).version' "$SDK_DIR/package.json")"
+npm install "$SDK_DIR/output/packages/browser-error-log-protocol-$SDK_VERSION.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-$SDK_VERSION.tgz" \
+  "$SDK_DIR/output/packages/browser-error-log-react-$SDK_VERSION.tgz"
 ```
 
 기본 브라우저 패키지에는 React가 필요하지 않습니다. 앱 번들러용 ESM, CommonJS, TypeScript 선언을 제공하지만 CDN 전역 스크립트는 제공하지 않습니다.

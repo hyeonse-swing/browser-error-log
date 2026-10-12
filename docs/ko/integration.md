@@ -17,7 +17,7 @@
     "project": "my-web",
     "environment": "staging",
     "release": "build-id",
-    "sdkVersion": "0.1.1",
+    "sdkVersion": "<installed-sdk-version>",
     "occurredAt": "2026-10-02T07:00:00.000Z",
     "viewId": "document-instance-id",
     "sequence": 1,
@@ -30,7 +30,7 @@
 }
 ```
 
-선택 필드는 `name`, `stack`, `componentStack`, `browser`, `context`, `network`입니다. `context` 값은 문자열, 유한한 숫자, boolean, null이며 `network`에는 `method`, `url`, `durationMs`, 선택적인 `status`가 있습니다. 발생 시각은 ISO UTC이고 서버는 `receivedAt`을 추가할 수 있습니다. 클라이언트가 제공하는 `project`와 `Origin`은 인증 정보가 아닙니다.
+예시의 `sdkVersion`은 자리 표시자이며 SDK가 설치된 패키지 버전으로 설정합니다. 선택 필드는 `name`, `stack`, `componentStack`, `browser`, `context`, `network`입니다. `context` 값은 문자열, 유한한 숫자, boolean, null이며 `network`에는 `method`, `url`, `durationMs`, 선택적인 `status`가 있습니다. 발생 시각은 ISO UTC이고 서버는 `receivedAt`을 추가할 수 있습니다. 클라이언트가 제공하는 `project`와 `Origin`은 인증 정보가 아닙니다.
 
 2xx 응답은 전체 배치의 수신 성공을 뜻하며 SDK는 본문을 사용하지 않습니다. 429, 5xx, 네트워크 실패는 첫 시도 후 같은 이벤트 ID로 최대 두 번 재시도합니다. 그 외 4xx는 영구 실패입니다. 시도별 기본 시간 제한은 5초입니다. SDK는 일부 수락을 해석할 수 없으므로 백엔드는 배치를 검증하고 원자적으로 영속 저장하거나 중복 확인을 마친 뒤 2xx를 반환하고 `(project, eventId)`로 중복을 제거해야 합니다.
 
