@@ -1,6 +1,6 @@
 {
   "name": "@ihyeon/browser-error-log",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "A small, framework-independent browser error SDK for a collector you control.",
   "keywords": [
     "browser",
@@ -23,7 +23,7 @@
     }
   },
   "dependencies": {
-    "@ihyeon/browser-error-log-protocol": "0.1.5"
+    "@ihyeon/browser-error-log-protocol": "0.1.6"
   },
   "files": [
     "dist",
