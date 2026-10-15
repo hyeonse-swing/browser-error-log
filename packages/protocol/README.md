@@ -1,16 +1,16 @@
-# browser-error-log-protocol
+# @ihyeon/browser-error-log-protocol
 
 English | [한국어](https://github.com/hyeonse-swing/browser-error-log/blob/main/packages/protocol/README.ko.md)
 
 Versioned TypeScript contracts for Browser Error Log SDKs, collectors, and viewers. Use them when connecting the SDK to your own backend or implementing a viewer data source.
 
-Install directly when implementing your own collector or viewer; `browser-error-log` also brings this package in as a dependency:
+Install directly when implementing your own collector or viewer; `@ihyeon/browser-error-log` also brings this package in as a dependency:
 
 ```sh
-npm install browser-error-log-protocol
+npm install @ihyeon/browser-error-log-protocol
 ```
 
-For local source-checkout development, use Node.js 24, `npm ci`, and `npm run check:package`, then install `output/packages/browser-error-log-protocol-0.1.5.tgz` by absolute path. See the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md).
+For local source-checkout development, use Node.js 24, `npm ci`, and `npm run check:package`, then install `output/packages/ihyeon-browser-error-log-protocol-0.1.5.tgz` by absolute path. See the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md).
 
 ## Event and query contracts
 
@@ -23,7 +23,7 @@ import {
   type EventFilter,
   type EventPage,
   type EventDataSource,
-} from 'browser-error-log-protocol';
+} from '@ihyeon/browser-error-log-protocol';
 
 function makeBatch(events: ErrorEventRecord[]): EventBatch {
   return { schemaVersion: SCHEMA_VERSION, events };

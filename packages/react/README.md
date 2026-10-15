@@ -1,4 +1,4 @@
-# browser-error-log-react
+# @ihyeon/browser-error-log-react
 
 English | [한국어](https://github.com/hyeonse-swing/browser-error-log/blob/main/packages/react/README.ko.md)
 
@@ -11,7 +11,7 @@ The declared React peer range is `>=18 <20`; this range is not a claim of verifi
 In a React app, install the browser SDK and adapter:
 
 ```sh
-npm install browser-error-log browser-error-log-react
+npm install @ihyeon/browser-error-log @ihyeon/browser-error-log-react
 ```
 
 React must already be installed in your app. The adapter does not bundle React. For local source-checkout development, follow the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md) to install protocol, browser, and React tarballs together.
@@ -27,8 +27,8 @@ MICRO_PROJECTS=my-web MICRO_ALLOWED_ORIGINS=http://localhost:5173 npm run micro
 Initialize a client once in browser code, then wrap the part of the UI you want to protect:
 
 ```tsx
-import { init } from 'browser-error-log';
-import { ErrorBoundary } from 'browser-error-log-react';
+import { init } from '@ihyeon/browser-error-log';
+import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
 
 const errorLog = init({
   project: 'my-web',

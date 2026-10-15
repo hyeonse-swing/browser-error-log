@@ -4,19 +4,19 @@ English | [한국어](ko/personal-sdk.md)
 
 The SDK accepts an `endpoint` or a custom `transport`. React is optional. For persistent storage, start with the [self-hosting guide](micro-server.md).
 
-The MIT-licensed browser SDK, protocol, and React adapter are available on npm. Their package pages show the current versions: [browser SDK](https://www.npmjs.com/package/browser-error-log), [protocol](https://www.npmjs.com/package/browser-error-log-protocol), and [React adapter](https://www.npmjs.com/package/browser-error-log-react). In the consuming app, install the browser SDK:
+The browser SDK, protocol, and React adapter are separate npm packages under `@ihyeon`. All three `0.1.5` packages have verified registry downloads and fresh-consumer installation checks; see the [release guide](releasing.md). Install the browser SDK in the consuming app:
 
 ```sh
-npm install browser-error-log
+npm install @ihyeon/browser-error-log
 ```
 
 For an existing React 18/19 app, install the browser SDK and optional React adapter:
 
 ```sh
-npm install browser-error-log browser-error-log-react
+npm install @ihyeon/browser-error-log @ihyeon/browser-error-log-react
 ```
 
-For ordinary app integration, you do not need a separate protocol install. `browser-error-log-protocol` is installed automatically with the SDK and contains the shared event types and constants. Install it directly only when importing those contracts in your own collector or viewer. It is not an error collector or a server.
+For ordinary app integration, you do not need a separate protocol install. `@ihyeon/browser-error-log-protocol` is installed automatically with the SDK and contains the shared event types and constants. Install it directly only when importing those contracts in your own collector or viewer. It is not an error collector or a server.
 
 The English/Korean selector is part of the viewer, demo, and install example built from this repository. Installing the SDK alone does not add a language selector to your app. The v1 event schema is unchanged; `sdkVersion` identifies the installed SDK release.
 
@@ -29,15 +29,15 @@ npm ci
 npm run check:package
 ```
 
-The script builds three tarballs for the checkout's version in `output/packages/` and installs them into isolated consumers to check browser-only installation, TypeScript declarations, ESM/CJS exports, and SSR imports. This path is for local development and does not publish anything.
+The script builds three tarballs for the checkout's version in `output/packages/` and installs them into isolated consumers to check standalone protocol use, browser-only installation without React, TypeScript declarations, ESM/CJS exports, and SSR imports. This path is for local development and does not publish anything.
 
 In the consuming app, replace `SDK_DIR` with this checkout's absolute path:
 
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
 SDK_VERSION="$(node -p 'require(process.argv[1]).version' "$SDK_DIR/package.json")"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-$SDK_VERSION.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-$SDK_VERSION.tgz"
+npm install "$SDK_DIR/output/packages/ihyeon-browser-error-log-protocol-$SDK_VERSION.tgz" \
+  "$SDK_DIR/output/packages/ihyeon-browser-error-log-$SDK_VERSION.tgz"
 ```
 
 For an existing React 18/19 app, add the adapter in the same install:
@@ -45,12 +45,18 @@ For an existing React 18/19 app, add the adapter in the same install:
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
 SDK_VERSION="$(node -p 'require(process.argv[1]).version' "$SDK_DIR/package.json")"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-$SDK_VERSION.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-$SDK_VERSION.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-react-$SDK_VERSION.tgz"
+npm install "$SDK_DIR/output/packages/ihyeon-browser-error-log-protocol-$SDK_VERSION.tgz" \
+  "$SDK_DIR/output/packages/ihyeon-browser-error-log-$SDK_VERSION.tgz" \
+  "$SDK_DIR/output/packages/ihyeon-browser-error-log-react-$SDK_VERSION.tgz"
 ```
 
 The browser package does not require React. These packages export ESM, CommonJS, and TypeScript declarations for app bundlers; they do not provide a CDN global script.
+
+For a collector or viewer that only needs the contracts, install just the protocol tarball:
+
+```sh
+npm install "$SDK_DIR/output/packages/ihyeon-browser-error-log-protocol-$SDK_VERSION.tgz"
+```
 
 ## Connect to the included collector
 
@@ -63,7 +69,7 @@ MICRO_PROJECTS=my-web MICRO_ALLOWED_ORIGINS=http://localhost:5173 npm run micro
 The exact origin must match, including hostname and port; `localhost` and `127.0.0.1` are different origins. Initialize once in the consuming app's browser entry point:
 
 ```ts
-import { init } from 'browser-error-log';
+import { init } from '@ihyeon/browser-error-log';
 
 export const errorLog = init({
   project: 'my-web',
@@ -99,14 +105,14 @@ Refresh `http://127.0.0.1:4319/` and select `my-web`. A successful `sent` counte
 | `maxQueueSize` | `50` | Buffered events; clamped to 1–100 |
 | `transportTimeoutMs` | `5000` | Per-attempt deadline in ms; clamped to 250–60,000 |
 
-The client exposes `captureException(error, extra?)`, `flush()`, `getStats()`, and `destroy()`. `extra` can include `context`, `componentStack`, and an event `type`. `getStats()` returns `queued`, `sent`, and `dropped` counts. A resolved `flush()` means delivery attempts have finished, including failures; it does not itself confirm success. `destroy()` cancels SDK work and discards pending events. Do not call it immediately after normal initialization.
+The client exposes `captureException(error, extra?)`, `flush()`, `getStats()`, and `destroy()`. `extra` can include `context`, `componentStack`, and an event `type`. `getStats()` returns `queued`, `sent`, and `dropped` counts. `sent` includes events accepted by the browser's `sendBeacon` queue when the tab is hidden, without confirming collector storage. A resolved `flush()` means delivery attempts have finished, including failures; it does not itself confirm success. `destroy()` cancels SDK work and discards pending events. Do not call it immediately after normal initialization.
 
 ## React and SSR
 
 Reuse the same client with the React adapter:
 
 ```tsx
-import { ErrorBoundary } from 'browser-error-log-react';
+import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
 import { errorLog } from './error-log';
 
 <ErrorBoundary client={errorLog} fallback={(_error, reset) => (

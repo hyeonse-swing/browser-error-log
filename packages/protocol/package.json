@@ -1,5 +1,5 @@
 {
-  "name": "browser-error-log-protocol",
+  "name": "@ihyeon/browser-error-log-protocol",
   "version": "0.1.5",
   "description": "Versioned event and query contracts for Browser Error Log collectors and viewers.",
   "keywords": [

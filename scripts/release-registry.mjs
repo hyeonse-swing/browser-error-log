@@ -1,4 +1,4 @@
-import { PACKAGES, REGISTRY } from './release-common.mjs';
+import { REGISTRY, manifestPackageNames } from './release-common.mjs';
 
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
@@ -28,10 +28,10 @@ export function assertRegistryIntegrity(metadata, name, manifest) {
 
 export async function releaseRegistryState(manifest, fetchImpl = fetch) {
   const missing = [];
-  for (const pkg of PACKAGES) {
-    const metadata = await lookupExactVersion(pkg.name, manifest.version, fetchImpl);
-    if (metadata) assertRegistryIntegrity(metadata, pkg.name, manifest);
-    else missing.push(pkg.name);
+  for (const name of manifestPackageNames(manifest)) {
+    const metadata = await lookupExactVersion(name, manifest.version, fetchImpl);
+    if (metadata) assertRegistryIntegrity(metadata, name, manifest);
+    else missing.push(name);
   }
   return { missing, complete: missing.length === 0 };
 }

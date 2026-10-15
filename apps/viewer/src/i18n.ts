@@ -1,4 +1,4 @@
-import { EVENT_LABELS, type EventType } from 'browser-error-log-protocol';
+import { EVENT_LABELS, type EventType } from '@ihyeon/browser-error-log-protocol';
 import type { Locale } from '../../i18n/locale';
 
 const korean: Record<string, string> = {

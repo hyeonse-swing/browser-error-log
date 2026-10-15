@@ -5,7 +5,7 @@ const client = vi.hoisted(() => ({
   captureException: vi.fn(), flush: vi.fn(async () => {}),
   getStats: vi.fn(() => ({ sent: 1, queued: 0, dropped: 0 })), destroy: vi.fn(),
 }));
-vi.mock('browser-error-log', () => ({ init: vi.fn(() => client) }));
+vi.mock('@ihyeon/browser-error-log', () => ({ init: vi.fn(() => client) }));
 
 function chooseLanguage(value: string): void {
   const language = document.querySelector<HTMLSelectElement>('#language')!;

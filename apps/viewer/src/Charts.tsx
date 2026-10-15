@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { EVENT_LABELS, type ErrorEventRecord, type EventType } from 'browser-error-log-protocol';
+import { EVENT_LABELS, type ErrorEventRecord, type EventType } from '@ihyeon/browser-error-log-protocol';
 import type { Analytics, Breakdown } from './analytics';
 import { useLocale } from '../../i18n/react';
 import type { Locale } from '../../i18n/locale';

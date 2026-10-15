@@ -1,4 +1,4 @@
-import { init } from 'browser-error-log';
+import { init } from '@ihyeon/browser-error-log';
 import { getLocale, setLocale, subscribeLocale } from '../../../apps/i18n/locale';
 
 const en = {
@@ -61,7 +61,7 @@ if (endpoint && project && send) {
   endpoint.value = `${location.origin}/api/events`;
   const update = () => {
     const snippet = document.querySelector('#snippet');
-    if (snippet) snippet.textContent = `import { init } from 'browser-error-log';\n\nconst errorLog = init({\n  project: ${JSON.stringify(project.value)},\n  endpoint: ${JSON.stringify(endpoint.value)},\n  environment: 'production',\n  release: 'my-release',\n});`;
+    if (snippet) snippet.textContent = `import { init } from '@ihyeon/browser-error-log';\n\nconst errorLog = init({\n  project: ${JSON.stringify(project.value)},\n  endpoint: ${JSON.stringify(endpoint.value)},\n  environment: 'production',\n  release: 'my-release',\n});`;
   };
   endpoint.addEventListener('input', update);
   project.addEventListener('input', update);

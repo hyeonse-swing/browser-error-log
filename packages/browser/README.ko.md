@@ -1,4 +1,4 @@
-# browser-error-log
+# @ihyeon/browser-error-log
 
 [English](https://github.com/hyeonse-swing/browser-error-log/blob/main/packages/browser/README.md) | 한국어
 
@@ -15,10 +15,10 @@
 ## 설치
 
 ```sh
-npm install browser-error-log
+npm install @ihyeon/browser-error-log
 ```
 
-`browser-error-log-protocol`은 npm 의존성으로 설치됩니다. 게시 패키지 대신 로컬 소스를 시험하려면 Node.js 24에서 `npm ci`와 `npm run check:package`를 실행하고 [SDK 가이드](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/ko/personal-sdk.md)에 따라 프로토콜·브라우저 tarball을 함께 설치하세요.
+`@ihyeon/browser-error-log-protocol`은 npm 의존성으로 설치됩니다. 게시 패키지 대신 로컬 소스를 시험하려면 Node.js 24에서 `npm ci`와 `npm run check:package`를 실행하고 [SDK 가이드](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/ko/personal-sdk.md)에 따라 프로토콜·브라우저 tarball을 함께 설치하세요.
 
 ## 세 단계로 연결
 
@@ -31,7 +31,7 @@ npm install browser-error-log
 2. 앱의 브라우저 진입점에서 한 번 초기화합니다.
 
    ```ts
-   import { init } from 'browser-error-log';
+   import { init } from '@ihyeon/browser-error-log';
 
    export const errorLog = init({
      project: 'my-web',
@@ -49,7 +49,7 @@ npm install browser-error-log
    console.log(errorLog.getStats()); // 전달 성공 시 sent: 1
    ```
 
-앱 수명 동안 클라이언트를 유지하세요. 테스트 종료나 앱 해제 때 `destroy()`는 계측을 제거하고 대기 이벤트를 버립니다. `flush()`는 SDK 전송 시도가 끝났다는 뜻이지 저장 보장이 아닙니다. `getStats()`와 수집기에서 확인하세요. 초기화 이전 오류는 수집하지 못합니다.
+앱 수명 동안 클라이언트를 유지하세요. 테스트 종료나 앱 해제 때 `destroy()`는 계측을 제거하고 대기 이벤트를 버립니다. `flush()`는 SDK 전송 시도가 끝났다는 뜻이지 저장 보장이 아닙니다. `getStats()`와 수집기에서 확인하세요. 탭이 숨겨질 때 브라우저의 `sendBeacon` 큐가 수락한 이벤트도 `sent`에 포함하며, 수집기 저장을 확인한 것은 아닙니다. 초기화 이전 오류는 수집하지 못합니다.
 
 외부 호스팅은 [자체 호스팅 가이드](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/ko/micro-server.md)를 참고하세요. 운영 앱에는 HTTPS 수집기, 정확한 허용 Origin, 영속 저장, 뷰어 인증이 필요합니다. `localhost`와 `127.0.0.1`은 서로 다른 Origin입니다. 뷰어 암호는 서버에만 두고 SDK 설정에 넣지 마세요.
 
@@ -63,7 +63,7 @@ try {
 }
 ```
 
-선택적인 `browser-error-log-react` 패키지는 Error Boundary를 제공합니다. 기본 SDK에는 React가 필요하지 않습니다. SSR에서 import·초기화할 수 있지만 서버 오류는 수집하지 않으므로 프레임워크의 브라우저/클라이언트 진입점에서 초기화하세요.
+선택적인 `@ihyeon/browser-error-log-react` 패키지는 Error Boundary를 제공합니다. 기본 SDK에는 React가 필요하지 않습니다. SSR에서 import·초기화할 수 있지만 서버 오류는 수집하지 않으므로 프레임워크의 브라우저/클라이언트 진입점에서 초기화하세요.
 
 ## 수집 제어
 

@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
-  PACKAGES, assertTarballsMatchManifest, assertVersions, decideRelease,
+  PACKAGES, LEGACY_PACKAGE_NAMES, assertTarballsMatchManifest, assertVersions, decideRelease,
   isReleaseRelevantPath, isStalePush, nextPatch, nextVersion, readTagManifest,
-  rejectUnappliedManualBump, selectReleaseBump, setVersion,
+  rejectUnappliedManualBump, selectReleaseBump, setVersion, manifestPackageNames,
 } from './release-common.mjs';
 import {
   lookupExactVersion, releaseAdvanceState, releaseRegistryState, waitForRegistryPackage,
@@ -76,9 +76,9 @@ test('one patch bump synchronizes manifests, lockfile, pins and runtime literals
   setVersion(next, scratch);
   assert.equal(assertVersions(scratch), next);
   const browser = JSON.parse(readFileSync(join(scratch, 'packages/browser/package.json')));
-  assert.equal(browser.dependencies['browser-error-log-protocol'], next);
+  assert.equal(browser.dependencies['@ihyeon/browser-error-log-protocol'], next);
   assert.match(readFileSync(join(scratch, 'packages/protocol/README.md'), 'utf8'),
-    new RegExp(`browser-error-log-protocol-${next.replaceAll('.', '\\.')}\\.tgz`));
+    new RegExp(`ihyeon-browser-error-log-protocol-${next.replaceAll('.', '\\.')}\\.tgz`));
   assert.throws(() => setVersion(next, scratch), /single patch bump/);
 });
 
@@ -105,6 +105,37 @@ const manifest = { version: '0.1.3', packages: Object.fromEntries(PACKAGES.map(p
 const metadata = (name, version = '0.1.3', hash = integrity) => ({ name, version, dist: { integrity: hash } });
 const response = (status, body) => ({ status, ok: status >= 200 && status < 300, json: async () => body });
 
+test('release manifests accept complete scoped or legacy identities and reject mixed sets', () => {
+  assert.deepEqual(manifestPackageNames(manifest), PACKAGES.map(pkg => pkg.name));
+  const legacy = { ...manifest, packages: Object.fromEntries(LEGACY_PACKAGE_NAMES.map(name => [name, integrity])) };
+  assert.deepEqual(manifestPackageNames(legacy), LEGACY_PACKAGE_NAMES);
+  for (const packages of [
+    {},
+    { ...manifest.packages, extra: integrity },
+    { ...legacy.packages, [PACKAGES[0].name]: integrity },
+    Object.fromEntries(PACKAGES.slice(0, 2).map(pkg => [pkg.name, integrity])),
+    { ...manifest.packages, [PACKAGES[0].name]: 'invalid' },
+  ]) assert.throws(() => manifestPackageNames({ ...manifest, packages }), /invalid package identity set|no valid integrity/);
+});
+
+test('previous unscoped releases verify their original registry identities before advancing', async () => {
+  const legacy = { version: '0.1.5', packages: Object.fromEntries(LEGACY_PACKAGE_NAMES.map(name => [name, integrity])) };
+  const visited = [];
+  const result = await releaseAdvanceState({ tag: 'v0.1.5', manifest: legacy, successfulRun: true,
+    fetchImpl: async url => {
+      const name = decodeURIComponent(new URL(url).pathname.split('/')[1]);
+      visited.push(name);
+      return response(200, metadata(name, '0.1.5'));
+    } });
+  assert.deepEqual(visited, LEGACY_PACKAGE_NAMES);
+  assert.deepEqual(result, { ready: true, missing: [] });
+  const missing = await releaseRegistryState(legacy, async url => {
+    const name = decodeURIComponent(new URL(url).pathname.split('/')[1]);
+    return name === 'browser-error-log-react' ? response(404) : response(200, metadata(name, '0.1.5'));
+  });
+  assert.deepEqual(missing, { missing: ['browser-error-log-react'], complete: false });
+});
+
 test('annotated release tag carries the immutable tarball manifest', () => {
   const repo = mkdtempSync(join(tmpdir(), 'browser-error-log-tag-'));
   const command = args => execFileSync('git', args, { cwd: repo, stdio: 'pipe' });
@@ -117,6 +148,9 @@ test('annotated release tag carries the immutable tarball manifest', () => {
   try {
     process.chdir(repo);
     assert.deepEqual(readTagManifest('v0.1.3'), manifest);
+    const legacy = { version: '0.1.5', packages: Object.fromEntries(LEGACY_PACKAGE_NAMES.map(name => [name, integrity])) };
+    command(['tag', '-a', 'v0.1.5', '-m', JSON.stringify(legacy)]);
+    assert.deepEqual(readTagManifest('v0.1.5'), legacy);
     command(['tag', 'v0.1.4']);
     assert.throws(() => readTagManifest('v0.1.4'), /annotated tag/);
   } finally {
@@ -125,28 +159,28 @@ test('annotated release tag carries the immutable tarball manifest', () => {
 });
 
 test('only an actual 404 means an exact npm version is absent', async () => {
-  assert.equal(await lookupExactVersion('browser-error-log', '0.1.3', async () => response(404)), null);
+  assert.equal(await lookupExactVersion('@ihyeon/browser-error-log', '0.1.3', async () => response(404)), null);
   for (const status of [401, 403, 500]) {
-    await assert.rejects(lookupExactVersion('browser-error-log', '0.1.3', async () => response(status)),
+    await assert.rejects(lookupExactVersion('@ihyeon/browser-error-log', '0.1.3', async () => response(status)),
       new RegExp(`HTTP ${status}`));
   }
-  await assert.rejects(lookupExactVersion('browser-error-log', '0.1.3', async () => { throw Error('DNS'); }),
+  await assert.rejects(lookupExactVersion('@ihyeon/browser-error-log', '0.1.3', async () => { throw Error('DNS'); }),
     /lookup failed/);
 });
 
 test('partial release resumes exact missing package; integrity mismatch fails before publishing', async () => {
   const partial = await releaseRegistryState(manifest, async url => {
     const name = decodeURIComponent(new URL(url).pathname.split('/')[1]);
-    return name === 'browser-error-log' ? response(404) : response(200, metadata(name));
+    return name === '@ihyeon/browser-error-log' ? response(404) : response(200, metadata(name));
   });
-  assert.deepEqual(partial, { missing: ['browser-error-log'], complete: false });
+  assert.deepEqual(partial, { missing: ['@ihyeon/browser-error-log'], complete: false });
   await assert.rejects(releaseRegistryState(manifest, async url => {
     const name = decodeURIComponent(new URL(url).pathname.split('/')[1]);
     return response(200, metadata(name, '0.1.3', 'sha512-wrong'));
   }), /integrity mismatch/);
   assert.throws(() => assertTarballsMatchManifest({
     ...Object.fromEntries(PACKAGES.map(pkg => [pkg.name, { integrity }])),
-    'browser-error-log': { integrity: 'sha512-wrong' },
+    '@ihyeon/browser-error-log': { integrity: 'sha512-wrong' },
   }, manifest), /immutable release tag/);
 });
 
@@ -175,9 +209,9 @@ test('publisher follow-up advances only the current tag after every registry dig
 
   const partial = await releaseAdvanceState({ ...input, fetchImpl: async url => {
     const name = decodeURIComponent(new URL(url).pathname.split('/')[1]);
-    return name === 'browser-error-log-react' ? response(404) : response(200, metadata(name));
+    return name === '@ihyeon/browser-error-log-react' ? response(404) : response(200, metadata(name));
   } });
-  assert.deepEqual(partial, { ready: false, missing: ['browser-error-log-react'] });
+  assert.deepEqual(partial, { ready: false, missing: ['@ihyeon/browser-error-log-react'] });
   await assert.rejects(releaseAdvanceState({ ...input, fetchImpl: async url => {
     const name = decodeURIComponent(new URL(url).pathname.split('/')[1]);
     return response(200, metadata(name, '0.1.3', 'sha512-wrong'));
@@ -269,14 +303,14 @@ test('GitHub Release creation is idempotent and rejects drafts or mismatched not
 
 test('registry visibility retries 404, then verifies digest; server errors do not retry', async () => {
   let requests = 0;
-  const fetched = await waitForRegistryPackage('browser-error-log', manifest, {
-    fetchImpl: async () => (++requests < 3 ? response(404) : response(200, metadata('browser-error-log'))),
+  const fetched = await waitForRegistryPackage('@ihyeon/browser-error-log', manifest, {
+    fetchImpl: async () => (++requests < 3 ? response(404) : response(200, metadata('@ihyeon/browser-error-log'))),
     sleepImpl: async () => {},
   });
   assert.equal(fetched.version, '0.1.3');
   assert.equal(requests, 3);
   requests = 0;
-  await assert.rejects(waitForRegistryPackage('browser-error-log', manifest, {
+  await assert.rejects(waitForRegistryPackage('@ihyeon/browser-error-log', manifest, {
     fetchImpl: async () => { requests++; return response(503); },
     sleepImpl: async () => {},
   }), /HTTP 503/);

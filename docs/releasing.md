@@ -2,7 +2,25 @@
 
 English | [한국어](ko/releasing.md)
 
-The [GitHub repository](https://github.com/hyeonse-swing/browser-error-log) holds the MIT-licensed source. The browser SDK, protocol, and React adapter are published on npm; the release history below records verified versions. All three have a published `0.1.0` version; the browser SDK and protocol have published `0.1.1` versions, while `browser-error-log-react@0.1.1` was never published. Before `0.1.2`, the React adapter's latest public version was `0.1.0`. The workspace root and apps remain private. npm publication is separate from a GitHub release or tag.
+The [GitHub repository](https://github.com/hyeonse-swing/browser-error-log) holds the MIT-licensed source. The release history below records verified versions of the original unscoped browser SDK, protocol, and React adapter. All three have a published `0.1.0` version; the browser SDK and protocol have published `0.1.1` versions, while `browser-error-log-react@0.1.1` was never published. Before `0.1.2`, the React adapter's latest public version was `0.1.0`. The workspace root and apps remain private. npm publication is separate from a GitHub release or tag.
+
+## Verified `@ihyeon` scoped release `0.1.5`
+
+Published on October 12, 2026. All three scoped packages are public and npm `latest` is `0.1.5`. The downloaded tarballs match the SHA-512 values of the reviewed initial-publication artifacts. Fresh registry consumers passed protocol-only installation, browser-only installation without React, and React TypeScript/ESM/CommonJS/SSR checks. The packages remain separate so each consumer can choose what to install:
+
+| Original package | Scoped package | Consumers |
+| --- | --- | --- |
+| `browser-error-log` | `@ihyeon/browser-error-log` | Browser apps; React is not required |
+| `browser-error-log-react` | `@ihyeon/browser-error-log-react` | React apps using an Error Boundary |
+| `browser-error-log-protocol` | `@ihyeon/browser-error-log-protocol` | Collectors and viewers using only the contracts |
+
+The SDK depends on the scoped protocol package; the React adapter depends on the scoped SDK and keeps React as a peer dependency. Existing unscoped versions and release tags keep their original names and integrity manifests. New installations must use scoped package names in both dependencies and imports; npm aliases or compatibility wrappers are not included.
+
+On October 12, 2026, all versions of the three original unscoped packages were deprecated with a migration message pointing to the matching `@ihyeon/*` package. The version list, latest tags, tarball URLs, and integrity values were preserved. A fresh legacy React installation displayed all three migration warnings and still passed SDK/React/protocol CommonJS and SSR smoke checks. The scoped packages remain active and are not deprecated.
+
+The first scoped release was published directly with the authenticated `ihyeon` account, separately from the legacy GitHub release tags. All three packages have package-specific Trusted Publishing configured for GitHub owner `hyeonse-swing`, repository `browser-error-log`, workflow `publish.yml`, environment `npm`, with publishing allowed. Automatic releases use the scoped package identities after this source migration reaches `main`. No new GitHub tag or GitHub Release was created for this bootstrap. The existing `v0.1.5` tag remains the unscoped release, and the next automatic patch release uses a new version and tag. See the [Trusted Publishing reference](https://docs.npmjs.com/trusted-publishers/).
+
+Local checks passed 96 application tests, 15 release tests, typecheck, SDK/viewer builds, isolated tarball consumers, the built micro-server smoke, and 6 Chromium/WebKit delivery tests. The browser SDK remains 4,934 bytes gzip. Scoped tarballs use the `ihyeon-` filename prefix, such as `ihyeon-browser-error-log-protocol-0.1.5.tgz`. The historical results below remain records of the unscoped packages.
 
 ## Verified `0.1.0` packages
 

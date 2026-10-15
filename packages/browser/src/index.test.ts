@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EventBatch } from 'browser-error-log-protocol';
+import type { EventBatch } from '@ihyeon/browser-error-log-protocol';
 import { init, type BrowserErrorLogClient } from './index';
 
 const clients: BrowserErrorLogClient[] = [];
@@ -216,6 +216,47 @@ describe('browser error client', () => {
     expect(bodies.map(batch => batch.events.length)).toEqual([1, 1]);
     expect(bodies[0].events[0].eventId).toBe(bodies[1].events[0].eventId);
     expect(instance.getStats()).toMatchObject({ queued: 0, sent: 1, dropped: 0 });
+  });
+
+  it('counts only beacon candidates accepted on hidden visibility changes', () => {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const sendBeacon = vi.fn(() => true);
+    vi.stubGlobal('navigator', { sendBeacon });
+    const instance = client({ transport: undefined, endpoint: '/collect', maxQueueSize: 20 });
+    for (let index = 0; index < 12; index++) instance.captureException(`failure ${index}`);
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(sendBeacon).toHaveBeenCalledTimes(1);
+    expect(instance.getStats()).toEqual({ queued: 2, sent: 10, dropped: 0 });
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(sendBeacon).toHaveBeenCalledTimes(2);
+    expect(instance.getStats()).toEqual({ queued: 0, sent: 12, dropped: 0 });
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(sendBeacon).toHaveBeenCalledTimes(2);
+    expect(instance.getStats()).toEqual({ queued: 0, sent: 12, dropped: 0 });
+  });
+
+  it.each(['false', 'throw'] as const)('keeps beacon candidates when sendBeacon returns %s, then flushes normally', async outcome => {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const sendBeacon = vi.fn(() => {
+      if (outcome === 'throw') throw new Error('beacon unavailable');
+      return false;
+    });
+    vi.stubGlobal('navigator', { sendBeacon });
+    const fetch = vi.fn(() => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal('fetch', fetch);
+    const instance = client({ transport: undefined, endpoint: '/collect' });
+    instance.captureException('retry later');
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(sendBeacon).toHaveBeenCalledTimes(1);
+    expect(instance.getStats()).toEqual({ queued: 1, sent: 0, dropped: 0 });
+
+    await instance.flush();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(instance.getStats()).toEqual({ queued: 0, sent: 1, dropped: 0 });
   });
 
   it('does not instrument a custom transport without an exclusion endpoint', async () => {

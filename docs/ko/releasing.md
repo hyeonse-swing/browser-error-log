@@ -2,7 +2,25 @@
 
 [English](../releasing.md) | 한국어
 
-[GitHub 저장소](https://github.com/hyeonse-swing/browser-error-log)에 MIT 라이선스 소스가 있습니다. 브라우저 SDK, 프로토콜, React 어댑터는 npm에 게시되어 있으며, 아래 릴리스 기록에 검증한 버전을 정리합니다. SDK 패키지 3개 모두 `0.1.0`이 게시되었고, 브라우저 SDK와 프로토콜은 `0.1.1`도 게시되었습니다. `browser-error-log-react@0.1.1`은 게시되지 않았으며, `0.1.2` 이전 React 어댑터의 최신 공개 버전은 `0.1.0`이었습니다. workspace 루트와 앱은 private입니다. npm 게시와 GitHub 릴리스·태그는 별개입니다.
+[GitHub 저장소](https://github.com/hyeonse-swing/browser-error-log)에 MIT 라이선스 소스가 있습니다. 아래 릴리스 기록은 기존 스코프 없는 브라우저 SDK, 프로토콜, React 어댑터의 검증된 버전입니다. SDK 패키지 3개 모두 `0.1.0`이 게시되었고, 브라우저 SDK와 프로토콜은 `0.1.1`도 게시되었습니다. `browser-error-log-react@0.1.1`은 게시되지 않았으며, `0.1.2` 이전 React 어댑터의 최신 공개 버전은 `0.1.0`이었습니다. workspace 루트와 앱은 private입니다. npm 게시와 GitHub 릴리스·태그는 별개입니다.
+
+## 검증된 `@ihyeon` 스코프 릴리스 `0.1.5`
+
+2026년 10월 12일 세 패키지를 public으로 게시했으며 npm `latest`가 모두 `0.1.5`입니다. npm에서 내려받은 tarball의 SHA-512 값이 검토한 최초 게시 파일과 일치합니다. 새 레지스트리 consumer에서 protocol 단독 설치, React 없는 SDK 설치, React 타입·ESM·CommonJS·SSR 검사가 통과했습니다. 필요한 기능만 설치할 수 있도록 개별 패키지를 유지합니다.
+
+| 기존 패키지 | 스코프 패키지 | 사용 대상 |
+| --- | --- | --- |
+| `browser-error-log` | `@ihyeon/browser-error-log` | 브라우저 앱; React 불필요 |
+| `browser-error-log-react` | `@ihyeon/browser-error-log-react` | Error Boundary를 쓰는 React 앱 |
+| `browser-error-log-protocol` | `@ihyeon/browser-error-log-protocol` | 이벤트 계약만 쓰는 수집기·뷰어 |
+
+SDK는 새 protocol 패키지에 의존하고 React 어댑터는 새 SDK에 의존합니다. React 자체는 peer dependency로 유지합니다. 기존 공개 버전과 릴리스 태그의 이름·무결성 기록은 그대로 보존합니다. 새 패키지를 설치하는 앱은 의존성과 import 경로를 함께 바꿔야 합니다. npm alias나 호환 wrapper는 포함하지 않습니다.
+
+2026년 10월 12일 기존 이름의 npm 패키지 3개는 모든 버전에 각 `@ihyeon/*` 패키지로 이동하라는 안내를 붙여 deprecated 처리했습니다. 기존 버전 목록, latest 태그, tarball URL, 무결성 값은 유지했습니다. 기존 React 패키지를 새 consumer에 설치했을 때 세 패키지의 이동 안내가 표시됐고 SDK·React·protocol의 CommonJS·SSR 검사가 계속 통과했습니다. 새 스코프 패키지는 deprecated 처리하지 않고 활성 상태로 유지합니다.
+
+최초 스코프 릴리스는 인증된 `ihyeon` 계정으로 직접 게시했으며 기존 GitHub 릴리스 태그와 별개입니다. 세 패키지에 GitHub 소유자 `hyeonse-swing`, 저장소 `browser-error-log`, 워크플로 `publish.yml`, 환경 `npm`의 Trusted Publishing을 설정하고 게시를 허용했습니다. 이 소스 전환이 `main`에 반영되면 자동 릴리스도 새 스코프 패키지 이름을 사용합니다. 이번 최초 게시에서 새 GitHub 태그나 GitHub Release는 만들지 않았습니다. 기존 `v0.1.5` 태그는 이전 이름의 릴리스로 유지하며 다음 자동 patch 릴리스는 새 버전·태그를 사용합니다. [Trusted Publishing 문서](https://docs.npmjs.com/trusted-publishers/)에서 설정 방식을 확인할 수 있습니다.
+
+로컬에서 애플리케이션 테스트 96개, 릴리스 테스트 15개, 타입 검사, SDK·뷰어 빌드, 독립 tarball consumer, 빌드된 마이크로 서버 smoke, Chromium·WebKit 전송 테스트 6개가 통과했습니다. 브라우저 SDK는 gzip 4,934바이트입니다. 새 스코프의 tarball 파일명에는 `ihyeon-` 접두사가 붙습니다. 예: `ihyeon-browser-error-log-protocol-0.1.5.tgz`. 아래 검증 결과는 기존 이름의 패키지 기록입니다.
 
 ## 검증된 `0.1.0` 패키지
 

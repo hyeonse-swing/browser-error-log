@@ -1,6 +1,6 @@
-import type { ErrorEventRecord, EventBatch, EventType, Runtime } from 'browser-error-log-protocol';
+import type { ErrorEventRecord, EventBatch, EventType, Runtime } from '@ihyeon/browser-error-log-protocol';
 
-export type { ErrorEventRecord, EventBatch } from 'browser-error-log-protocol';
+export type { ErrorEventRecord, EventBatch } from '@ihyeon/browser-error-log-protocol';
 
 export interface CaptureExtra {
   type?: EventType;
@@ -484,6 +484,7 @@ class Client implements BrowserErrorLogClient {
         if (byteLength(body) <= MAX_BEACON_BYTES) {
           if (navigator.sendBeacon(this.endpoint, new Blob([body], { type: 'application/json' }))) {
             this.queue.splice(0, candidates.length);
+            this.sent += candidates.length;
           }
           return;
         }

@@ -1,4 +1,4 @@
-# browser-error-log
+# @ihyeon/browser-error-log
 
 English | [한국어](https://github.com/hyeonse-swing/browser-error-log/blob/main/packages/browser/README.ko.md)
 
@@ -15,10 +15,10 @@ A small browser error SDK for a collector you control. Use your own backend or t
 ## Install
 
 ```sh
-npm install browser-error-log
+npm install @ihyeon/browser-error-log
 ```
 
-The `browser-error-log-protocol` dependency resolves from npm. For local source-checkout development, use Node.js 24, `npm ci`, and `npm run check:package`, then install the protocol and browser tarballs together as shown in the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md).
+The `@ihyeon/browser-error-log-protocol` dependency resolves from npm. For local source-checkout development, use Node.js 24, `npm ci`, and `npm run check:package`, then install the protocol and browser tarballs together as shown in the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md).
 
 ## Connect in three steps
 
@@ -31,7 +31,7 @@ The `browser-error-log-protocol` dependency resolves from npm. For local source-
 2. In your app's browser entry point, initialize once:
 
    ```ts
-   import { init } from 'browser-error-log';
+   import { init } from '@ihyeon/browser-error-log';
 
    export const errorLog = init({
      project: 'my-web',
@@ -49,7 +49,7 @@ The `browser-error-log-protocol` dependency resolves from npm. For local source-
    console.log(errorLog.getStats()); // sent: 1 when delivery succeeds
    ```
 
-Keep the client alive for the app's lifetime. Use `destroy()` for test cleanup or when disposing the app; it removes instrumentation and discards pending events. `flush()` completes the SDK's delivery attempts, not a guarantee of storage: check `getStats()` and the collector. Capturing starts only after initialization.
+Keep the client alive for the app's lifetime. Use `destroy()` for test cleanup or when disposing the app; it removes instrumentation and discards pending events. `flush()` completes the SDK's delivery attempts, not a guarantee of storage: check `getStats()` and the collector. `sent` also counts events accepted by the browser's `sendBeacon` queue when the tab is hidden; this does not confirm collector storage. Capturing starts only after initialization.
 
 Use the [self-hosting guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/micro-server.md) for external hosting. Production apps need their own HTTPS collector, exact allowed origins, persistent storage, and viewer authentication. `localhost` and `127.0.0.1` are different origins. The viewer password belongs only on the server; do not put it in SDK configuration.
 
@@ -63,7 +63,7 @@ try {
 }
 ```
 
-The optional `browser-error-log-react` package provides an Error Boundary. The base SDK does not require React. Imports and initialization are safe during SSR but do not collect server-side errors; initialize in your framework's browser/client entry point.
+The optional `@ihyeon/browser-error-log-react` package provides an Error Boundary. The base SDK does not require React. Imports and initialization are safe during SSR but do not collect server-side errors; initialize in your framework's browser/client entry point.
 
 ## Collection controls
 

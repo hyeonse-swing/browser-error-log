@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { init } from 'browser-error-log';
-import { ErrorBoundary } from 'browser-error-log-react';
+import { init } from '@ihyeon/browser-error-log';
+import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
 import { LanguageSwitcher, useLocale } from '../i18n/react';
 import './style.css';
 

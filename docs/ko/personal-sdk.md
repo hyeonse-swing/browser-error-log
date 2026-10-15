@@ -4,19 +4,19 @@
 
 SDK는 `endpoint` 또는 사용자 지정 `transport`로 연결합니다. React는 선택 사항입니다. 영속 저장을 시작하려면 [자체 호스팅 가이드](micro-server.md)를 참고하세요.
 
-MIT 라이선스 브라우저 SDK, 프로토콜, React 어댑터가 npm에 게시되어 있습니다. 현재 버전은 각 패키지 페이지에서 확인하세요: [브라우저 SDK](https://www.npmjs.com/package/browser-error-log), [프로토콜](https://www.npmjs.com/package/browser-error-log-protocol), [React 어댑터](https://www.npmjs.com/package/browser-error-log-react). 대상 앱에서 브라우저 SDK를 설치합니다.
+브라우저 SDK, 프로토콜, React 어댑터를 `@ihyeon` 스코프의 개별 npm 패키지로 제공합니다. 세 패키지의 `0.1.5` 레지스트리 파일과 새 consumer 설치를 검증했습니다. [릴리스 가이드](releasing.md)에 게시 기록을 정리했습니다. 대상 앱에서 브라우저 SDK를 설치합니다.
 
 ```sh
-npm install browser-error-log
+npm install @ihyeon/browser-error-log
 ```
 
 기존 React 18/19 앱에는 브라우저 SDK와 선택적 React 어댑터를 설치합니다.
 
 ```sh
-npm install browser-error-log browser-error-log-react
+npm install @ihyeon/browser-error-log @ihyeon/browser-error-log-react
 ```
 
-`browser-error-log-protocol`은 공개 타입이나 상수를 앱에서 직접 import하지 않으면 의존성으로 설치됩니다.
+`@ihyeon/browser-error-log-protocol`은 SDK의 의존성으로 자동 설치됩니다. 직접 만든 수집기·뷰어에서 이벤트 타입과 상수만 필요하면 protocol 패키지만 설치할 수 있습니다.
 
 영어·한국어 선택기는 이 저장소에서 빌드하는 뷰어·데모·설치 예제의 기능입니다. SDK만 설치해도 앱에 언어 선택기가 추가되지는 않습니다. v1 이벤트 스키마는 그대로이며 `sdkVersion`은 설치된 SDK 릴리스를 식별합니다.
 
@@ -29,15 +29,15 @@ npm ci
 npm run check:package
 ```
 
-스크립트는 현재 체크아웃 버전의 tarball 3개를 `output/packages/`에 만들고 독립 consumer에 설치하여 React 없는 브라우저 설치, TypeScript 타입 선언, ESM/CJS export, SSR import를 확인합니다. 로컬 개발 경로이며 npm에 게시하지 않습니다.
+스크립트는 현재 체크아웃 버전의 tarball 3개를 `output/packages/`에 만들고 독립 consumer에 설치하여 protocol 단독 사용, React 없는 브라우저 설치, TypeScript 타입 선언, ESM/CJS export, SSR import를 확인합니다. 로컬 개발 경로이며 npm에 게시하지 않습니다.
 
 대상 앱에서 `SDK_DIR`을 이 저장소의 절대 경로로 바꾸세요.
 
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
 SDK_VERSION="$(node -p 'require(process.argv[1]).version' "$SDK_DIR/package.json")"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-$SDK_VERSION.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-$SDK_VERSION.tgz"
+npm install "$SDK_DIR/output/packages/ihyeon-browser-error-log-protocol-$SDK_VERSION.tgz" \
+  "$SDK_DIR/output/packages/ihyeon-browser-error-log-$SDK_VERSION.tgz"
 ```
 
 기존 React 18/19 앱에는 3개 tarball을 같은 명령으로 설치합니다.
@@ -45,12 +45,18 @@ npm install "$SDK_DIR/output/packages/browser-error-log-protocol-$SDK_VERSION.tg
 ```sh
 SDK_DIR="/absolute/path/to/browser-error-log"
 SDK_VERSION="$(node -p 'require(process.argv[1]).version' "$SDK_DIR/package.json")"
-npm install "$SDK_DIR/output/packages/browser-error-log-protocol-$SDK_VERSION.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-$SDK_VERSION.tgz" \
-  "$SDK_DIR/output/packages/browser-error-log-react-$SDK_VERSION.tgz"
+npm install "$SDK_DIR/output/packages/ihyeon-browser-error-log-protocol-$SDK_VERSION.tgz" \
+  "$SDK_DIR/output/packages/ihyeon-browser-error-log-$SDK_VERSION.tgz" \
+  "$SDK_DIR/output/packages/ihyeon-browser-error-log-react-$SDK_VERSION.tgz"
 ```
 
 기본 브라우저 패키지에는 React가 필요하지 않습니다. 앱 번들러용 ESM, CommonJS, TypeScript 선언을 제공하지만 CDN 전역 스크립트는 제공하지 않습니다.
+
+이벤트 계약만 필요한 수집기·뷰어에서는 protocol tarball만 설치합니다.
+
+```sh
+npm install "$SDK_DIR/output/packages/ihyeon-browser-error-log-protocol-$SDK_VERSION.tgz"
+```
 
 ## 포함된 수집기에 연결하기
 
@@ -63,7 +69,7 @@ MICRO_PROJECTS=my-web MICRO_ALLOWED_ORIGINS=http://localhost:5173 npm run micro
 Origin은 host·port까지 정확히 일치해야 하며 `localhost`와 `127.0.0.1`은 다릅니다. 앱의 브라우저 진입점에서 한 번 초기화합니다.
 
 ```ts
-import { init } from 'browser-error-log';
+import { init } from '@ihyeon/browser-error-log';
 
 export const errorLog = init({
   project: 'my-web',
@@ -99,14 +105,14 @@ console.log(errorLog.getStats());
 | `maxQueueSize` | `50` | 버퍼 이벤트 수, 1–100으로 제한 |
 | `transportTimeoutMs` | `5000` | 시도별 ms 제한, 250–60,000으로 제한 |
 
-클라이언트는 `captureException(error, extra?)`, `flush()`, `getStats()`, `destroy()`를 제공합니다. `extra`에는 `context`, `componentStack`, 이벤트 `type`을 넣을 수 있습니다. `getStats()`는 `queued`, `sent`, `dropped`를 반환합니다. `flush()` 완료는 실패를 포함해 전송 시도가 끝났다는 뜻이며 성공 확인이 아닙니다. `destroy()`는 SDK 작업을 취소하고 대기 이벤트를 버리므로 초기화 직후 바로 호출하지 마세요.
+클라이언트는 `captureException(error, extra?)`, `flush()`, `getStats()`, `destroy()`를 제공합니다. `extra`에는 `context`, `componentStack`, 이벤트 `type`을 넣을 수 있습니다. `getStats()`는 `queued`, `sent`, `dropped`를 반환합니다. 탭이 숨겨질 때 브라우저의 `sendBeacon` 큐가 수락한 이벤트도 `sent`에 포함하며, 수집기 저장을 확인한 것은 아닙니다. `flush()` 완료는 실패를 포함해 전송 시도가 끝났다는 뜻이며 성공 확인이 아닙니다. `destroy()`는 SDK 작업을 취소하고 대기 이벤트를 버리므로 초기화 직후 바로 호출하지 마세요.
 
 ## React와 SSR
 
 같은 클라이언트를 React 어댑터에 전달합니다.
 
 ```tsx
-import { ErrorBoundary } from 'browser-error-log-react';
+import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
 import { errorLog } from './error-log';
 
 <ErrorBoundary client={errorLog} fallback={(_error, reset) => (

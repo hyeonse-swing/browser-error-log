@@ -1,4 +1,4 @@
-# browser-error-log-react
+# @ihyeon/browser-error-log-react
 
 [English](https://github.com/hyeonse-swing/browser-error-log/blob/main/packages/react/README.md) | 한국어
 
@@ -11,7 +11,7 @@ React peer 범위는 `>=18 <20`입니다. 이 선언이 모든 React 버전·프
 React 앱에서 브라우저 SDK와 어댑터를 설치합니다.
 
 ```sh
-npm install browser-error-log browser-error-log-react
+npm install @ihyeon/browser-error-log @ihyeon/browser-error-log-react
 ```
 
 앱에 React가 이미 설치되어 있어야 합니다. 어댑터는 React를 번들에 넣지 않습니다. 게시 패키지 대신 로컬 소스를 사용하려면 [SDK 가이드](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/ko/personal-sdk.md)에 따라 프로토콜·브라우저·React tarball을 함께 설치하세요.
@@ -27,8 +27,8 @@ MICRO_PROJECTS=my-web MICRO_ALLOWED_ORIGINS=http://localhost:5173 npm run micro
 브라우저 코드에서 클라이언트를 한 번 초기화하고 보호할 UI를 감쌉니다.
 
 ```tsx
-import { init } from 'browser-error-log';
-import { ErrorBoundary } from 'browser-error-log-react';
+import { init } from '@ihyeon/browser-error-log';
+import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
 
 const errorLog = init({
   project: 'my-web',

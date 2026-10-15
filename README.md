@@ -2,11 +2,11 @@
 
 English | [한국어](README.ko.md)
 
-[![npm version](https://img.shields.io/npm/v/browser-error-log.svg)](https://www.npmjs.com/package/browser-error-log)
+[![npm version](https://img.shields.io/npm/v/@ihyeon%2Fbrowser-error-log.svg)](https://www.npmjs.com/package/@ihyeon/browser-error-log)
 
 Capture browser failures on infrastructure you control. This project includes a framework-independent browser SDK, a React Error Boundary, a small self-hosted collector, and a viewer. A Node.js 24 process can persist events in SQLite and serve the viewer. You choose where records live, how long they remain, and who can read them. The public event types and transport hook also support a backend you own.
 
-The MIT-licensed browser SDK, protocol, and React adapter are available on npm: [browser-error-log](https://www.npmjs.com/package/browser-error-log), [browser-error-log-react](https://www.npmjs.com/package/browser-error-log-react), and [browser-error-log-protocol](https://www.npmjs.com/package/browser-error-log-protocol). The collector and viewer run on your own infrastructure; see the [release guide](docs/releasing.md) for package details and automatic publishing from `main`. The English/Korean language selector belongs to the viewer, demo, and install example built from this repository; installing the SDK alone does not add that UI to an app.
+The MIT-licensed browser SDK, React adapter, and protocol are published separately under the `@ihyeon` scope: [@ihyeon/browser-error-log](https://www.npmjs.com/package/@ihyeon/browser-error-log), [@ihyeon/browser-error-log-react](https://www.npmjs.com/package/@ihyeon/browser-error-log-react), and [@ihyeon/browser-error-log-protocol](https://www.npmjs.com/package/@ihyeon/browser-error-log-protocol). All three `0.1.5` packages have verified registry downloads and fresh-consumer installation checks; the original unscoped packages remain available. See the [release guide](docs/releasing.md) for the migration and publishing workflow. The collector and viewer run on your own infrastructure. The English/Korean language selector belongs to the viewer, demo, and install example built from this repository; installing the SDK alone does not add that UI to an app.
 
 ## Start with persistent storage
 
@@ -28,16 +28,16 @@ SQLite defaults to seven days from server receipt, 10,000 events, and a 64 MiB l
 In another web app, install the SDK:
 
 ```sh
-npm install browser-error-log
+npm install @ihyeon/browser-error-log
 ```
 
 For an existing React 18/19 app, install the browser SDK and optional React adapter:
 
 ```sh
-npm install browser-error-log browser-error-log-react
+npm install @ihyeon/browser-error-log @ihyeon/browser-error-log-react
 ```
 
-For a standard integration, install only `browser-error-log`. It automatically installs `browser-error-log-protocol`, the shared event types and constants used by SDKs and collectors. The protocol package does not capture errors or run a server. Add `browser-error-log-react` only when you need a React Error Boundary. The [SDK guide](docs/personal-sdk.md) also covers local source-checkout tarballs.
+For a standard integration, install only `@ihyeon/browser-error-log`. It automatically installs `@ihyeon/browser-error-log-protocol`, the shared event types and constants used by SDKs and collectors. The protocol package does not capture errors or run a server. Add `@ihyeon/browser-error-log-react` only when you need a React Error Boundary. The [SDK guide](docs/personal-sdk.md) also covers local source-checkout tarballs.
 
 For an app at `http://localhost:5173`, start the collector with that exact browser origin:
 
@@ -48,7 +48,7 @@ MICRO_PROJECTS=my-web MICRO_ALLOWED_ORIGINS=http://localhost:5173 npm run start:
 Initialize once in the app's browser entry point:
 
 ```ts
-import { init } from 'browser-error-log';
+import { init } from '@ihyeon/browser-error-log';
 
 export const errorLog = init({
   project: 'my-web',

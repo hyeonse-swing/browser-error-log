@@ -9,10 +9,12 @@ export const REGISTRY = 'https://registry.npmjs.org/';
 // the verified 0.1.2 source; subsequent releases use their immutable tags.
 export const UNTAGGED_BASELINE = '316ceecc8c10b45f84eda0d21833338f34559266';
 export const PACKAGES = [
-  { name: 'browser-error-log-protocol', path: 'packages/protocol' },
-  { name: 'browser-error-log', path: 'packages/browser' },
-  { name: 'browser-error-log-react', path: 'packages/react' },
+  { name: '@ihyeon/browser-error-log-protocol', path: 'packages/protocol' },
+  { name: '@ihyeon/browser-error-log', path: 'packages/browser' },
+  { name: '@ihyeon/browser-error-log-react', path: 'packages/react' },
 ];
+// Existing release tags retain their original npm identities and integrity.
+export const LEGACY_PACKAGE_NAMES = ['browser-error-log-protocol', 'browser-error-log', 'browser-error-log-react'];
 const versionFiles = ['package.json', 'apps/viewer/package.json', ...PACKAGES.map(pkg => `${pkg.path}/package.json`)];
 
 export function git(args, options = {}) {
@@ -89,8 +91,8 @@ export function assertVersions(root = '.') {
       throw new Error(`${pkg.path} public npm package identity/configuration differs`);
     }
   }
-  if (read('packages/browser/package.json').dependencies['browser-error-log-protocol'] !== version
-    || read('packages/react/package.json').dependencies['browser-error-log'] !== version) {
+  if (read('packages/browser/package.json').dependencies['@ihyeon/browser-error-log-protocol'] !== version
+    || read('packages/react/package.json').dependencies['@ihyeon/browser-error-log'] !== version) {
     throw new Error('Published package dependency pins differ from the workspace version');
   }
   const lock = read('package-lock.json');
@@ -98,8 +100,8 @@ export function assertVersions(root = '.') {
   for (const path of ['', 'apps/viewer', ...PACKAGES.map(pkg => pkg.path)]) {
     if (lock.packages[path]?.version !== version) throw new Error(`Lockfile ${path || 'root'} version differs`);
   }
-  if (lock.packages['packages/browser'].dependencies['browser-error-log-protocol'] !== version
-    || lock.packages['packages/react'].dependencies['browser-error-log'] !== version) {
+  if (lock.packages['packages/browser'].dependencies['@ihyeon/browser-error-log-protocol'] !== version
+    || lock.packages['packages/react'].dependencies['@ihyeon/browser-error-log'] !== version) {
     throw new Error('Lockfile package dependency pins differ');
   }
   const browser = readFileSync(resolve(root, 'packages/browser/src/index.ts'), 'utf8');
@@ -108,7 +110,7 @@ export function assertVersions(root = '.') {
     throw new Error('SDK runtime version literals differ');
   }
   for (const path of ['packages/protocol/README.md', 'packages/protocol/README.ko.md']) {
-    if (!readFileSync(resolve(root, path), 'utf8').includes(`browser-error-log-protocol-${version}.tgz`)) {
+    if (!readFileSync(resolve(root, path), 'utf8').includes(`ihyeon-browser-error-log-protocol-${version}.tgz`)) {
       throw new Error(`${path} source tarball example differs from ${version}`);
     }
   }
@@ -130,16 +132,16 @@ export function setVersion(next, root = '.', bump = 'patch') {
     const file = resolve(root, path);
     const data = readJson(file);
     data.version = next;
-    if (path === 'packages/browser/package.json') data.dependencies['browser-error-log-protocol'] = next;
-    if (path === 'packages/react/package.json') data.dependencies['browser-error-log'] = next;
+    if (path === 'packages/browser/package.json') data.dependencies['@ihyeon/browser-error-log-protocol'] = next;
+    if (path === 'packages/react/package.json') data.dependencies['@ihyeon/browser-error-log'] = next;
     writeJson(file, data);
   }
   const lockPath = resolve(root, 'package-lock.json');
   const lock = readJson(lockPath);
   lock.version = next;
   for (const path of ['', 'apps/viewer', ...PACKAGES.map(pkg => pkg.path)]) lock.packages[path].version = next;
-  lock.packages['packages/browser'].dependencies['browser-error-log-protocol'] = next;
-  lock.packages['packages/react'].dependencies['browser-error-log'] = next;
+  lock.packages['packages/browser'].dependencies['@ihyeon/browser-error-log-protocol'] = next;
+  lock.packages['packages/react'].dependencies['@ihyeon/browser-error-log'] = next;
   writeJson(lockPath, lock);
   const literals = [
     ['packages/browser/src/index.ts', /sdkVersion: '\d+\.\d+\.\d+'/, `sdkVersion: '${next}'`, 'browser SDK version'],
@@ -152,8 +154,8 @@ export function setVersion(next, root = '.', bump = 'patch') {
   for (const path of ['packages/protocol/README.md', 'packages/protocol/README.ko.md']) {
     const file = resolve(root, path);
     writeFileSync(file, replaceExactlyOnce(readFileSync(file, 'utf8'),
-      /browser-error-log-protocol-\d+\.\d+\.\d+\.tgz/,
-      `browser-error-log-protocol-${next}.tgz`, `${path} tarball example`));
+      /ihyeon-browser-error-log-protocol-\d+\.\d+\.\d+\.tgz/,
+      `ihyeon-browser-error-log-protocol-${next}.tgz`, `${path} tarball example`));
   }
   assertVersions(root);
 }
@@ -164,7 +166,7 @@ export function packRelease(directory) {
   for (const pkg of PACKAGES) {
     const result = JSON.parse(execFileSync('npm', [
       'pack', '--workspace', pkg.name, '--json', '--pack-destination', directory,
-      '--ignore-scripts', '--offline',
+      '--ignore-scripts', '--offline', '--update-notifier=false',
     ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }));
     if (result.length !== 1 || result[0].name !== pkg.name) throw new Error(`Unexpected npm pack result for ${pkg.name}`);
     const file = resolve(directory, result[0].filename);
@@ -183,16 +185,25 @@ export function createTagManifest(version, tarballs) {
   };
 }
 
+export function manifestPackageNames(manifest) {
+  const names = Object.keys(manifest.packages ?? {});
+  const expected = [PACKAGES.map(pkg => pkg.name), LEGACY_PACKAGE_NAMES]
+    .find(group => names.length === group.length && group.every(name => names.includes(name)));
+  if (!expected) throw new Error('Release manifest has an invalid package identity set');
+  for (const name of expected) {
+    if (!/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(manifest.packages[name])) {
+      throw new Error(`Release manifest has no valid integrity for ${name}`);
+    }
+  }
+  return expected;
+}
+
 export function readTagManifest(tag) {
   if (!/^v\d+\.\d+\.\d+$/.test(tag)) throw new Error(`Invalid release tag: ${tag}`);
   if (git(['cat-file', '-t', `refs/tags/${tag}`]) !== 'tag') throw new Error(`${tag} must be an annotated tag`);
   const manifest = JSON.parse(git(['for-each-ref', '--format=%(contents)', `refs/tags/${tag}`]));
   if (manifest.version !== tag.slice(1)) throw new Error(`${tag} manifest version differs`);
-  for (const pkg of PACKAGES) {
-    if (!/^sha512-[A-Za-z0-9+/]+={0,2}$/.test(manifest.packages?.[pkg.name])) {
-      throw new Error(`${tag} has no valid integrity for ${pkg.name}`);
-    }
-  }
+  manifestPackageNames(manifest);
   return manifest;
 }
 

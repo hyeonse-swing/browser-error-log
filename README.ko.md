@@ -2,11 +2,11 @@
 
 [English](README.md) | 한국어
 
-[![npm version](https://img.shields.io/npm/v/browser-error-log.svg)](https://www.npmjs.com/package/browser-error-log)
+[![npm version](https://img.shields.io/npm/v/@ihyeon%2Fbrowser-error-log.svg)](https://www.npmjs.com/package/@ihyeon/browser-error-log)
 
 브라우저 오류를 직접 관리하는 인프라에 기록합니다. 프레임워크에 종속되지 않는 브라우저 SDK, React Error Boundary, 작은 자체 호스팅 수집기와 뷰어를 제공합니다. Node.js 24 프로세스 하나로 SQLite에 이벤트를 저장하고 뷰어를 제공할 수 있습니다. 데이터 위치, 보관 기간, 조회 권한은 운영자가 결정합니다. 공개 이벤트 타입과 전송 훅을 사용해 자체 백엔드에 연결할 수도 있습니다.
 
-MIT 라이선스 브라우저 SDK, 프로토콜, React 어댑터를 npm에서 설치할 수 있습니다: [browser-error-log](https://www.npmjs.com/package/browser-error-log), [browser-error-log-react](https://www.npmjs.com/package/browser-error-log-react), [browser-error-log-protocol](https://www.npmjs.com/package/browser-error-log-protocol). 수집기와 뷰어는 운영자의 인프라에서 실행합니다. 패키지 정보와 `main` 자동 게시 절차는 [릴리스 가이드](docs/ko/releasing.md)를 참고하세요. 영어·한국어 선택기는 이 저장소에서 빌드하는 뷰어·데모·설치 예제의 기능이며 SDK만 설치해도 앱에 해당 UI가 추가되지는 않습니다. GitHub 소스 릴리스나 태그는 npm 게시와 별개입니다.
+MIT 라이선스 패키지 3개를 `@ihyeon` 스코프로 각각 게시했습니다: [@ihyeon/browser-error-log](https://www.npmjs.com/package/@ihyeon/browser-error-log), [@ihyeon/browser-error-log-react](https://www.npmjs.com/package/@ihyeon/browser-error-log-react), [@ihyeon/browser-error-log-protocol](https://www.npmjs.com/package/@ihyeon/browser-error-log-protocol). 세 패키지의 `0.1.5` 레지스트리 파일과 새 consumer 설치를 검증했으며 기존 이름의 공개 패키지도 유지됩니다. 이름 전환과 게시 워크플로는 [릴리스 가이드](docs/ko/releasing.md)를 참고하세요. 수집기와 뷰어는 각 사용자가 자신의 인프라에서 운영합니다. 영어·한국어 선택기는 이 저장소에서 빌드하는 뷰어·데모·설치 예제의 기능이며 SDK만 설치해도 앱에 해당 UI가 추가되지는 않습니다.
 
 ## 영구 저장으로 시작하기
 
@@ -28,16 +28,16 @@ SQLite 기본값은 서버 수신 시점부터 7일, 이벤트 10,000건, DB 본
 대상 웹앱에서 SDK를 설치합니다.
 
 ```sh
-npm install browser-error-log
+npm install @ihyeon/browser-error-log
 ```
 
 기존 React 18/19 앱에는 브라우저 SDK와 선택적 React 어댑터를 설치합니다.
 
 ```sh
-npm install browser-error-log browser-error-log-react
+npm install @ihyeon/browser-error-log @ihyeon/browser-error-log-react
 ```
 
-일반적인 앱 연결에는 `browser-error-log`만 설치하면 됩니다. SDK와 수집기가 공유하는 이벤트 타입·상수 패키지인 `browser-error-log-protocol`은 자동으로 설치됩니다. protocol 자체는 오류를 수집하거나 서버를 실행하지 않습니다. React Error Boundary가 필요할 때만 `browser-error-log-react`를 추가하세요. 소스 체크아웃의 로컬 tarball 경로도 [SDK 가이드](docs/ko/personal-sdk.md)에 설명합니다.
+일반적인 앱 연결에는 `@ihyeon/browser-error-log`만 설치하면 됩니다. SDK와 수집기가 공유하는 이벤트 타입·상수 패키지인 `@ihyeon/browser-error-log-protocol`은 자동으로 설치됩니다. protocol 자체는 오류를 수집하거나 서버를 실행하지 않습니다. React Error Boundary가 필요할 때만 `@ihyeon/browser-error-log-react`를 추가하세요. 소스 체크아웃의 로컬 tarball 경로도 [SDK 가이드](docs/ko/personal-sdk.md)에 설명합니다.
 
 앱 주소가 `http://localhost:5173`이라면 정확한 브라우저 Origin을 허용해 수집기를 시작합니다.
 
@@ -48,7 +48,7 @@ MICRO_PROJECTS=my-web MICRO_ALLOWED_ORIGINS=http://localhost:5173 npm run start:
 앱의 브라우저 진입점에서 한 번 초기화합니다.
 
 ```ts
-import { init } from 'browser-error-log';
+import { init } from '@ihyeon/browser-error-log';
 
 export const errorLog = init({
   project: 'my-web',

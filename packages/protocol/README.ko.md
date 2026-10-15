@@ -1,16 +1,16 @@
-# browser-error-log-protocol
+# @ihyeon/browser-error-log-protocol
 
 [English](https://github.com/hyeonse-swing/browser-error-log/blob/main/packages/protocol/README.md) | 한국어
 
 Browser Error Log SDK·수집기·뷰어를 위한 버전이 있는 TypeScript 계약입니다. SDK를 자체 백엔드에 연결하거나 뷰어 데이터 소스를 구현할 때 사용하세요.
 
-직접 사용하는 경우 설치합니다. `browser-error-log`도 의존성으로 포함합니다.
+직접 사용하는 경우 설치합니다. `@ihyeon/browser-error-log`도 의존성으로 포함합니다.
 
 ```sh
-npm install browser-error-log-protocol
+npm install @ihyeon/browser-error-log-protocol
 ```
 
-게시 패키지 대신 로컬 소스 tarball을 사용하려면 Node.js 24에서 `npm ci`, `npm run check:package`를 실행하고 `output/packages/browser-error-log-protocol-0.1.5.tgz`를 절대 경로로 설치합니다. [SDK 가이드](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/ko/personal-sdk.md)를 참고하세요.
+게시 패키지 대신 로컬 소스 tarball을 사용하려면 Node.js 24에서 `npm ci`, `npm run check:package`를 실행하고 `output/packages/ihyeon-browser-error-log-protocol-0.1.5.tgz`를 절대 경로로 설치합니다. [SDK 가이드](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/ko/personal-sdk.md)를 참고하세요.
 
 ## 이벤트·조회 계약
 
@@ -23,7 +23,7 @@ import {
   type EventFilter,
   type EventPage,
   type EventDataSource,
-} from 'browser-error-log-protocol';
+} from '@ihyeon/browser-error-log-protocol';
 
 function makeBatch(events: ErrorEventRecord[]): EventBatch {
   return { schemaVersion: SCHEMA_VERSION, events };

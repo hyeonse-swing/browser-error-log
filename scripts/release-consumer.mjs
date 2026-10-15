@@ -33,12 +33,30 @@ function consumer(name, dependencies, expectedPackages, esm, cjs, typescript) {
   }
 }
 
-consumer('browser-only', [
-  `browser-error-log@${version}`,
-], ['browser-error-log', 'browser-error-log-protocol'], `
+consumer('protocol-only', [`@ihyeon/browser-error-log-protocol@${version}`],
+  ['@ihyeon/browser-error-log-protocol'], `
   import { createRequire } from 'node:module';
-  import { init } from 'browser-error-log';
-  import { SDK_VERSION } from 'browser-error-log-protocol';
+  import { SDK_VERSION } from '@ihyeon/browser-error-log-protocol';
+  if (SDK_VERSION !== '${version}') throw Error('Protocol version differs');
+  const require = createRequire(import.meta.url);
+  for (const name of ['@ihyeon/browser-error-log', '@ihyeon/browser-error-log-react', 'react']) {
+    try { require.resolve(name); throw Error('Protocol-only install pulled ' + name); }
+    catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
+  }
+`, `
+  const { SDK_VERSION } = require('@ihyeon/browser-error-log-protocol');
+  if (SDK_VERSION !== '${version}') throw Error('Protocol CJS version differs');
+`, `
+  import { SCHEMA_VERSION, type EventBatch } from '@ihyeon/browser-error-log-protocol';
+  const batch: EventBatch = { schemaVersion: SCHEMA_VERSION, events: [] }; void batch;
+`);
+
+consumer('browser-only', [
+  `@ihyeon/browser-error-log@${version}`,
+], ['@ihyeon/browser-error-log', '@ihyeon/browser-error-log-protocol'], `
+  import { createRequire } from 'node:module';
+  import { init } from '@ihyeon/browser-error-log';
+  import { SDK_VERSION } from '@ihyeon/browser-error-log-protocol';
   if (SDK_VERSION !== '${version}') throw Error('Protocol version differs');
   const require = createRequire(import.meta.url);
   try { require.resolve('react'); throw Error('Browser-only install pulled React'); }
@@ -46,28 +64,28 @@ consumer('browser-only', [
   const client = init({ project: 'registry-smoke' });
   await client.flush(); client.destroy();
 `, `
-  const { init } = require('browser-error-log');
-  const { SDK_VERSION } = require('browser-error-log-protocol');
+  const { init } = require('@ihyeon/browser-error-log');
+  const { SDK_VERSION } = require('@ihyeon/browser-error-log-protocol');
   if (SDK_VERSION !== '${version}') throw Error('Protocol CJS version differs');
   init({ project: 'registry-smoke' }).destroy();
 `);
 
 consumer('react', [
-  `browser-error-log-react@${version}`, 'react@19.3.0', '@types/react@^19', 'csstype@^3',
+  `@ihyeon/browser-error-log-react@${version}`, 'react@19.3.0', '@types/react@^19', 'csstype@^3',
 ], PACKAGES.map(pkg => pkg.name), `
-  import { init } from 'browser-error-log';
-  import { ErrorBoundary } from 'browser-error-log-react';
+  import { init } from '@ihyeon/browser-error-log';
+  import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
   if (typeof ErrorBoundary !== 'function') throw Error('React adapter ESM export missing');
   init({ project: 'registry-smoke' }).destroy();
 `, `
-  const { init } = require('browser-error-log');
-  const { ErrorBoundary } = require('browser-error-log-react');
+  const { init } = require('@ihyeon/browser-error-log');
+  const { ErrorBoundary } = require('@ihyeon/browser-error-log-react');
   if (typeof ErrorBoundary !== 'function') throw Error('React adapter CJS export missing');
   init({ project: 'registry-smoke' }).destroy();
 `, `
-  import { init, type TransportContext } from 'browser-error-log';
-  import { ErrorBoundary } from 'browser-error-log-react';
-  import { EVENT_LABELS, type EventBatch } from 'browser-error-log-protocol';
+  import { init, type TransportContext } from '@ihyeon/browser-error-log';
+  import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
+  import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';
   const client = init({ project: 'registry-smoke', enabled: false,
     transport: async (batch: EventBatch, context: TransportContext) => { void batch; void context.signal; } });
   client.captureException(new Error(EVENT_LABELS.manual));
