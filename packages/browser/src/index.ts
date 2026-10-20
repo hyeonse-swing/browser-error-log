@@ -528,10 +528,11 @@ function describeFetch(input: RequestInfo | URL, init?: RequestInit): { url: str
       catch { /* not a genuine Request */ }
     }
   }
+  const initSignal = read(init, 'signal');
   return {
     url: requestUrl ?? safeString(input),
     method: safeString(read(init, 'method') ?? (requestUrl === undefined ? undefined : read(input, 'method')) ?? 'GET'),
-    signal: (read(init, 'signal') ?? (requestUrl === undefined ? undefined : read(input, 'signal'))) as AbortSignal | null | undefined,
+    signal: (initSignal === undefined ? (requestUrl === undefined ? undefined : read(input, 'signal')) : initSignal) as AbortSignal | null | undefined,
   };
 }
 

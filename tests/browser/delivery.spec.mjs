@@ -115,6 +115,53 @@ test('delivers selected HTTP and fetch failures without recapturing collector re
   expect(await events(environment)).toHaveLength(2);
 });
 
+test('honors a null signal override on an aborted Request', async ({ page }) => {
+  const refusedPort = await availablePort();
+  const url = `http://127.0.0.1:${refusedPort}/offline`;
+  await page.goto(`${origin}/`);
+  const native = await page.evaluate(async url => {
+    const controller = new AbortController();
+    controller.abort();
+    const request = new Request(url, { signal: controller.signal });
+    const sameOriginRequest = new Request('/missing', { signal: controller.signal });
+    const sameOriginStatus = (await fetch(sameOriginRequest, { signal: null })).status;
+    const rejectName = async init => {
+      try { await fetch(request, init); return 'resolved'; }
+      catch (error) { return error.name; }
+    };
+    return {
+      sameOriginStatus,
+      omitted: await rejectName(),
+      undefined: await rejectName({ signal: undefined }),
+      null: await rejectName({ signal: null }),
+    };
+  }, url);
+  expect(native.sameOriginStatus).toBe(404);
+  expect(native.omitted).toBe('AbortError');
+  expect(native.undefined).toBe('AbortError');
+  expect(native.null).toBe('TypeError');
+
+  const environment = randomUUID();
+  await init(page, environment);
+  const wrapped = await page.evaluate(async url => {
+    const controller = new AbortController();
+    controller.abort();
+    const request = new Request(url, { signal: controller.signal });
+    const rejectName = async init => {
+      try { await fetch(request, init); return 'resolved'; }
+      catch (error) { return error.name; }
+    };
+    return {
+      omitted: await rejectName(),
+      undefined: await rejectName({ signal: undefined }),
+      null: await rejectName({ signal: null }),
+    };
+  }, url);
+  expect(wrapped).toEqual({ omitted: native.omitted, undefined: native.undefined, null: native.null });
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+  expect((await events(environment))[0]).toMatchObject({ type: 'network', network: { url } });
+});
+
 test('records a Request created in an iframe while preserving native fetch', async ({ page }) => {
   const environment = randomUUID();
   await init(page, environment, true);

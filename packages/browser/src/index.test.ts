@@ -111,6 +111,32 @@ describe('browser error client', () => {
     expect(captured[0].events[0].network?.status).toBe(404);
   });
 
+  it('uses an explicit fetch signal override when classifying Request failures', async () => {
+    const aborted = new AbortController();
+    aborted.abort();
+    const active = new AbortController();
+    const abortFailure = Object.assign(new Error('cancelled'), { name: 'AbortError' });
+    const networkFailure = new TypeError('Failed to fetch');
+    const request = new Request('https://example.test/offline', { signal: aborted.signal });
+    const native = vi.fn((_input: RequestInfo | URL, init?: RequestInit) =>
+      Promise.reject((init?.signal === undefined ? request.signal : init.signal)?.aborted ? abortFailure : networkFailure));
+    vi.stubGlobal('fetch', native);
+    const instance = client({ captureNetwork: true, endpoint: '/collector' });
+
+    await expect(window.fetch(request)).rejects.toBe(abortFailure);
+    await expect(window.fetch(request, { signal: undefined })).rejects.toBe(abortFailure);
+    await expect(window.fetch(request, { signal: null })).rejects.toBe(networkFailure);
+    await expect(window.fetch(request, { signal: active.signal })).rejects.toBe(networkFailure);
+    await expect(window.fetch(request, { signal: aborted.signal })).rejects.toBe(abortFailure);
+    await instance.flush();
+
+    expect(native).toHaveBeenCalledTimes(5);
+    expect(captured[0].events.map(event => event.network?.url)).toEqual([
+      'https://example.test/offline',
+      'https://example.test/offline',
+    ]);
+  });
+
   it('captures XHR HTTP failures while preserving handlers and excluding aborts', async () => {
     class FakeXHR extends EventTarget {
       status = 503;
