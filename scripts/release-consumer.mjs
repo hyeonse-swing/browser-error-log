@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { REGISTRY, PACKAGES } from './release-common.mjs';
+import { retryRegistryInstall } from './release-install.mjs';
 
 const version = process.argv[2];
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Pass the published version to verify');
@@ -11,13 +12,27 @@ const scratch = mkdtempSync(join(tmpdir(), 'browser-error-log-registry-'));
 const cache = join(scratch, 'npm-cache');
 const root = fileURLToPath(new URL('..', import.meta.url));
 
-function consumer(name, dependencies, expectedPackages, esm, cjs, typescript) {
+async function consumer(name, dependencies, expectedPackages, esm, cjs, typescript) {
   const dir = join(scratch, name);
   mkdirSync(dir);
   writeFileSync(join(dir, 'package.json'), `${JSON.stringify({ name, private: true, type: 'module' })}\n`);
-  execFileSync('npm', ['install', '--no-save', '--ignore-scripts', '--no-audit', '--no-fund',
-    '--prefer-online', '--registry', REGISTRY, '--cache', cache, ...dependencies], {
-    cwd: dir, stdio: 'inherit',
+  await retryRegistryInstall({
+    expectedPackages, version,
+    sleep: ms => {
+      console.log(`npm metadata is still propagating; retrying ${name} install in ${ms / 1000}s.`);
+      return new Promise(resolve => setTimeout(resolve, ms));
+    },
+    install: () => {
+      try {
+        return execFileSync('npm', ['install', '--no-save', '--ignore-scripts', '--no-audit', '--no-fund',
+          '--prefer-online', '--registry', REGISTRY, '--cache', cache, ...dependencies], {
+          cwd: dir, stdio: ['inherit', 'inherit', 'pipe'],
+        });
+      } catch (error) {
+        if (error.stderr) process.stderr.write(error.stderr);
+        throw error;
+      }
+    },
   });
   for (const pkg of PACKAGES.filter(pkg => expectedPackages.includes(pkg.name))) {
     const installed = JSON.parse(readFileSync(join(dir, 'node_modules', pkg.name, 'package.json'), 'utf8'));
@@ -33,7 +48,7 @@ function consumer(name, dependencies, expectedPackages, esm, cjs, typescript) {
   }
 }
 
-consumer('protocol-only', [`@ihyeon/browser-error-log-protocol@${version}`],
+await consumer('protocol-only', [`@ihyeon/browser-error-log-protocol@${version}`],
   ['@ihyeon/browser-error-log-protocol'], `
   import { createRequire } from 'node:module';
   import { SDK_VERSION } from '@ihyeon/browser-error-log-protocol';
@@ -51,7 +66,7 @@ consumer('protocol-only', [`@ihyeon/browser-error-log-protocol@${version}`],
   const batch: EventBatch = { schemaVersion: SCHEMA_VERSION, events: [] }; void batch;
 `);
 
-consumer('browser-only', [
+await consumer('browser-only', [
   `@ihyeon/browser-error-log@${version}`,
 ], ['@ihyeon/browser-error-log', '@ihyeon/browser-error-log-protocol'], `
   import { createRequire } from 'node:module';
@@ -70,7 +85,7 @@ consumer('browser-only', [
   init({ project: 'registry-smoke' }).destroy();
 `);
 
-consumer('react', [
+await consumer('react', [
   `@ihyeon/browser-error-log-react@${version}`, 'react@19.3.0', '@types/react@^19', 'csstype@^3',
 ], PACKAGES.map(pkg => pkg.name), `
   import { init } from '@ihyeon/browser-error-log';
