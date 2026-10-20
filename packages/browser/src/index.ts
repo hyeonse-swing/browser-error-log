@@ -520,9 +520,19 @@ function removeNetworkClient(client: Client): void {
 }
 
 function describeFetch(input: RequestInfo | URL, init?: RequestInit): { url: string; method: string; signal?: AbortSignal | null } {
-  const request = typeof Request !== 'undefined' && input instanceof Request ? input : undefined;
-  const url = request ? request.url : safeString(input);
-  return { url, method: safeString(init?.method ?? request?.method ?? 'GET'), signal: init?.signal ?? request?.signal };
+  let requestUrl: string | undefined;
+  if (typeof Request !== 'undefined' && input !== null && typeof input === 'object') {
+    if (input instanceof Request) requestUrl = read(input, 'url') as string | undefined;
+    else {
+      try { requestUrl = Object.getOwnPropertyDescriptor(Request.prototype, 'url')?.get?.call(input); }
+      catch { /* not a genuine Request */ }
+    }
+  }
+  return {
+    url: requestUrl ?? safeString(input),
+    method: safeString(read(init, 'method') ?? (requestUrl === undefined ? undefined : read(input, 'method')) ?? 'GET'),
+    signal: (read(init, 'signal') ?? (requestUrl === undefined ? undefined : read(input, 'signal'))) as AbortSignal | null | undefined,
+  };
 }
 
 function installNetwork(): Instrumentation {

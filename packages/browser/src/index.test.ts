@@ -62,6 +62,40 @@ describe('browser error client', () => {
     expect(native).toHaveBeenCalledTimes(2);
   });
 
+  it('reads genuine Request metadata with init precedence and keeps other fetch inputs safe', async () => {
+    const response = new Response(null, { status: 503 });
+    const native = vi.fn(function (this: unknown): Promise<Response> {
+      expect(this).toBe(window);
+      return Promise.resolve(response);
+    });
+    vi.stubGlobal('fetch', native);
+    const instance = client({ captureNetwork: true, endpoint: '/collector' });
+    const url = (path: string) => new URL(path, window.location.href);
+    const request = new Request(url('/request?token=private'), { method: 'POST' });
+    const override = { method: 'PUT' };
+    const requestLike = { url: url('/decoy').href, method: 'POST', toString: () => '/stringified' };
+    const hostile = { get url(): never { throw new Error('url getter'); }, get method(): never { throw new Error('method getter'); }, get signal(): never { throw new Error('signal getter'); }, toString: () => '/hostile' };
+
+    expect(await window.fetch(request)).toBe(response);
+    expect(await window.fetch(request, override)).toBe(response);
+    expect(await window.fetch('/string?token=private')).toBe(response);
+    expect(await window.fetch(url('/url?token=private'))).toBe(response);
+    expect(await window.fetch(requestLike as unknown as Request)).toBe(response);
+    expect(await window.fetch(hostile as unknown as Request, { get method(): never { throw new Error('init method'); }, get signal(): never { throw new Error('init signal'); } })).toBe(response);
+    expect(await window.fetch(new Request(url('/collector'), { method: 'POST' }))).toBe(response);
+    expect(native.mock.calls[1]).toEqual([request, override]);
+
+    await instance.flush();
+    expect(captured[0].events.map(event => event.network && [event.network.method, event.network.url])).toEqual([
+      ['POST', url('/request').href],
+      ['PUT', url('/request').href],
+      ['GET', url('/string').href],
+      ['GET', url('/url').href],
+      ['GET', url('/stringified').href],
+      ['GET', url('/hostile').href],
+    ]);
+  });
+
   it('records only selected HTTP statuses and ignores intentional fetch aborts', async () => {
     const aborted = Object.assign(new Error('cancelled'), { name: 'AbortError' });
     vi.stubGlobal('fetch', vi.fn((url: string) => {

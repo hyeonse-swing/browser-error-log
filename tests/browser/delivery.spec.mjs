@@ -114,3 +114,20 @@ test('delivers selected HTTP and fetch failures without recapturing collector re
   await delay(150);
   expect(await events(environment)).toHaveLength(2);
 });
+
+test('records a Request created in an iframe while preserving native fetch', async ({ page }) => {
+  const environment = randomUUID();
+  await init(page, environment, true);
+  const result = await page.evaluate(async () => {
+    const frame = document.createElement('iframe');
+    document.body.append(frame);
+    try {
+      const request = new frame.contentWindow.Request('/missing?token=iframe-secret', { method: 'POST', body: 'payload' });
+      const response = await window.fetch(request);
+      return { foreign: !(request instanceof Request), nativeResponse: response instanceof Response, status: response.status };
+    } finally { frame.remove(); }
+  });
+  expect(result).toMatchObject({ foreign: true, nativeResponse: true, status: 404 });
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+  expect((await events(environment))[0].network).toMatchObject({ method: 'POST', url: `${origin}/missing`, status: 404 });
+});
