@@ -10,7 +10,7 @@ Browser Error Log SDK·수집기·뷰어를 위한 버전이 있는 TypeScript �
 npm install @ihyeon/browser-error-log-protocol
 ```
 
-게시 패키지 대신 로컬 소스 tarball을 사용하려면 Node.js 24에서 `npm ci`, `npm run check:package`를 실행하고 `output/packages/ihyeon-browser-error-log-protocol-0.1.9.tgz`를 절대 경로로 설치합니다. [SDK 가이드](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/ko/personal-sdk.md)를 참고하세요.
+게시 패키지 대신 로컬 소스 tarball을 사용하려면 Node.js 24에서 `npm ci`, `npm run check:package`를 실행하고 `output/packages/ihyeon-browser-error-log-protocol-0.1.10.tgz`를 절대 경로로 설치합니다. [SDK 가이드](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/ko/personal-sdk.md)를 참고하세요.
 
 ## 이벤트·조회 계약
 

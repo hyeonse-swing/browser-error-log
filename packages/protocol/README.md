@@ -10,7 +10,7 @@ Install directly when implementing your own collector or viewer; `@ihyeon/browse
 npm install @ihyeon/browser-error-log-protocol
 ```
 
-For local source-checkout development, use Node.js 24, `npm ci`, and `npm run check:package`, then install `output/packages/ihyeon-browser-error-log-protocol-0.1.9.tgz` by absolute path. See the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md).
+For local source-checkout development, use Node.js 24, `npm ci`, and `npm run check:package`, then install `output/packages/ihyeon-browser-error-log-protocol-0.1.10.tgz` by absolute path. See the [SDK guide](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md).
 
 ## Event and query contracts
 
