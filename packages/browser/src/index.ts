@@ -574,11 +574,13 @@ function installNetwork(): Instrumentation {
   const originalOpen = prototype?.open;
   const originalSend = prototype?.send;
   const metadata = new WeakMap<XMLHttpRequest, { method: string; url: string }>();
+  const pending = new WeakMap<XMLHttpRequest, () => void>();
   let wrappedOpen: typeof XMLHttpRequest.prototype.open | undefined;
   let wrappedSend: typeof XMLHttpRequest.prototype.send | undefined;
   if (prototype && originalOpen && originalSend) {
     wrappedOpen = (function (this: XMLHttpRequest, ...args: unknown[]): void {
       const result = Reflect.apply(originalOpen, this, args);
+      pending.get(this)?.();
       try { metadata.set(this, { method: safeString(args[0]), url: safeString(args[1]) }); }
       catch { /* native open already succeeded */ }
       return result;
@@ -590,13 +592,19 @@ function installNetwork(): Instrumentation {
       const started = now();
       let aborted = false;
       let failed = false;
+      let completed = false;
       const onAbort = () => { aborted = true; };
       const onFailure = () => { failed = true; };
-      const onLoadEnd = () => {
+      const cleanup = () => {
         this.removeEventListener('abort', onAbort);
         this.removeEventListener('error', onFailure);
         this.removeEventListener('timeout', onFailure);
         this.removeEventListener('loadend', onLoadEnd);
+        if (pending.get(this) === cleanup) pending.delete(this);
+      };
+      const onLoadEnd = () => {
+        completed = true;
+        cleanup();
         if (aborted) return;
         try {
           const status = this.status;
@@ -610,13 +618,17 @@ function installNetwork(): Instrumentation {
         this.addEventListener('error', onFailure);
         this.addEventListener('timeout', onFailure);
         this.addEventListener('loadend', onLoadEnd);
-      } catch { return Reflect.apply(originalSend, this, args); }
-      try { return Reflect.apply(originalSend, this, args); }
+      } catch {
+        cleanup();
+        return Reflect.apply(originalSend, this, args);
+      }
+      try {
+        const result = Reflect.apply(originalSend, this, args);
+        if (!completed) pending.set(this, cleanup);
+        return result;
+      }
       catch (error) {
-        this.removeEventListener('abort', onAbort);
-        this.removeEventListener('error', onFailure);
-        this.removeEventListener('timeout', onFailure);
-        this.removeEventListener('loadend', onLoadEnd);
+        cleanup();
         throw error;
       }
     };

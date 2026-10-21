@@ -171,6 +171,45 @@ describe('browser error client', () => {
     expect(captured[0].events[0].network?.url).not.toContain('secret=1');
   });
 
+  it('discards an active XHR request on successful reopen but retains it after failed operations', async () => {
+    class FakeXHR extends EventTarget {
+      status = 503;
+      active = false;
+      open(_method: string, url: string): void {
+        if (url === '/invalid') throw new Error('invalid URL');
+        this.active = false;
+      }
+      send(): void {
+        if (this.active) throw new Error('already sent');
+        this.active = true;
+      }
+      finish(): void {
+        this.active = false;
+        this.dispatchEvent(new Event('loadend'));
+      }
+    }
+    vi.stubGlobal('XMLHttpRequest', FakeXHR);
+    const instance = client({ captureNetwork: true, endpoint: '/collector', shouldCaptureHttp: () => true });
+    const xhr = new XMLHttpRequest() as XMLHttpRequest & FakeXHR;
+
+    xhr.open('GET', '/old');
+    xhr.send();
+    xhr.open('GET', '/new');
+    xhr.send();
+    xhr.finish();
+    xhr.open('GET', '/kept');
+    xhr.send();
+    expect(() => xhr.open('GET', '/invalid')).toThrow('invalid URL');
+    expect(() => xhr.send()).toThrow('already sent');
+    xhr.finish();
+
+    await instance.flush();
+    expect(captured[0].events.map(event => event.network?.url)).toEqual([
+      new URL('/new', window.location.href).href,
+      new URL('/kept', window.location.href).href,
+    ]);
+  });
+
   it('deduplicates the same Error across global and manual capture', async () => {
     const instance = client();
     const error = new Error('one failure');

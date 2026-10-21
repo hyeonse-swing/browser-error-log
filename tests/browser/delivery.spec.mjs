@@ -178,3 +178,48 @@ test('records a Request created in an iframe while preserving native fetch', asy
   await expect.poll(async () => (await events(environment)).length).toBe(1);
   expect((await events(environment))[0].network).toMatchObject({ method: 'POST', url: `${origin}/missing`, status: 404 });
 });
+
+test('records only the latest request when an active XHR is reopened', async ({ page }) => {
+  const environment = randomUUID();
+  await init(page, environment, true);
+  const nativeEvents = await page.evaluate(async () => {
+    const xhr = new XMLHttpRequest();
+    const events = [];
+    let phase = 'old';
+    xhr.addEventListener('abort', () => events.push({ phase, type: 'abort', status: xhr.status }));
+    xhr.addEventListener('loadend', () => events.push({ phase, type: 'loadend', status: xhr.status }));
+    const completed = new Promise(resolve => xhr.addEventListener('loadend', () => {
+      if (phase === 'new') resolve();
+    }));
+    xhr.open('GET', '/old');
+    xhr.send();
+    phase = 'opening-new';
+    xhr.open('GET', '/new');
+    phase = 'new';
+    xhr.send();
+    await completed;
+    return events;
+  });
+  expect(nativeEvents).toEqual([{ phase: 'new', type: 'loadend', status: 404 }]);
+  await expect.poll(async () => (await events(environment)).length).toBeGreaterThanOrEqual(1);
+  expect((await events(environment)).map(event => event.network?.url)).toEqual([`${origin}/new`]);
+});
+
+test('keeps an active XHR request when reopening throws', async ({ page }) => {
+  const environment = randomUUID();
+  await init(page, environment, true);
+  const result = await page.evaluate(async () => {
+    const xhr = new XMLHttpRequest();
+    const completed = new Promise(resolve => xhr.addEventListener('loadend', resolve, { once: true }));
+    xhr.open('GET', '/kept');
+    xhr.send();
+    let openThrew = false;
+    try { xhr.open('GET', 'http://['); }
+    catch { openThrew = true; }
+    await completed;
+    return { openThrew, status: xhr.status };
+  });
+  expect(result).toEqual({ openThrew: true, status: 404 });
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+  expect((await events(environment))[0].network).toMatchObject({ url: `${origin}/kept`, status: 404 });
+});
