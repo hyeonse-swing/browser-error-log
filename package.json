@@ -47,5 +47,8 @@
   "homepage": "https://github.com/hyeonse-swing/browser-error-log#readme",
   "bugs": {
     "url": "https://github.com/hyeonse-swing/browser-error-log/issues"
+  },
+  "engines": {
+    "node": ">=24.22.1 <25"
   }
 }

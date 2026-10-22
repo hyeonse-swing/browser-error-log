@@ -4,6 +4,8 @@
 
 마이크로 서버는 SDK 이벤트를 받아 운영자가 관리하는 디스크에 기록하는 단일 프로세스 Node.js 24 예제입니다. SQLite 모드는 뷰어와 조회 API를 제공하고 JSONL 모드는 나중에 오프라인 분석할 수 있는 크기 제한 회전 로그를 남깁니다. 런타임에는 Node 내장 기능을 사용하며 관리형 DB나 큐가 포함되지 않습니다.
 
+[2026년 10월 보안 수정](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)이 포함된 Node.js 24.22.1 또는 그 이후의 24.x 패치 버전을 사용하세요. nvm을 쓴다면 저장소 루트에서 `nvm install`과 `nvm use`를 실행해 `.nvmrc`의 버전을 선택하세요.
+
 ## 저장 모드
 
 | 모드 | 현재 동작 | 기본 상한 |
@@ -56,6 +58,8 @@ npm run dev
 ## 외부에 노출하기
 
 `npm run build:micro`는 Node.js 24에서 실행하는 독립 폴더 `dist/micro-server/`를 만듭니다. 폴더 전체를 호스트에 복사하고 `node server.mjs`로 실행하세요. `MICRO_DATA_DIR`은 빌드 폴더 밖의 영속 디스크에 둡니다. 단일 프로세스·단일 디스크 설계이므로 여러 replica가 같은 데이터 경로를 공유하게 하지 마세요.
+
+기존 호스트 배포는 호스트의 Node.js 런타임을 24.22.1 또는 그 이후의 24.x 패치 버전으로 업데이트하고 서버 프로세스를 재시작하세요. 기존 컨테이너 배포는 갱신된 기반 이미지를 pull하고 마이크로 서버 이미지를 다시 빌드한 뒤 컨테이너를 재생성하세요. 교체 중에는 영속 데이터 디렉터리나 Compose named volume을 그대로 연결하고 볼륨을 삭제하지 마세요. 배포된 SDK 패키지를 업데이트해도 서버의 Node.js 런타임은 업데이트되지 않습니다.
 
 [Compose 예제](../../examples/micro-server/compose.yaml)는 Caddy HTTPS와 named volume을 사용합니다. 도메인 DNS를 설정하고 프로젝트·Origin을 정확히 지정하세요.
 

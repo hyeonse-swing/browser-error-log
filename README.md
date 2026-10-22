@@ -10,7 +10,7 @@ The MIT-licensed browser SDK, React adapter, and protocol are published separate
 
 ## Start with persistent storage
 
-With Node.js 24 and npm:
+Use Node.js 24.22.1 or a later 24.x patch and npm. With nvm, run `nvm install` and `nvm use` in the cloned repository before `npm ci` to select the version in [`.nvmrc`](.nvmrc).
 
 ```sh
 git clone https://github.com/hyeonse-swing/browser-error-log.git

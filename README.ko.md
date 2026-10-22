@@ -10,7 +10,7 @@ MIT 라이선스 패키지 3개를 `@ihyeon` 스코프로 각각 게시했습니
 
 ## 영구 저장으로 시작하기
 
-Node.js 24와 npm을 사용합니다.
+Node.js 24.22.1 또는 그 이후의 24.x 패치 버전과 npm을 사용합니다. nvm을 쓴다면 복제한 저장소에서 `npm ci` 전에 `nvm install`과 `nvm use`를 실행해 [`.nvmrc`](.nvmrc)의 버전을 선택하세요.
 
 ```sh
 git clone https://github.com/hyeonse-swing/browser-error-log.git

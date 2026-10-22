@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '24'
+          node-version-file: '.nvmrc'
           package-manager-cache: false
       - name: Install npm with trusted publishing support
         run: npm install --global npm@11.21.0 --no-audit --no-fund

@@ -4,6 +4,8 @@ English | [한국어](ko/micro-server.md)
 
 The micro server is a single-process Node.js 24 example that receives SDK events and writes to a disk you control. SQLite mode serves the included viewer and query API. JSONL mode keeps bounded rotating logs for later offline analysis. The server uses Node built-ins at runtime; no managed database or queue is bundled.
 
+Use Node.js 24.22.1 or a later 24.x patch release, which includes the [October 2026 security fixes](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases). With nvm, run `nvm install` and `nvm use` from the repository root to select the version in `.nvmrc`.
+
 ## Storage modes
 
 | Mode | Current behavior | Default limits |
@@ -56,6 +58,8 @@ In the local viewer, import `.data/exported-events.json` using its JSON import c
 ## Expose the server
 
 `npm run build:micro` creates `dist/micro-server/`, a standalone Node.js 24 runtime folder. Copy the whole folder to a host and run `node server.mjs` there. Put `MICRO_DATA_DIR` on a persistent disk outside the build directory. This is a single-process, single-disk design; do not point multiple replicas at the same data path.
+
+For an existing host deployment, update the host's Node.js runtime to 24.22.1 or a later 24.x patch and restart the server process. For an existing container deployment, pull the updated base image, rebuild the micro-server image, and recreate the container. Keep the persistent data directory or Compose named volume attached during replacement; do not remove the volume. Updating the published SDK package does not update the server's Node.js runtime.
 
 The [Compose example](../examples/micro-server/compose.yaml) uses Caddy for HTTPS and a named data volume. Configure DNS for your own domain and supply exact project and origin lists. For example, on a host with Docker Compose:
 
