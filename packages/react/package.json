@@ -1,6 +1,6 @@
 {
   "name": "@ihyeon/browser-error-log-react",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "A React Error Boundary adapter for the self-hosted Browser Error Log SDK.",
   "keywords": [
     "react",
@@ -25,7 +25,7 @@
     "react": ">=18 <20"
   },
   "dependencies": {
-    "@ihyeon/browser-error-log": "0.1.11"
+    "@ihyeon/browser-error-log": "0.1.12"
   },
   "files": [
     "dist",
