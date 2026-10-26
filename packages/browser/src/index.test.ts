@@ -27,6 +27,74 @@ afterEach(() => {
 });
 
 describe('browser error client', () => {
+  it('keeps native console semantics and enriches the first Error argument', async () => {
+    const receiver = { label: 'native receiver' };
+    const first = new TypeError('first');
+    const second = new Error('second');
+    const args = ['prefix', first, second, 17];
+    const native = vi.spyOn(console, 'error').mockImplementation(function (this: unknown, ...values: unknown[]) {
+      expect(this).toBe(receiver);
+      expect(values).toEqual(args);
+      expect(values[1]).toBe(first);
+      return 'native result' as unknown as void;
+    });
+    const instance = client({ captureConsole: true });
+    expect(Reflect.apply(console.error, receiver, args)).toBe('native result');
+    await instance.flush();
+    expect(native).toHaveBeenCalledExactlyOnceWith(...args);
+    expect(captured[0].events[0]).toMatchObject({
+      type: 'console', message: args.map(String).join(' '), name: 'TypeError', stack: first.stack,
+    });
+    expect(captured[0].events[0].stack).not.toBe(second.stack);
+  });
+
+  it('does not invent console Error fields for primitive and plain object arguments, or lose hostile Proxy arguments', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const instance = client({ captureConsole: true });
+    const hostile = new Proxy({}, { getPrototypeOf() { throw new Error('hostile prototype'); } });
+    console.error('plain', 17, { message: 'ordinary' }, hostile);
+    await instance.flush();
+    expect(captured[0].events).toHaveLength(1);
+    expect(captured[0].events[0]).toMatchObject({ type: 'console', message: 'plain 17 [object Object] [object Object]' });
+    expect(captured[0].events[0]).not.toHaveProperty('name');
+    expect(captured[0].events[0]).not.toHaveProperty('stack');
+  });
+
+  it('preserves native console throws, opt-out, and teardown', async () => {
+    const failure = new Error('native throw');
+    const native = vi.spyOn(console, 'error').mockImplementation(() => { throw failure; });
+    const original = console.error;
+    const optedOut = client({ captureConsole: false });
+    expect(console.error).toBe(original);
+    const instance = client({ captureConsole: true });
+    expect(() => console.error('throwing')).toThrow(failure);
+    await instance.flush();
+    expect(captured[0].events[0]).toMatchObject({ type: 'console', message: 'throwing' });
+    instance.destroy();
+    expect(console.error).toBe(original);
+    expect(() => console.error('after teardown')).toThrow(failure);
+    expect(native).toHaveBeenCalledTimes(2);
+    optedOut.destroy();
+  });
+
+  it('sanitizes console Error stack URLs through hooks and honors beforeSend veto', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const urls: string[] = [];
+    const instance = client({ captureConsole: true, sanitizeUrl: url => {
+      urls.push(url);
+      return url.replace('/private/', '/redacted/');
+    }, beforeSend: event => event.message.includes('veto') ? false : event });
+    const error = new Error('broken');
+    error.stack = 'Error: broken\n at fn (https://user:pass@example.test/private/app.js?token=secret#part:12:3)';
+    console.error('kept', error);
+    console.error('veto', new Error('hidden'));
+    await instance.flush();
+    expect(captured[0].events).toHaveLength(1);
+    expect(captured[0].events[0].stack).toContain('/redacted/app.js');
+    expect(JSON.stringify(captured)).not.toMatch(/user:pass|token=secret|#part|hidden/);
+    expect(urls.some(url => url.includes('/private/app.js'))).toBe(true);
+  });
+
   it('is inert when disabled or rendered on the server', async () => {
     const disabled = client({ enabled: false, transport: undefined });
     disabled.captureException(new Error('ignored'));

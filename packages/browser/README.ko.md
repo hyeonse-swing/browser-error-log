@@ -85,6 +85,8 @@ const errorLog = init({
 });
 ```
 
+`captureConsole: true`로 `console.error` 호출을 수집할 수 있습니다. 인자를 합친 메시지는 유지하며, 같은 창에서 생성된 첫 번째 `Error` 인자의 이름과 스택도 기록합니다. 동일한 민감정보 필터와 `beforeSend` 제어가 적용됩니다.
+
 기본 HTTP 수집은 5xx와 네트워크 실패를 포함하고 의도적인 취소와 수집기 endpoint를 제외합니다. SDK는 URL 쿼리·해시·자격 정보와 흔한 이메일/토큰 패턴을 제거합니다. 요청/응답 본문, 쿠키, DOM, 폼 입력, 세션 녹화는 수집하지 않습니다. 오류 메시지, URL 경로, 스택, 사용자 지정 context에는 민감정보가 남을 수 있으므로 앱별 필터를 설정하세요. `beforeSend`나 `sanitizeUrl`이 실패하면 이벤트를 버립니다.
 
 사용자 지정 `transport(batch, { signal })`에서는 요청에 `signal`을 전달하고 전송 실패 시 reject하세요. 자동 네트워크 수집을 원하면 자기 전송을 제외할 `endpoint`를 지정해야 합니다. 없으면 사용자 지정 transport에서 네트워크 수집을 끕니다. 기본 전송은 credentials를 보내지 않습니다.

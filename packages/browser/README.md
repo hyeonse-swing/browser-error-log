@@ -85,6 +85,8 @@ const errorLog = init({
 });
 ```
 
+Set `captureConsole: true` to capture `console.error` calls. The combined message is preserved; the first `Error` created in the current window also contributes its name and stack, using the same redaction and `beforeSend` controls.
+
 By default, HTTP capture records 5xx responses and network failures, excludes intentional aborts, and excludes the collector endpoint. The SDK strips URL queries, fragments, and credentials and masks common email/token patterns. It does not collect request/response bodies, cookies, DOM, form inputs, or session recordings. Error text, URL paths, stacks, and custom context may still contain sensitive data; set application-specific filters. A failing `beforeSend` or `sanitizeUrl` drops the event.
 
 For a custom `transport(batch, { signal })`, pass `signal` to your request and reject on delivery failure. Include `endpoint` for collector exclusion if you want automatic network capture; otherwise network capture is disabled for a custom transport. The default transport omits credentials.

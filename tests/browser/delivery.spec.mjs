@@ -116,6 +116,35 @@ test('delivers an unhandled promise rejection to the local collector', async ({ 
   expect((await events(environment))[0]).toMatchObject({ type: 'promise', message: 'synthetic promise failure' });
 });
 
+test('opt-in console.error delivers the first named Error without changing native return', async ({ page }) => {
+  const optedOutEnvironment = randomUUID();
+  await init(page, optedOutEnvironment);
+  await page.evaluate(async () => {
+    console.error('opted out', new Error('ignored'));
+    await window.testClient.flush();
+    window.testClient.destroy();
+  });
+  expect(await events(optedOutEnvironment)).toHaveLength(0);
+
+  const environment = randomUUID();
+  await page.evaluate(async environment => {
+    const { init } = await import('/sdk.js');
+    window.testClient = init({ project: 'browser-test', environment, endpoint: '/api/events', captureConsole: true });
+  }, environment);
+  const result = await page.evaluate(async () => {
+    function makeFailure() { return new TypeError('synthetic console failure'); }
+    const error = makeFailure();
+    const nativeReturn = console.error('prefix', error, 'suffix');
+    await window.testClient.flush();
+    return { nativeReturn, message: ['prefix', error, 'suffix'].map(String).join(' ') };
+  });
+  expect(result.nativeReturn).toBeUndefined();
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+  const [event] = await events(environment);
+  expect(event).toMatchObject({ type: 'console', message: result.message, name: 'TypeError' });
+  expect(event.stack).toContain('makeFailure');
+});
+
 test('delivers selected HTTP and fetch failures without recapturing collector requests', async ({ page }) => {
   const environment = randomUUID();
   await init(page, environment, true);

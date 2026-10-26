@@ -192,7 +192,16 @@ class Client implements BrowserErrorLogClient {
 
   captureConsole(values: unknown[]): void {
     if (!this.active || this.destroyed) return;
-    try { this.enqueue(this.makeEvent('console', values.map(safeString).join(' '))); }
+    try {
+      const message = values.map(safeString).join(' ');
+      let fields: ReturnType<typeof errorFields> | undefined;
+      for (const value of values) {
+        try {
+          if (value instanceof Error) { fields = errorFields(value); break; }
+        } catch { /* a hostile value must not suppress the console event */ }
+      }
+      this.enqueue(this.makeEvent('console', message, { name: fields?.name, stack: fields?.stack }));
+    }
     catch { this.dropped++; /* console behavior is never changed by capture */ }
   }
 
