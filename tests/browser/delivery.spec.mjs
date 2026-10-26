@@ -47,6 +47,7 @@ test.beforeAll(async () => {
   await mkdir(publicDir);
   await copyFile('packages/browser/dist/index.js', join(publicDir, 'sdk.js'));
   await writeFile(join(publicDir, 'index.html'), '<!doctype html><title>SDK browser delivery test</title>');
+  await writeFile(join(publicDir, 'source-location.js'), "throw 'synthetic source failure';\n");
   const port = await availablePort();
   origin = `http://127.0.0.1:${port}`;
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('MICRO_')));
@@ -85,6 +86,26 @@ test('delivers an uncaught runtime error to the local collector', async ({ page 
   expect(event).toMatchObject({ type: 'javascript', message: 'synthetic runtime failure', project: 'browser-test' });
   expect(event.page).toBe(`${origin}/`);
   expect(JSON.stringify(event)).not.toContain('synthetic-page-secret');
+});
+
+test('delivers native source location for a primitive thrown by an external script', async ({ page }) => {
+  const environment = randomUUID();
+  await init(page, environment);
+  const native = await page.evaluate(() => new Promise(resolve => {
+    window.addEventListener('error', event => resolve({ filename: event.filename, lineno: event.lineno, colno: event.colno }), { once: true });
+    const script = document.createElement('script');
+    script.src = '/source-location.js?token=synthetic-source-secret';
+    document.body.append(script);
+  }));
+  expect(native).toMatchObject({ filename: `${origin}/source-location.js?token=synthetic-source-secret`, lineno: 1 });
+  expect(native.colno).toBeGreaterThan(0);
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+  const [event] = await events(environment);
+  expect(event).toMatchObject({ type: 'javascript', context: {
+    filename: `${origin}/source-location.js`, lineno: native.lineno, colno: native.colno,
+  } });
+  expect(event.message).toContain('synthetic source failure');
+  expect(JSON.stringify(event)).not.toContain('synthetic-source-secret');
 });
 
 test('delivers an unhandled promise rejection to the local collector', async ({ page }) => {

@@ -226,7 +226,18 @@ class Client implements BrowserErrorLogClient {
   }
 
   private readonly onError = (event: ErrorEvent): void => {
-    this.captureException(event.error ?? event.message ?? 'Script error', { type: 'javascript' });
+    try {
+      const filename = read(event, 'filename');
+      const lineno = read(event, 'lineno');
+      const colno = read(event, 'colno');
+      const context: Record<string, unknown> = {};
+      if (typeof filename === 'string' && filename.trim()) context.filename = this.cleanUrl(filename);
+      if (typeof lineno === 'number' && Number.isFinite(lineno) && lineno > 0) context.lineno = lineno;
+      if (typeof colno === 'number' && Number.isFinite(colno) && colno > 0) context.colno = colno;
+      this.captureException(read(event, 'error') ?? read(event, 'message') ?? 'Script error', {
+        type: 'javascript', ...(Object.keys(context).length ? { context } : {}),
+      });
+    } catch { this.dropped++; /* a failing URL hook must not affect the host app */ }
   };
 
   private readonly onRejection = (event: PromiseRejectionEvent): void => {

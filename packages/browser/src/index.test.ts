@@ -223,6 +223,83 @@ describe('browser error client', () => {
     expect(captured[0].events[0].type).toBe('javascript');
   });
 
+  it('keeps native error location with a sanitized filename', async () => {
+    const instance = client();
+    window.dispatchEvent(new ErrorEvent('error', {
+      message: 'primitive failure', filename: 'https://user:pass@example.test/app.js?token=private#part',
+      lineno: 12, colno: 7,
+    }));
+    await instance.flush();
+    expect(captured[0].events[0]).toMatchObject({
+      type: 'javascript', message: 'primitive failure',
+      context: { filename: 'https://example.test/app.js', lineno: 12, colno: 7 },
+    });
+    expect(JSON.stringify(captured)).not.toMatch(/user:pass|token=private|#part/);
+  });
+
+  it('runs the URL hook for relative and absolute native filenames', async () => {
+    const paths: string[] = [];
+    const instance = client({ sanitizeUrl: url => {
+      paths.push(url);
+      return new URL(url, window.location.href).pathname.replace('/private/', '/redacted/');
+    } });
+    window.dispatchEvent(new ErrorEvent('error', { message: 'relative', filename: '/private/a.js?token=one', lineno: 2 }));
+    window.dispatchEvent(new ErrorEvent('error', { message: 'absolute', filename: 'https://user:pass@example.test/private/b.js?token=two', colno: 3 }));
+    await instance.flush();
+    const [relative, absolute] = captured[0].events;
+    expect(paths).toContain('/private/a.js?token=one');
+    expect(paths).toContain('https://user:pass@example.test/private/b.js?token=two');
+    expect(relative.context).toMatchObject({ filename: `${window.location.origin}/redacted/a.js`, lineno: 2 });
+    expect(absolute.context).toMatchObject({ filename: `${window.location.origin}/redacted/b.js`, colno: 3 });
+    expect(JSON.stringify(captured)).not.toMatch(/private\/|token=one|token=two|user:pass/);
+  });
+
+  it('omits absent or invalid native source fields and tolerates a throwing getter', async () => {
+    const instance = client();
+    window.dispatchEvent(new ErrorEvent('error', { message: 'no source' }));
+    window.dispatchEvent(new ErrorEvent('error', { message: 'invalid source', filename: ' ', lineno: 0, colno: 0 }));
+    const nonFinite = new Event('error');
+    Object.defineProperties(nonFinite, {
+      message: { value: 'nonfinite source' }, lineno: { value: Infinity }, colno: { value: NaN },
+    });
+    window.dispatchEvent(nonFinite);
+    const hostile = new Event('error');
+    Object.defineProperty(hostile, 'filename', { get: () => { throw new Error('hostile filename'); } });
+    Object.defineProperty(hostile, 'message', { value: 'getter failure' });
+    window.dispatchEvent(hostile);
+    await instance.flush();
+    expect(captured[0].events.map(event => event.message)).toEqual(['no source', 'invalid source', 'nonfinite source', 'getter failure']);
+    expect(captured[0].events.every(event => event.context === undefined)).toBe(true);
+  });
+
+  it('drops a native error if its filename sanitizer throws and still honors beforeSend', async () => {
+    const failing = client({ sanitizeUrl: url => {
+      if (url.includes('/private/')) throw new Error('unsafe path');
+      return url;
+    } });
+    expect(() => window.dispatchEvent(new ErrorEvent('error', { message: 'secret', filename: '/private/a.js' }))).not.toThrow();
+    await failing.flush();
+    expect(failing.getStats()).toMatchObject({ sent: 0, dropped: 1 });
+    failing.destroy();
+    const vetoed = client({ beforeSend: () => false });
+    window.dispatchEvent(new ErrorEvent('error', { message: 'veto', filename: '/safe.js', lineno: 4 }));
+    await vetoed.flush();
+    expect(vetoed.getStats()).toMatchObject({ sent: 0, queued: 0 });
+    expect(captured).toHaveLength(0);
+    vetoed.destroy();
+
+    let seen: unknown;
+    const altered = client({ beforeSend: event => {
+      seen = event.context;
+      event.context = undefined;
+      return event;
+    } });
+    window.dispatchEvent(new ErrorEvent('error', { message: 'removed source', filename: '/safe.js', lineno: 5 }));
+    await altered.flush();
+    expect(seen).toMatchObject({ filename: `${window.location.origin}/safe.js`, lineno: 5 });
+    expect(captured[0].events[0].context).toBeUndefined();
+  });
+
   it('redacts sensitive content even when beforeSend mutates the record', async () => {
     const instance = client({
       beforeSend: event => {
