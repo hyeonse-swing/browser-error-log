@@ -364,7 +364,7 @@ class Client implements BrowserErrorLogClient {
       project: this.cleanText(this.options.project, 80),
       environment: this.cleanText(this.options.environment ?? 'development', 80),
       release: this.cleanText(this.options.release ?? 'unknown', 120),
-      sdkVersion: '0.1.13',
+      sdkVersion: '0.1.14',
       occurredAt: new Date().toISOString(),
       viewId: this.viewId,
       sequence: ++this.sequence,
