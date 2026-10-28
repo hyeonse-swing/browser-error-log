@@ -71,6 +71,7 @@ try {
 const errorLog = init({
   project: 'my-web',
   endpoint: '/api/events', // 자체 수집기 또는 같은 Origin의 프록시
+  context: { appSection: 'checkout', buildChannel: 'stable' },
   captureConsole: false,
   beforeSend(event) {
     if (event.message.includes('Expected diagnostic')) return null;
@@ -84,6 +85,8 @@ const errorLog = init({
   },
 });
 ```
+
+초기화 시 `context`를 지정하면 자동 수집을 포함한 모든 이벤트에 공통 진단 정보를 붙입니다. `captureException(error, { context })`의 개별 값이 우선하며, 최대 12개의 단일 값 항목 중 남은 자리를 공통 정보로 채웁니다. 동일한 민감 키·URL·텍스트 필터가 적용되고, `beforeSend`에서 합쳐진 context를 수정하거나 제거할 수 있습니다.
 
 `captureConsole: true`로 `console.error` 호출을 수집할 수 있습니다. 인자를 합친 메시지는 유지하며, 같은 창에서 생성된 첫 번째 `Error` 인자의 이름과 스택도 기록합니다. 동일한 민감정보 필터와 `beforeSend` 제어가 적용됩니다.
 

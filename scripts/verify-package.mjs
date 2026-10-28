@@ -63,7 +63,7 @@ npm(['install', ...tarballs, ...peers], consumer);
 writeFileSync(join(consumer, 'consumer.tsx'), `import { init, type TransportContext } from '@ihyeon/browser-error-log';
 import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
 import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';
-const client = init({project:'consumer',enabled:false,transport:async(batch:EventBatch,context:TransportContext)=>{void batch;void context.signal;}});
+const client = init({project:'consumer',enabled:false,context:{appSection:'checkout',buildChannel:'stable'},transport:async(batch:EventBatch,context:TransportContext)=>{void batch;void context.signal;}});
 client.captureException(new Error(EVENT_LABELS.manual));
 const node = <ErrorBoundary client={client} fallback={<p>Fallback</p>}><p>Ready</p></ErrorBoundary>;
 void node; client.destroy();`);

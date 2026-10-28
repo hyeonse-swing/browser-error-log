@@ -88,6 +88,23 @@ test('delivers an uncaught runtime error to the local collector', async ({ page 
   expect(JSON.stringify(event)).not.toContain('synthetic-page-secret');
 });
 
+test('delivers shared metadata and a per-event override to the local collector', async ({ page }) => {
+  const environment = randomUUID();
+  await page.goto(`${origin}/`);
+  await page.evaluate(async environment => {
+    const { init } = await import('/sdk.js');
+    const shared = { team: 'checkout', attempt: 2, password: 'synthetic-private-value' };
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events', context: shared });
+    client.captureException(new Error('shared metadata'), { context: { team: 'billing', source: 'button' } });
+    await client.flush();
+    client.destroy();
+  }, environment);
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+  const [event] = await events(environment);
+  expect(event).toMatchObject({ type: 'manual', context: { team: 'billing', source: 'button', attempt: 2 } });
+  expect(JSON.stringify(event)).not.toContain('synthetic-private-value');
+});
+
 test('delivers native source location for a primitive thrown by an external script', async ({ page }) => {
   const environment = randomUUID();
   await init(page, environment);

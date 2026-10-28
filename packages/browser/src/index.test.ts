@@ -305,6 +305,87 @@ describe('browser error client', () => {
     expect(JSON.stringify(captured)).not.toMatch(/user:pass|token=private|#part/);
   });
 
+  it('adds shared context to manual, React, global, promise, HTTP, network, and console events', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal('fetch', vi.fn((url: string) => url.includes('offline')
+      ? Promise.reject(new Error('offline')) : Promise.resolve(new Response(null, { status: 503 }))));
+    const instance = client({ context: { team: 'checkout', attempt: 2 }, captureConsole: true,
+      captureNetwork: true, endpoint: '/collector' });
+    instance.captureException(new Error('manual'));
+    instance.captureException(new Error('react'), { type: 'react' });
+    window.dispatchEvent(new ErrorEvent('error', { message: 'global' }));
+    const rejection = new Event('unhandledrejection');
+    Object.defineProperty(rejection, 'reason', { value: new Error('promise') });
+    window.dispatchEvent(rejection);
+    await window.fetch('/failed');
+    await expect(window.fetch('/offline')).rejects.toThrow('offline');
+    console.error('console');
+    await instance.flush();
+    expect(captured[0].events.map(event => event.type)).toEqual([
+      'manual', 'react', 'javascript', 'promise', 'http', 'network', 'console',
+    ]);
+    expect(captured[0].events.every(event => event.context?.team === 'checkout' && event.context?.attempt === 2)).toBe(true);
+  });
+
+  it('keeps event context first and within 12 fields, including native source location', async () => {
+    const defaults = Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`default${index}`, index]));
+    const instance = client({ context: { ...defaults, filename: 'wrong', shared: 'default' } });
+    window.dispatchEvent(new ErrorEvent('error', {
+      message: 'global', filename: '/actual.js?token=secret', lineno: 12, colno: 7,
+    }));
+    instance.captureException(new Error('manual'), { context: { shared: 'event', own: true } });
+    await instance.flush();
+    const [global, manual] = captured[0].events;
+    expect(global.context).toMatchObject({ filename: `${window.location.origin}/actual.js`, lineno: 12, colno: 7 });
+    expect(Object.keys(global.context ?? {})).toHaveLength(12);
+    expect(global.context).not.toHaveProperty('default9');
+    expect(manual.context).toMatchObject({ shared: 'event', own: true, default0: 0 });
+    expect(Object.keys(manual.context ?? {})).toHaveLength(12);
+  });
+
+  it('captures shared context when Object.hasOwn is unavailable', async () => {
+    const instance = client({ context: { team: 'default', attempt: 2 } });
+    const original = Object.getOwnPropertyDescriptor(Object, 'hasOwn');
+    try {
+      Object.defineProperty(Object, 'hasOwn', { ...original, value: undefined });
+      instance.captureException(new Error('fallback'), { context: { team: 'event' } });
+    } finally {
+      if (original) Object.defineProperty(Object, 'hasOwn', original);
+      else Reflect.deleteProperty(Object, 'hasOwn');
+    }
+    await instance.flush();
+    expect(captured[0].events[0].context).toEqual({ team: 'event', attempt: 2 });
+  });
+
+  it('sanitizes shared context and lets beforeSend remove it without affecting another client', async () => {
+    const shared = { password: 'secret', team: 'bob@example.com', request: '/api?token=secret', nested: { unsafe: true }, count: 3 };
+    const first = client({ context: shared, beforeSend: event => { event.context = undefined; return event; } });
+    const second = client({ context: shared });
+    first.captureException(new Error('first'));
+    second.captureException(new Error('second'));
+    await first.flush();
+    await second.flush();
+    expect(captured[0].events[0].context).toBeUndefined();
+    expect(captured[1].events[0].context).toEqual({ team: '[REDACTED_EMAIL]', request: '/api', count: 3 });
+    expect(shared).toEqual({ password: 'secret', team: 'bob@example.com', request: '/api?token=secret', nested: { unsafe: true }, count: 3 });
+    expect(JSON.stringify(captured)).not.toContain('token=secret');
+  });
+
+  it('ignores hostile and unsupported shared context values without changing later events', async () => {
+    const throwing: Record<string, unknown> = { valid: 'kept', invalid: Infinity, nested: { secret: true } };
+    Object.defineProperty(throwing, 'bad', { enumerable: true, get: () => { throw new Error('getter'); } });
+    const hostile = new Proxy({}, { ownKeys: () => { throw new Error('keys'); } });
+    const first = client({ context: throwing });
+    const second = client({ context: hostile });
+    first.captureException(new Error('first'));
+    second.captureException(new Error('second'));
+    first.captureException(new Error('third'));
+    await first.flush();
+    await second.flush();
+    expect(captured[0].events.map(event => event.context)).toEqual([{ valid: 'kept' }, { valid: 'kept' }]);
+    expect(captured[1].events[0].context).toBeUndefined();
+  });
+
   it('runs the URL hook for relative and absolute native filenames', async () => {
     const paths: string[] = [];
     const instance = client({ sanitizeUrl: url => {

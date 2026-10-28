@@ -71,6 +71,7 @@ The optional `@ihyeon/browser-error-log-react` package provides an Error Boundar
 const errorLog = init({
   project: 'my-web',
   endpoint: '/api/events', // your collector or a same-origin proxy
+  context: { appSection: 'checkout', buildChannel: 'stable' },
   captureConsole: false,
   beforeSend(event) {
     if (event.message.includes('Expected diagnostic')) return null;
@@ -84,6 +85,8 @@ const errorLog = init({
   },
 });
 ```
+
+Set `context` at initialization to attach common diagnostic fields to every event, including automatic captures. Per-error `captureException(error, { context })` values take priority, including within the limit of 12 scalar fields; common fields fill the remaining slots. The same sensitive-key, URL, and text filters apply, and `beforeSend` can edit or remove the combined context.
 
 Set `captureConsole: true` to capture `console.error` calls. The combined message is preserved; the first `Error` created in the current window also contributes its name and stack, using the same redaction and `beforeSend` controls.
 

@@ -14,6 +14,8 @@ export interface BrowserErrorLogOptions {
   project: string;
   environment?: string;
   release?: string;
+  /** Scalar metadata added to every captured event; event context takes precedence. */
+  context?: Record<string, unknown>;
   endpoint?: string;
   transport?: (batch: EventBatch, context: TransportContext) => void | Promise<void>;
   runtime?: Runtime;
@@ -345,7 +347,16 @@ class Client implements BrowserErrorLogClient {
     context?: unknown; network?: unknown;
   } = {}): ErrorEventRecord {
     const userAgent = read(navigator, 'userAgent');
-    const context = this.cleanContext(extra.context);
+    const eventContext = this.cleanContext(extra.context);
+    const defaults = this.cleanContext(this.options.context);
+    let context = eventContext;
+    if (defaults) {
+      context = { ...eventContext };
+      for (const key of Object.keys(defaults)) {
+        if (Object.keys(context).length >= 12) break;
+        if (!Object.prototype.hasOwnProperty.call(context, key)) context[key] = defaults[key];
+      }
+    }
     const network = this.cleanNetwork(extra.network);
     return {
       schemaVersion: 1,
