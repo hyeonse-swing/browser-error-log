@@ -1,4 +1,5 @@
 import type { ErrorEventRecord, EventFilter, EventPage, EventType } from '@ihyeon/browser-error-log-protocol';
+import { isBreadcrumbTrail } from '@ihyeon/browser-error-log-protocol';
 
 const types = new Set<EventType>(['javascript', 'promise', 'react', 'console', 'http', 'network', 'manual']);
 const runtimes = new Set(['browser', 'webview-ios', 'webview-android', 'unknown']);
@@ -13,6 +14,7 @@ export function isEventRecord(value: unknown): value is ErrorEventRecord {
   if (!Number.isInteger(e.sequence) || (e.sequence as number) < 0 || typeof e.elapsedMs !== 'number' || !Number.isFinite(e.elapsedMs) || e.elapsedMs < 0) return false;
   for (const key of ['name', 'stack', 'componentStack', 'browser']) if (e[key] !== undefined && (typeof e[key] !== 'string' || (e[key] as string).length > 16384)) return false;
   if (e.context !== undefined && (!e.context || typeof e.context !== 'object' || Array.isArray(e.context) || Object.values(e.context).some(v => v !== null && !['string', 'number', 'boolean'].includes(typeof v)))) return false;
+  if (e.breadcrumbs !== undefined && !isBreadcrumbTrail(e.breadcrumbs)) return false;
   if (e.network !== undefined) {
     if (!e.network || typeof e.network !== 'object') return false;
     const n = e.network as Record<string, unknown>;

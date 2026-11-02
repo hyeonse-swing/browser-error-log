@@ -65,6 +65,21 @@ try {
 
 The optional `@ihyeon/browser-error-log-react` package provides an Error Boundary. The base SDK does not require React. Imports and initialization are safe during SSR but do not collect server-side errors; initialize in your framework's browser/client entry point.
 
+## Record the steps before an error
+
+```ts
+errorLog.addBreadcrumb({ category: 'navigation', message: 'Checkout opened' });
+errorLog.addBreadcrumb({ category: 'action', message: 'Order submitted', data: { paymentMethod: 'card', attempt: 1 } });
+errorLog.captureException(new Error('Order could not be completed'));
+errorLog.clearBreadcrumbs(); // start a new flow; captured errors keep their snapshot
+```
+
+Each client keeps the latest 20 manually recorded steps, within a 12,000-byte UTF-8 JSON budget. Adding a step does not send a separate event; subsequent errors include an oldest-first snapshot. Steps have an SDK-generated UTC timestamp, a category (default `manual`, up to 40 characters), a message (up to 256 characters), and optional scalar data (six keys, 80 characters per key and 200 per string value). The existing sensitive-key, URL, and text filters apply; `beforeSend` can edit or remove `event.breadcrumbs`. `clearBreadcrumbs()` affects future captures, and `destroy()` also clears the local trail.
+
+`init()` returns `BrowserErrorLogBreadcrumbClient`, extending the existing `BrowserErrorLogClient` contract. Existing clients and React Error Boundary mocks can keep the original interface; use the extended type when explicitly typing a client that calls the new methods.
+
+The viewer shows these steps in both error detail views and preserves them in history JSON. Update your self-hosted collector and viewer to this source version to retain and display the optional field; older collectors may accept an event while omitting its breadcrumbs. Custom backends can validate the trail with `isBreadcrumbTrail` from `@ihyeon/browser-error-log-protocol`.
+
 ## Collection controls
 
 ```ts

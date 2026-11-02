@@ -51,7 +51,8 @@ async function consumer(name, dependencies, expectedPackages, esm, cjs, typescri
 await consumer('protocol-only', [`@ihyeon/browser-error-log-protocol@${version}`],
   ['@ihyeon/browser-error-log-protocol'], `
   import { createRequire } from 'node:module';
-  import { SDK_VERSION } from '@ihyeon/browser-error-log-protocol';
+  import { SDK_VERSION, isBreadcrumbTrail, BREADCRUMB_LIMITS } from '@ihyeon/browser-error-log-protocol';
+  if (!isBreadcrumbTrail([]) || BREADCRUMB_LIMITS.count !== 20) throw Error('Breadcrumb exports missing');
   if (SDK_VERSION !== '${version}') throw Error('Protocol version differs');
   const require = createRequire(import.meta.url);
   for (const name of ['@ihyeon/browser-error-log', '@ihyeon/browser-error-log-react', 'react']) {
@@ -77,6 +78,7 @@ await consumer('browser-only', [
   try { require.resolve('react'); throw Error('Browser-only install pulled React'); }
   catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
   const client = init({ project: 'registry-smoke' });
+  client.addBreadcrumb({ message: 'SSR no-op' }); client.clearBreadcrumbs();
   await client.flush(); client.destroy();
 `, `
   const { init } = require('@ihyeon/browser-error-log');
@@ -98,12 +100,15 @@ await consumer('react', [
   if (typeof ErrorBoundary !== 'function') throw Error('React adapter CJS export missing');
   init({ project: 'registry-smoke' }).destroy();
 `, `
-  import { init, type TransportContext } from '@ihyeon/browser-error-log';
+  import { init, type TransportContext, type BrowserErrorLogClient } from '@ihyeon/browser-error-log';
   import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
   import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';
   const client = init({ project: 'registry-smoke', enabled: false,
     transport: async (batch: EventBatch, context: TransportContext) => { void batch; void context.signal; } });
   client.captureException(new Error(EVENT_LABELS.manual));
+  client.addBreadcrumb({ category: 'action', message: 'Registry consumer', data: { attempt: 1 } }); client.clearBreadcrumbs();
+  const oldClient: BrowserErrorLogClient = {captureException(){},flush:async()=>{},destroy(){},getStats:()=>({queued:0,sent:0,dropped:0})};
+  const compatible = <ErrorBoundary client={oldClient}><p>Compatible</p></ErrorBoundary>; void compatible;
   const view = <ErrorBoundary client={client} fallback={<p>Fallback</p>}><p>Ready</p></ErrorBoundary>;
   void view; client.destroy();
 `);

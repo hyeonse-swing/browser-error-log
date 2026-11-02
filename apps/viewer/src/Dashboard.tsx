@@ -8,6 +8,7 @@ import { useLocale } from '../../i18n/react';
 import type { Locale } from '../../i18n/locale';
 import { countText, eventLabel, localizeError, numberText, t } from './i18n';
 import './dashboard.css';
+import { BreadcrumbTrail } from './BreadcrumbTrail';
 
 type Period = '24h' | '7d' | '30d' | 'all' | 'custom';
 type Controls = { project: string; environment: string; type: EventType | ''; query: string; period: Period; from: string; to: string };
@@ -63,6 +64,7 @@ function EventDialog({ event, onClose }: { event: ErrorEventRecord; onClose: () 
       {event.network && <section><h4>{t(locale, 'Network')}</h4><p>{event.network.method} {event.network.url}</p><p>{t(locale, 'Response')} {event.network.status || t(locale, 'None')} · {numberText(locale, event.network.durationMs)} ms</p></section>}
       {event.stack && <section><h4>{t(locale, 'Stack trace')}</h4><pre className="code-block">{event.stack}</pre></section>}
       {event.componentStack && <section><h4>{t(locale, 'Component stack')}</h4><pre className="code-block">{event.componentStack}</pre></section>}
+      <BreadcrumbTrail breadcrumbs={event.breadcrumbs}/>
       {event.context && <section><h4>{t(locale, 'Additional context')}</h4><pre className="code-block">{JSON.stringify(event.context, null, 2)}</pre></section>}
     </div>
   </dialog>;

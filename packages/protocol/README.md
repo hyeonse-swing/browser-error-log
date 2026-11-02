@@ -37,7 +37,9 @@ function makeBatch(events: ErrorEventRecord[]): EventBatch {
 - `EventDataSource` exposes `listEvents(filter, signal?)` and `getEvent(project, eventId, signal?)` for the viewer.
 - `EVENT_LABELS` provides English display labels. The underlying event type identifiers stay unchanged.
 
-These are types and constants, not a runtime validator, database, or HTTP server. Treat all incoming data as untrusted and validate it at your collector. Scope deduplication and event lookup by `(project, eventId)`; different projects may use the same event ID. Use ISO timestamps and distinguish client-supplied `occurredAt` from server-owned `receivedAt`.
+`Breadcrumb` describes optional `ErrorEventRecord.breadcrumbs`. `BREADCRUMB_LIMITS` and `isBreadcrumbTrail(value)` provide shared bounds and validation: at most 20 entries and 12,000 UTF-8 JSON bytes, canonical UTC `occurredAt` (`Date.toISOString()`), nonempty category/message (40/256 characters), and optional scalar `data` (six keys, key length 80, string length 200). Unknown breadcrumb properties, nested data, and non-finite numbers are rejected. Empty arrays are valid. Validation does not redact content; SDK filters or application-specific server controls handle removal.
+
+The package does not validate complete events or provide a database or HTTP server. Validate incoming events at your collector. Deduplicate and look up by `(project, eventId)`; distinguish client-supplied `occurredAt` from server-owned `receivedAt`.
 
 The [integration contract](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/integration.md) describes the HTTP API; `examples/micro-server` implements a small self-hosted collector with persistent SQLite or log-only JSONL storage. The in-memory development collector is only a demo.
 

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -46,6 +46,8 @@ test.beforeAll(async () => {
   const publicDir = join(scratch, 'public');
   await mkdir(publicDir);
   await copyFile('packages/browser/dist/index.js', join(publicDir, 'sdk.js'));
+  await copyFile('dist/viewer/index.html', join(publicDir, 'viewer.html'));
+  await cp('dist/viewer/assets', join(publicDir, 'assets'), { recursive: true });
   await writeFile(join(publicDir, 'index.html'), '<!doctype html><title>SDK browser delivery test</title>');
   await writeFile(join(publicDir, 'source-location.js'), "throw 'synthetic source failure';\n");
   const port = await availablePort();
@@ -75,6 +77,56 @@ test.afterAll(async () => {
     try { await closed; } finally { clearTimeout(timeout); }
   }
   if (scratch) await rm(scratch, { recursive: true, force: true });
+});
+
+test('preserves manual steps through SDK delivery, both viewer details, and history export', async ({ page }) => {
+  const environment = randomUUID();
+  await init(page, environment);
+  await page.evaluate(async () => {
+    window.testClient.addBreadcrumb({ category: 'navigation', message: 'Checkout opened',
+      data: { email: 'demo@example.test', password: 'fakepass', route: '/checkout?token=hidden' } });
+    window.testClient.addBreadcrumb({ category: 'action', message: 'Order submitted', data: { attempt: 1 } });
+    window.testClient.captureException(new Error('breadcrumb checkout failure'));
+    window.testClient.clearBreadcrumbs();
+    window.testClient.captureException(new Error('after clear failure'));
+    await window.testClient.flush();
+    window.testClient.destroy();
+  });
+  await expect.poll(async () => (await events(environment)).length).toBe(2);
+  const delivered = await events(environment);
+  const captured = delivered.find(event => event.message === 'breadcrumb checkout failure');
+  expect(captured.breadcrumbs.map(entry => entry.message)).toEqual(['Checkout opened', 'Order submitted']);
+  expect(captured.breadcrumbs[0].data).toEqual({ email: '[REDACTED_EMAIL]', route: '/checkout' });
+  expect(delivered.find(event => event.message === 'after clear failure').breadcrumbs).toBeUndefined();
+  expect(JSON.stringify(delivered)).not.toMatch(/demo@example|fakepass|token=hidden/);
+
+  await page.goto(`${origin}/viewer.html`);
+  await page.locator('.language-switcher select').selectOption('en');
+  await page.locator('.dash-filters').getByLabel('Environment', { exact: true }).fill(environment);
+  await page.locator('.dash-filters').getByRole('button', { name: /Query/ }).click();
+  await page.getByRole('button').filter({ hasText: 'breadcrumb checkout failure' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: 'Activity before this error' })).toBeVisible();
+  await expect(dialog.locator('.breadcrumb-entry')).toHaveCount(2);
+  await dialog.getByRole('button', { name: 'Close details' }).click();
+  const pendingDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Save query data ↓' }).click();
+  const download = await pendingDownload;
+  const exported = JSON.parse(await readFile(await download.path(), 'utf8'));
+  expect(exported.events.find(event => event.eventId === captured.eventId).breadcrumbs).toEqual(captured.breadcrumbs);
+
+  await page.getByRole('button', { name: 'Event Timeline', exact: true }).last().click();
+  await page.getByLabel('Environment', { exact: true }).last().fill(environment);
+  await page.locator('.event-row').filter({ hasText: 'breadcrumb checkout failure' }).click();
+  const inspector = page.locator('.detail-panel');
+  await expect(inspector.locator('.breadcrumb-entry')).toHaveCount(2);
+  await inspector.locator('.breadcrumb-trail').screenshot({ path: resolve(`output/playwright/breadcrumbs-${test.info().project.name}-desktop.png`) });
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.locator('.language-switcher select').selectOption('ko');
+  await expect(inspector.getByRole('heading', { name: '오류 전 작업 기록' })).toBeVisible();
+  expect(await inspector.locator('.breadcrumb-trail').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await inspector.locator('.breadcrumb-trail').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: resolve(`output/playwright/breadcrumbs-${test.info().project.name}-mobile.png`) });
 });
 
 test('delivers an uncaught runtime error to the local collector', async ({ page }) => {

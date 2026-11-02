@@ -39,6 +39,12 @@ function normalizeEvents(events: ErrorEventRecord[], receivedAt: string): ErrorE
       runtime: event.runtime,
       ...(event.browser !== undefined ? { browser: event.browser } : {}),
       ...(event.context !== undefined ? { context: { ...event.context } } : {}),
+      ...(event.breadcrumbs !== undefined ? { breadcrumbs: event.breadcrumbs.map(crumb => ({
+        occurredAt: crumb.occurredAt,
+        category: crumb.category,
+        message: crumb.message,
+        ...(crumb.data !== undefined ? { data: { ...crumb.data } } : {}),
+      })) } : {}),
       ...(event.network !== undefined ? { network: {
         method: event.network.method,
         url: event.network.url,

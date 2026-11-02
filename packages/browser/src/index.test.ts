@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EventBatch } from '@ihyeon/browser-error-log-protocol';
+import { BREADCRUMB_LIMITS, isBreadcrumbTrail, type EventBatch } from '@ihyeon/browser-error-log-protocol';
 import { init, type BrowserErrorLogClient } from './index';
 
 const clients: BrowserErrorLogClient[] = [];
 const captured: EventBatch[] = [];
 
-function client(overrides: Partial<Parameters<typeof init>[0]> = {}): BrowserErrorLogClient {
+function client(overrides: Partial<Parameters<typeof init>[0]> = {}): ReturnType<typeof init> {
   const instance = init({
     project: 'web',
     environment: 'test',
@@ -27,6 +27,172 @@ afterEach(() => {
 });
 
 describe('browser error client', () => {
+  it('snapshots manual breadcrumbs in order and clears only future events', async () => {
+    const instance = client();
+    const input = { message: 'step one', data: { state: 'cart' } };
+    instance.addBreadcrumb(input);
+    input.data.state = 'changed';
+    instance.captureException(new Error('first'));
+    instance.addBreadcrumb({ category: 'navigation', message: 'step two' });
+    instance.captureException(new Error('second'));
+    instance.clearBreadcrumbs();
+    instance.captureException(new Error('third'));
+    await instance.flush();
+    const [first, second, third] = captured[0].events;
+    expect(first.breadcrumbs).toMatchObject([{ category: 'manual', message: 'step one', data: { state: 'cart' } }]);
+    expect(second.breadcrumbs?.map(crumb => crumb.message)).toEqual(['step one', 'step two']);
+    expect(third.breadcrumbs).toBeUndefined();
+    expect(first.breadcrumbs?.[0].occurredAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(isBreadcrumbTrail(first.breadcrumbs)).toBe(true);
+    expect(isBreadcrumbTrail(second.breadcrumbs)).toBe(true);
+  });
+
+  it('bounds a multibyte breadcrumb trail and sanitizes sensitive data', async () => {
+    const instance = client();
+    for (let index = 0; index < 24; index++) instance.addBreadcrumb({
+      message: `step ${index} ${'한'.repeat(240)}`,
+      data: { password: 'secret', path: '/checkout?token=hidden', email: 'bob@example.com' },
+    });
+    instance.captureException(new Error('bounded'));
+    await instance.flush();
+    const trail = captured[0].events[0].breadcrumbs;
+    expect(trail?.length).toBeLessThan(BREADCRUMB_LIMITS.count);
+    expect(trail?.at(-1)?.message).toContain('step 23');
+    expect(new TextEncoder().encode(JSON.stringify(trail)).length).toBeLessThanOrEqual(BREADCRUMB_LIMITS.bytes);
+    expect(isBreadcrumbTrail(trail)).toBe(true);
+    expect(JSON.stringify(trail)).not.toMatch(/password|secret|token=hidden|bob@example.com/);
+  });
+
+  it('retains only the last 20 small breadcrumbs and isolates clients and automatic events', async () => {
+    const first = client();
+    const second = client();
+    for (let index = 0; index < 24; index++) first.addBreadcrumb({ message: `step ${index}` });
+    window.dispatchEvent(new ErrorEvent('error', { message: 'global failure' }));
+    await first.flush();
+    await second.flush();
+    expect(captured[0].events[0].breadcrumbs?.map(crumb => crumb.message)).toEqual(
+      Array.from({ length: 20 }, (_, index) => `step ${index + 4}`),
+    );
+    expect(captured[1].events[0].breadcrumbs).toBeUndefined();
+    expect(isBreadcrumbTrail(captured[0].events[0].breadcrumbs)).toBe(true);
+  });
+
+  it('ignores invalid and hostile breadcrumb values and sanitizer failures without changing error stats', async () => {
+    const hostile = new Proxy({}, { ownKeys: () => { throw new Error('keys'); } });
+    const instance = client({ sanitizeUrl: url => {
+      if (url.includes('/private/')) throw new Error('unsafe URL');
+      return url;
+    } });
+    expect(() => instance.addBreadcrumb({ message: 'GET /private/path?token=hidden' })).not.toThrow();
+    instance.addBreadcrumb({ message: 'valid', data: { good: 2, nested: {}, invalid: Infinity } });
+    instance.addBreadcrumb({ message: 'also valid', data: hostile });
+    instance.addBreadcrumb({ message: ' ' });
+    instance.captureException(new Error('failure'));
+    await instance.flush();
+    expect(captured[0].events[0].breadcrumbs?.map(crumb => crumb.message)).toEqual(['valid', 'also valid']);
+    expect(captured[0].events[0].breadcrumbs?.[0].data).toEqual({ good: 2 });
+    expect(instance.getStats()).toMatchObject({ sent: 1, dropped: 0 });
+  });
+
+  it('makes breadcrumb methods inert outside an active client', async () => {
+    const disabled = client({ enabled: false });
+    disabled.addBreadcrumb({ message: 'disabled' });
+    disabled.clearBreadcrumbs();
+    vi.stubGlobal('window', undefined);
+    const server = client();
+    server.addBreadcrumb({ message: 'server' });
+    server.clearBreadcrumbs();
+    vi.unstubAllGlobals();
+    const active = client();
+    active.addBreadcrumb({ message: 'before destroy' });
+    active.destroy();
+    active.addBreadcrumb({ message: 'after destroy' });
+    active.clearBreadcrumbs();
+    expect(disabled.getStats()).toEqual({ queued: 0, sent: 0, dropped: 0 });
+    expect(server.getStats()).toEqual({ queued: 0, sent: 0, dropped: 0 });
+  });
+
+  it('lets beforeSend remove or replace isolated breadcrumbs', async () => {
+    const instance = client({ beforeSend: event => {
+      if (event.message === 'remove') event.breadcrumbs = undefined;
+      if (event.message === 'replace') event.breadcrumbs = [
+        { occurredAt: new Date().toISOString(), category: 'custom', message: 'GET /private?token=hidden',
+          data: { password: 'secret', valid: 'bob@example.com' } },
+      ];
+      if (event.message === 'mutate' && event.breadcrumbs) event.breadcrumbs[0].data!.state = 'changed';
+      return event;
+    } });
+    instance.addBreadcrumb({ message: 'original', data: { state: 'initial' } });
+    instance.captureException(new Error('remove'));
+    instance.captureException(new Error('replace'));
+    instance.captureException(new Error('mutate'));
+    instance.captureException(new Error('later'));
+    await instance.flush();
+    const [removed, replaced, mutated, later] = captured[0].events;
+    expect(removed.breadcrumbs).toBeUndefined();
+    expect(replaced.breadcrumbs?.[0]).toMatchObject({ message: 'GET /private', data: { valid: '[REDACTED_EMAIL]' } });
+    expect(mutated.breadcrumbs?.[0].data?.state).toBe('changed');
+    expect(later.breadcrumbs?.[0].data?.state).toBe('initial');
+    expect(isBreadcrumbTrail(replaced.breadcrumbs)).toBe(true);
+    expect(JSON.stringify(captured)).not.toMatch(/token=hidden|bob@example.com|password|secret/);
+  });
+
+  it('drops an event once when beforeSend injects an unsanitizable breadcrumb', async () => {
+    const instance = client({ sanitizeUrl: url => {
+      if (url.includes('/private/')) throw new Error('unsafe URL');
+      return url;
+    }, beforeSend: event => {
+      event.breadcrumbs = [{ occurredAt: new Date().toISOString(), category: 'manual',
+        message: 'GET /private/path?token=hidden' }];
+      return event;
+    } });
+    instance.captureException(new Error('failure'));
+    await instance.flush();
+    expect(instance.getStats()).toMatchObject({ sent: 0, dropped: 1 });
+    expect(captured).toHaveLength(0);
+  });
+
+  it('inspects at most the last 20 replacement breadcrumb indices', async () => {
+    const timestamp = new Date().toISOString();
+    let numericReads = 0;
+    const replacement = new Proxy([], { get(_target, key) {
+      if (key === 'length') return 50_000;
+      if (typeof key === 'string' && /^\d+$/.test(key)) {
+        numericReads++;
+        if (key === '49998' || key === '49999') return { occurredAt: timestamp, category: 'manual', message: `step ${key}` };
+      }
+      return undefined;
+    } }) as EventBatch['events'][number]['breadcrumbs'];
+    const instance = client({ beforeSend: event => { event.breadcrumbs = replacement; return event; } });
+    instance.captureException(new Error('bounded replacement'));
+    await instance.flush();
+    expect(numericReads).toBeLessThanOrEqual(BREADCRUMB_LIMITS.count);
+    expect(captured[0].events[0].breadcrumbs?.map(crumb => crumb.message)).toEqual(['step 49998', 'step 49999']);
+    expect(isBreadcrumbTrail(captured[0].events[0].breadcrumbs)).toBe(true);
+  });
+
+  it('drops a replacement trail with an invalid or throwing array length without dropping the event', async () => {
+    let numericReads = 0;
+    const invalid = [Infinity, 'throw'] as const;
+    const instance = client({ beforeSend: event => {
+      const behavior = invalid[event.sequence - 1];
+      event.breadcrumbs = new Proxy([], { get(_target, key) {
+        if (key === 'length') {
+          if (behavior === 'throw') throw new Error('hostile length');
+          return behavior;
+        }
+        if (typeof key === 'string' && /^\d+$/.test(key)) numericReads++;
+        return undefined;
+      } }) as EventBatch['events'][number]['breadcrumbs'];
+      return event;
+    } });
+    instance.captureException(new Error('first'));
+    instance.captureException(new Error('second'));
+    await instance.flush();
+    expect(numericReads).toBe(0);
+    expect(captured[0].events.map(event => event.breadcrumbs)).toEqual([undefined, undefined]);
+    expect(instance.getStats()).toMatchObject({ sent: 2, dropped: 0 });
+  });
   it('keeps native console semantics and enriches the first Error argument', async () => {
     const receiver = { label: 'native receiver' };
     const first = new TypeError('first');

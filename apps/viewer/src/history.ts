@@ -1,4 +1,5 @@
 import type { ErrorEventRecord, EventDataSource, EventFilter, EventPage, EventType, Runtime } from '@ihyeon/browser-error-log-protocol';
+import { isBreadcrumbTrail } from '@ihyeon/browser-error-log-protocol';
 
 export const MAX_HISTORY_EVENTS = 10_000;
 export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
@@ -103,6 +104,15 @@ function projectEvent(value: unknown, label: string): ErrorEventRecord {
       return [key, value] as const;
     });
     event.context = Object.fromEntries(entries);
+  }
+  if (raw.breadcrumbs !== undefined) {
+    if (!isBreadcrumbTrail(raw.breadcrumbs)) throw new Error(`${label}.breadcrumbs is invalid.`);
+    event.breadcrumbs = raw.breadcrumbs.map(crumb => ({
+      occurredAt: crumb.occurredAt,
+      category: crumb.category,
+      message: crumb.message,
+      ...(crumb.data !== undefined ? { data: { ...crumb.data } } : {}),
+    }));
   }
   if (raw.network !== undefined) {
     const network = record(raw.network, `${label}.network`);

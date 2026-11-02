@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createSampleEvents, EventStore, isEventRecord } from './store';
+import { BREADCRUMB_LIMITS } from '@ihyeon/browser-error-log-protocol';
 describe('local collector contract', () => {
   it('deduplicates retries without replacing the original event', () => {
     const store = new EventStore(); const e = createSampleEvents()[0];
@@ -22,6 +23,23 @@ describe('local collector contract', () => {
     const e = createSampleEvents()[0]; expect(isEventRecord(e)).toBe(true);
     expect(isEventRecord({ ...e, occurredAt: 'yesterday' })).toBe(false);
     expect(isEventRecord({ ...e, message: { html: '<script>' } })).toBe(false);
+  });
+  it('accepts bounded breadcrumbs on new records and legacy records without them', () => {
+    const e = createSampleEvents()[0];
+    expect(isEventRecord(e)).toBe(true);
+    expect(isEventRecord({ ...e, breadcrumbs: [{ occurredAt: '2026-10-02T00:00:00.000Z', category: 'navigation', message: 'Opened page', data: { count: 1, okay: true, absent: null } }] })).toBe(true);
+  });
+  it('rejects malformed or oversized breadcrumb trails', () => {
+    const e = createSampleEvents()[0];
+    const crumb = { occurredAt: '2026-10-02T00:00:00.000Z', category: 'navigation', message: 'Opened page' };
+    for (const breadcrumbs of [
+      Array(BREADCRUMB_LIMITS.count + 1).fill(crumb),
+      Array(BREADCRUMB_LIMITS.count).fill({ ...crumb, message: '한'.repeat(BREADCRUMB_LIMITS.message) }),
+      [{ ...crumb, occurredAt: '2026-10-02T00:00:00Z' }],
+      [{ ...crumb, data: { nested: { value: 1 } } }],
+      [{ ...crumb, data: { count: Infinity } }],
+      [{ ...crumb, extra: 'discard' }],
+    ]) expect(isEventRecord({ ...e, breadcrumbs })).toBe(false);
   });
   it('separates identical event IDs across projects in details and pagination', () => {
     const store = new EventStore(); const e = createSampleEvents()[0];

@@ -58,6 +58,19 @@ afterEach(async () => {
 });
 
 describe('SQLite micro storage', () => {
+  it('retains a cloned breadcrumb trail in detail and list after restart', async () => {
+    const settings = await options();
+    const first = await storage('sqlite', settings);
+    const trail = [{ occurredAt: '2026-10-02T00:00:00.000Z', category: 'navigation', message: 'Opened page', data: { route: '/home' } }];
+    const input = event('with-trail', { breadcrumbs: trail });
+    await first.writeBatch([input]);
+    trail[0].data.route = '/mutated';
+    await first.close();
+    const reopened = await storage('sqlite', settings);
+    expect(reopened.get('web', 'with-trail')?.breadcrumbs).toEqual([{ occurredAt: '2026-10-02T00:00:00.000Z', category: 'navigation', message: 'Opened page', data: { route: '/home' } }]);
+    expect(reopened.list({}).events[0].breadcrumbs).toEqual(reopened.get('web', 'with-trail')?.breadcrumbs);
+  });
+
   it('persists normalized records across restart and deduplicates project-scoped retries', async () => {
     const settings = await options();
     const first = await storage('sqlite', settings);
@@ -88,6 +101,12 @@ describe('SQLite micro storage', () => {
     expect(db.get('web', 'existing')).not.toBeNull();
     expect(db.get('web', 'would-insert')).toBeNull();
     clock += 2 * 86_400_000;
+    expect(db.list({}).events).toEqual([]);
+  });
+  it('rejects an invalid breadcrumb trail before inserting a batch', async () => {
+    const db = await storage('sqlite', await options());
+    await expect(db.writeBatch([event('valid'), event('invalid', { breadcrumbs: [{ occurredAt: '2026-10-02T00:00:00Z', category: 'navigation', message: 'bad' }] })]))
+      .rejects.toThrow('Invalid event record');
     expect(db.list({}).events).toEqual([]);
   });
 
@@ -157,6 +176,17 @@ describe('SQLite micro storage', () => {
 });
 
 describe('JSONL micro storage', () => {
+  it('writes a cloned breadcrumb trail to JSONL', async () => {
+    const settings = await options();
+    const log = await storage('jsonl', settings);
+    const trail = [{ occurredAt: '2026-10-02T00:00:00.000Z', category: 'navigation', message: 'Opened page', data: { route: '/home' } }];
+    const write = log.writeBatch([event('with-trail', { breadcrumbs: trail })]);
+    trail[0].data.route = '/mutated';
+    await write;
+    await log.close();
+    const row = JSON.parse((await readFile(join(settings.dataDir, 'events.jsonl'), 'utf8')).trim()) as ErrorEventRecord;
+    expect(row.breadcrumbs?.[0].data).toEqual({ route: '/home' });
+  });
   it('rejects preexisting logs outside a lowered file-size or file-count cap', async () => {
     const sizeSettings = await options({ logFileBytes: 512 });
     const oversized = `${'x'.repeat(512)}\n`;

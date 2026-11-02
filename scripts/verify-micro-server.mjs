@@ -17,6 +17,7 @@ const event = {
   release: 'micro-smoke', sdkVersion: '0.1.0', occurredAt: new Date().toISOString(),
   viewId: 'synthetic-view', sequence: 1, elapsedMs: 0, type: 'manual',
   message: 'Synthetic micro server persistence check', page: `${origin}/`, runtime: 'browser',
+  breadcrumbs: [{ occurredAt: new Date().toISOString(), category: 'action', message: 'Synthetic checkout opened', data: { attempt: 1 } }],
 };
 let child;
 let address;
@@ -72,6 +73,9 @@ try {
   const viewer = await fetch(address, { headers: auth });
   assert.equal(viewer.status, 200);
   assert.match(await viewer.text(), /mode:'live'/);
+  const malformed = await fetch(`${address}/api/events`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin },
+    body: JSON.stringify({ schemaVersion: 1, events: [{ ...event, breadcrumbs: Array(21).fill(event.breadcrumbs[0]) }] }) });
+  assert.equal(malformed.status, 400);
   assert.deepEqual(await send(), { accepted: 1, stored: 1, duplicates: 0 });
   assert.deepEqual(await send(), { accepted: 1, stored: 0, duplicates: 1 });
   await stop();
@@ -79,6 +83,7 @@ try {
   const persisted = await (await fetch(`${address}/api/events?project=my-web`, { headers: auth })).json();
   assert.equal(persisted.events.length, 1);
   assert.equal(persisted.events[0].eventId, event.eventId);
+  assert.deepEqual(persisted.events[0].breadcrumbs, event.breadcrumbs);
   assert.equal((await fetch(`${address}/events.sqlite`, { headers: auth })).status, 404);
   await stop();
 
@@ -103,6 +108,7 @@ try {
   assert.equal(imported.partial, true);
   assert.equal(imported.events.length, 1);
   assert.equal(imported.events[0].eventId, event.eventId);
+  assert.deepEqual(imported.events[0].breadcrumbs, event.breadcrumbs);
   await mkdir('output/micro-server-smoke', { recursive: true });
   await copyFile(destination, 'output/micro-server-smoke/events.json');
   console.log('Built-server smoke PASS: authenticated viewer, credentialless CORS ingest, SQLite restart/dedupe, JSONL-only storage, viewer-compatible export.');

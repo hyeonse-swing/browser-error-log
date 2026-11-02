@@ -30,8 +30,9 @@ const protocolConsumer = createConsumer('protocol-smoke');
 npm(['install', tarballs[0]], protocolConsumer);
 execFileSync(process.execPath, ['--input-type=module', '-e', `
   import { createRequire } from 'node:module';
-  import { SCHEMA_VERSION, EVENT_LABELS } from '@ihyeon/browser-error-log-protocol';
+  import { SCHEMA_VERSION, EVENT_LABELS, isBreadcrumbTrail, BREADCRUMB_LIMITS } from '@ihyeon/browser-error-log-protocol';
   if (SCHEMA_VERSION !== 1 || EVENT_LABELS.manual !== 'Manual') throw Error('Protocol exports invalid');
+  if (!isBreadcrumbTrail([]) || BREADCRUMB_LIMITS.count !== 20) throw Error('Breadcrumb contract exports invalid');
   const require = createRequire(import.meta.url);
   for (const name of ['@ihyeon/browser-error-log', '@ihyeon/browser-error-log-react', 'react']) {
     try { require.resolve(name); throw Error('Protocol unexpectedly requires ' + name); }
@@ -52,7 +53,7 @@ execFileSync(process.execPath, ['--input-type=module', '-e', `
   const require = createRequire(import.meta.url);
   try { require.resolve('react'); throw new Error('Browser package unexpectedly requires React'); }
   catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
-  const client = init({ project: 'ssr' }); await client.flush(); client.destroy();
+  const client = init({ project: 'ssr' }); client.addBreadcrumb({ message: 'SSR no-op' }); client.clearBreadcrumbs(); await client.flush(); client.destroy();
 `], { cwd: browserConsumer, stdio: 'inherit' });
 
 // Repack installed peer/type dependencies, so the check needs neither registry
@@ -60,10 +61,14 @@ execFileSync(process.execPath, ['--input-type=module', '-e', `
 const peers = pack(['react', '@types/react', 'csstype'].map(p => join(root, 'node_modules', p)), scratch);
 const consumer = createConsumer('react-smoke');
 npm(['install', ...tarballs, ...peers], consumer);
-writeFileSync(join(consumer, 'consumer.tsx'), `import { init, type TransportContext } from '@ihyeon/browser-error-log';
+writeFileSync(join(consumer, 'consumer.tsx'), `import { init, type TransportContext, type BrowserErrorLogClient, type BrowserErrorLogBreadcrumbClient } from '@ihyeon/browser-error-log';
 import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
 import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';
 const client = init({project:'consumer',enabled:false,context:{buildChannel:'stable'},getContext:()=>({appSection:'checkout'}),transport:async(batch:EventBatch,context:TransportContext)=>{void batch;void context.signal;}});
+const extended: BrowserErrorLogBreadcrumbClient = client;
+extended.addBreadcrumb({message:'Checkout',data:{attempt:1}}); extended.clearBreadcrumbs();
+const oldClient: BrowserErrorLogClient = {captureException(){},flush:async()=>{},destroy(){},getStats:()=>({queued:0,sent:0,dropped:0})};
+const oldNode = <ErrorBoundary client={oldClient}><p>Compatible</p></ErrorBoundary>; void oldNode;
 client.captureException(new Error(EVENT_LABELS.manual));
 const node = <ErrorBoundary client={client} fallback={<p>Fallback</p>}><p>Ready</p></ErrorBoundary>;
 void node; client.destroy();`);

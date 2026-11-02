@@ -78,6 +78,30 @@ describe('historical loading', () => {
 });
 
 describe('portable history', () => {
+  it('retains a cloned breadcrumb trail through loading, export, and import', async () => {
+    const trail = [{ occurredAt: '2026-10-02T00:00:00.000Z', category: 'navigation', message: 'Opened page', data: { route: '/home' } }];
+    const original = event({ breadcrumbs: trail });
+    const loaded = await loadHistory(source(async () => ({ events: [original] })), {}, new AbortController().signal);
+    trail[0].data.route = '/mutated';
+    expect(loaded.events[0].breadcrumbs?.[0].data).toEqual({ route: '/home' });
+    const exported = serializeHistory(loaded.events);
+    expect(parseHistoryJson(exported).events[0].breadcrumbs).toEqual(loaded.events[0].breadcrumbs);
+    expect(JSON.parse(exported).events[0].breadcrumbs).toEqual(loaded.events[0].breadcrumbs);
+  });
+
+  it('rejects malformed breadcrumb imports and exports', () => {
+    const valid = { occurredAt: '2026-10-02T00:00:00.000Z', category: 'navigation', message: 'Opened page' };
+    for (const breadcrumbs of [
+      [{ ...valid, occurredAt: '2026-10-02T00:00:00Z' }],
+      [{ ...valid, data: { nested: { value: 1 } } }],
+      [{ ...valid, extra: 'discard' }],
+      Array(21).fill(valid),
+      Array(20).fill({ ...valid, message: '한'.repeat(256) }),
+    ]) {
+      expect(() => parseHistoryJson(JSON.stringify([event({ breadcrumbs })]))).toThrow(/breadcrumbs/);
+      expect(() => serializeHistory([event({ breadcrumbs })])).toThrow(/breadcrumbs/);
+    }
+  });
   it('normalizes timezone offsets, projects safe fields, and round-trips a v1 envelope', () => {
     const raw = {
       ...event({ occurredAt: '2026-10-02T09:00:00+09:00' }),

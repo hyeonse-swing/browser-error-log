@@ -5,6 +5,7 @@ import { Dashboard } from './Dashboard';
 import { LanguageSwitcher, useLocale } from '../../i18n/react';
 import { eventLabel, localizeError, numberText, t } from './i18n';
 import type { Locale } from '../../i18n/locale';
+import { BreadcrumbTrail } from './BreadcrumbTrail';
 
 type TimeRange = '24h' | '7d' | 'all';
 const eventTypes = Object.keys(EVENT_LABELS) as EventType[];
@@ -260,6 +261,7 @@ export function App() {
           {selected.network && <div className="detail-block"><div className="block-title">{t(locale, 'Network')} <span>03</span></div><div className="network-summary"><span className="method-tag">{selected.network.method}</span><span className="network-url">{selected.network.url}</span></div><dl className="info-grid compact"><div><dt>{t(locale, 'HTTP status')}</dt><dd className="mono">{selected.network.status ?? t(locale, 'No response')}</dd></div><div><dt>{t(locale, 'Duration')}</dt><dd className="mono">{numberText(locale, selected.network.durationMs)} ms</dd></div></dl></div>}
           {selected.stack && <div className="detail-block"><div className="block-title">{t(locale, 'Stack trace')}</div><pre className="code-block">{selected.stack}</pre></div>}
           {selected.componentStack && <div className="detail-block"><div className="block-title">{t(locale, 'Component stack')}</div><pre className="code-block">{selected.componentStack}</pre></div>}
+          <BreadcrumbTrail breadcrumbs={selected.breadcrumbs}/>
           {selected.context && Object.keys(selected.context).length > 0 && <div className="detail-block"><div className="block-title">{t(locale, 'Additional context')}</div><dl className="info-grid context-grid">{Object.entries(selected.context).map(([key, value]) => <div key={key}><dt>{key}</dt><dd className="breakable">{value === null ? 'null' : String(value)}</dd></div>)}</dl></div>}
         </div>}
       </section></div>

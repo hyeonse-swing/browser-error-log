@@ -1,6 +1,6 @@
-import type { ErrorEventRecord, EventBatch, EventType, Runtime } from '@ihyeon/browser-error-log-protocol';
+import { BREADCRUMB_LIMITS, type Breadcrumb, type ErrorEventRecord, type EventBatch, type EventType, type Runtime } from '@ihyeon/browser-error-log-protocol';
 
-export type { ErrorEventRecord, EventBatch } from '@ihyeon/browser-error-log-protocol';
+export type { Breadcrumb, ErrorEventRecord, EventBatch } from '@ihyeon/browser-error-log-protocol';
 
 export interface CaptureExtra {
   type?: EventType;
@@ -39,6 +39,17 @@ export interface BrowserErrorLogClient {
   flush(): Promise<void>;
   destroy(): void;
   getStats(): { queued: number; sent: number; dropped: number };
+}
+
+export interface BreadcrumbInput {
+  message: string;
+  category?: string;
+  data?: Record<string, unknown>;
+}
+
+export interface BrowserErrorLogBreadcrumbClient extends BrowserErrorLogClient {
+  addBreadcrumb(input: BreadcrumbInput): void;
+  clearBreadcrumbs(): void;
 }
 
 const MAX_BATCH_EVENTS = 20;
@@ -113,7 +124,7 @@ class UrlSanitizationError extends Error {}
 
 class ContextResolutionError extends Error {}
 
-class Client implements BrowserErrorLogClient {
+class Client implements BrowserErrorLogBreadcrumbClient {
   private readonly active: boolean;
   private readonly endpoint?: string;
   private readonly options: BrowserErrorLogOptions;
@@ -123,6 +134,7 @@ class Client implements BrowserErrorLogClient {
   private readonly viewId = newId();
   private readonly seenErrors = new WeakSet<object>();
   private readonly queue: ErrorEventRecord[] = [];
+  private readonly breadcrumbs: Breadcrumb[] = [];
   private readonly maxQueueSize: number;
   private readonly cancelWaits = new Set<() => void>();
   private readonly controllers = new Set<AbortController>();
@@ -211,6 +223,21 @@ class Client implements BrowserErrorLogClient {
     catch { this.dropped++; /* console behavior is never changed by capture */ }
   }
 
+  addBreadcrumb(input: BreadcrumbInput): void {
+    if (!this.active || this.destroyed) return;
+    try {
+      const breadcrumb = this.cleanBreadcrumb(input, new Date().toISOString());
+      if (!breadcrumb) return;
+      this.breadcrumbs.push(breadcrumb);
+      this.boundBreadcrumbs(this.breadcrumbs);
+    } catch { /* Diagnostics must never affect the host app or error stats. */ }
+  }
+
+  clearBreadcrumbs(): void {
+    if (!this.active || this.destroyed) return;
+    this.breadcrumbs.length = 0;
+  }
+
   flush(): Promise<void> {
     if (!this.active || this.destroyed) return Promise.resolve();
     if (this.flushing) return this.flushing;
@@ -231,6 +258,7 @@ class Client implements BrowserErrorLogClient {
     }
     this.dropped += this.queue.length + this.inFlight;
     this.queue.length = 0;
+    this.breadcrumbs.length = 0;
     for (const cancel of this.cancelWaits) cancel();
     for (const controller of this.controllers) controller.abort();
     this.resolveDestroy(DESTROYED);
@@ -333,6 +361,59 @@ class Client implements BrowserErrorLogClient {
     return Object.keys(output).length ? output : undefined;
   }
 
+  private cleanBreadcrumb(input: unknown, timestamp?: string): Breadcrumb | undefined {
+    if (!input || typeof input !== 'object') return undefined;
+    const occurredAt = timestamp ?? read(input, 'occurredAt');
+    if (typeof occurredAt !== 'string') return undefined;
+    try { if (new Date(occurredAt).toISOString() !== occurredAt) return undefined; }
+    catch { return undefined; }
+    const rawCategory = read(input, 'category');
+    const rawMessage = read(input, 'message');
+    if ((rawCategory !== undefined && typeof rawCategory !== 'string') || typeof rawMessage !== 'string') return undefined;
+    const category = this.cleanText(rawCategory ?? (timestamp ? 'manual' : ''), BREADCRUMB_LIMITS.category);
+    const message = this.cleanText(rawMessage, BREADCRUMB_LIMITS.message);
+    if (!category.trim() || !message.trim()) return undefined;
+    const rawData = read(input, 'data');
+    const data: NonNullable<Breadcrumb['data']> = {};
+    if (rawData && typeof rawData === 'object') {
+      let keys: string[];
+      try { keys = Object.keys(rawData); }
+      catch { keys = []; }
+      for (const key of keys) {
+        if (Object.keys(data).length >= BREADCRUMB_LIMITS.dataKeys) break;
+        if (SENSITIVE_KEY.test(key)) continue;
+        const safeKey = this.cleanText(key, BREADCRUMB_LIMITS.dataKey);
+        const value = read(rawData, key);
+        if (typeof value === 'string') data[safeKey] = this.cleanText(value, BREADCRUMB_LIMITS.dataString);
+        else if (typeof value === 'number' && Number.isFinite(value)) data[safeKey] = value;
+        else if (typeof value === 'boolean' || value === null) data[safeKey] = value;
+      }
+    }
+    return { occurredAt, category, message, ...(Object.keys(data).length ? { data } : {}) };
+  }
+
+  private boundBreadcrumbs(trail: Breadcrumb[]): void {
+    while (trail.length > BREADCRUMB_LIMITS.count || byteLength(JSON.stringify(trail)) > BREADCRUMB_LIMITS.bytes) trail.shift();
+  }
+
+  private cleanBreadcrumbTrail(input: unknown): Breadcrumb[] | undefined {
+    let length: number;
+    try {
+      if (!Array.isArray(input)) return undefined;
+      length = input.length;
+    } catch { return undefined; }
+    if (!Number.isSafeInteger(length) || length < 0) return undefined;
+    const trail: Breadcrumb[] = [];
+    for (let index = Math.max(0, length - BREADCRUMB_LIMITS.count); index < length; index++) {
+      const breadcrumb = this.cleanBreadcrumb(read(input, index));
+      if (breadcrumb) {
+        trail.push(breadcrumb);
+        this.boundBreadcrumbs(trail);
+      }
+    }
+    return trail.length ? trail : undefined;
+  }
+
   private cleanNetwork(input: unknown): ErrorEventRecord['network'] {
     if (!input || typeof input !== 'object') return undefined;
     const rawStatus = read(input, 'status');
@@ -389,6 +470,9 @@ class Client implements BrowserErrorLogClient {
       runtime: RUNTIMES.has(this.options.runtime as Runtime) ? this.options.runtime! : 'browser',
       ...(typeof userAgent === 'string' ? { browser: this.cleanText(userAgent, 300) } : {}),
       ...(context ? { context } : {}),
+      ...(this.breadcrumbs.length ? { breadcrumbs: this.breadcrumbs.map(crumb => ({
+        ...crumb, ...(crumb.data ? { data: { ...crumb.data } } : {}),
+      })) } : {}),
       ...(network ? { network } : {}),
     };
   }
@@ -401,6 +485,7 @@ class Client implements BrowserErrorLogClient {
     const componentStack = read(candidate, 'componentStack');
     const browser = read(candidate, 'browser');
     const context = this.cleanContext(read(candidate, 'context'));
+    const breadcrumbs = this.cleanBreadcrumbTrail(read(candidate, 'breadcrumbs'));
     const network = this.cleanNetwork(read(candidate, 'network'));
     return {
       ...base,
@@ -413,6 +498,7 @@ class Client implements BrowserErrorLogClient {
       runtime: RUNTIMES.has(runtime as Runtime) ? runtime as Runtime : base.runtime,
       ...(browser === undefined ? { browser: base.browser } : { browser: this.cleanText(browser, 300) }),
       ...(context ? { context } : { context: undefined }),
+      ...(breadcrumbs ? { breadcrumbs } : { breadcrumbs: undefined }),
       ...(network ? { network } : { network: undefined }),
     };
   }
@@ -422,7 +508,9 @@ class Client implements BrowserErrorLogClient {
     let finalEvent = event;
     if (this.options.beforeSend) {
       try {
-        const copy = { ...event, context: event.context && { ...event.context }, network: event.network && { ...event.network } };
+        const copy = { ...event, context: event.context && { ...event.context },
+          breadcrumbs: event.breadcrumbs?.map(crumb => ({ ...crumb, data: crumb.data && { ...crumb.data } })),
+          network: event.network && { ...event.network } };
         const result = this.options.beforeSend(copy);
         if (result === false || result === null) return false;
         finalEvent = this.sanitizeReplacement(result === undefined ? copy : result, event);
@@ -713,6 +801,6 @@ function installConsole(): Instrumentation {
   return { clients, cleanup() { if (console.error === wrapped) console.error = original; } };
 }
 
-export function init(options: BrowserErrorLogOptions): BrowserErrorLogClient {
+export function init(options: BrowserErrorLogOptions): BrowserErrorLogBreadcrumbClient {
   return new Client(options);
 }
