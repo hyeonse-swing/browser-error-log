@@ -16,6 +16,8 @@ export interface BrowserErrorLogOptions {
   release?: string;
   /** Scalar metadata added to every captured event; event context takes precedence. */
   context?: Record<string, unknown>;
+  /** Returns scalar metadata from current application state for each new event. */
+  getContext?: () => Record<string, unknown> | undefined;
   endpoint?: string;
   transport?: (batch: EventBatch, context: TransportContext) => void | Promise<void>;
   runtime?: Runtime;
@@ -109,6 +111,8 @@ class HttpDeliveryError extends Error {
 
 class UrlSanitizationError extends Error {}
 
+class ContextResolutionError extends Error {}
+
 class Client implements BrowserErrorLogClient {
   private readonly active: boolean;
   private readonly endpoint?: string;
@@ -169,7 +173,7 @@ class Client implements BrowserErrorLogClient {
         this.seenErrors.add(error);
       }
     } catch (error) {
-      if (error instanceof UrlSanitizationError) this.dropped++;
+      if (error instanceof UrlSanitizationError || error instanceof ContextResolutionError) this.dropped++;
       // Diagnostics must never affect the host app.
     }
   }
@@ -348,13 +352,20 @@ class Client implements BrowserErrorLogClient {
   } = {}): ErrorEventRecord {
     const userAgent = read(navigator, 'userAgent');
     const eventContext = this.cleanContext(extra.context);
+    let resolved: unknown;
+    try { resolved = this.options.getContext?.(); }
+    catch { throw new ContextResolutionError('Context resolver failed'); }
+    const dynamicContext = this.cleanContext(resolved);
     const defaults = this.cleanContext(this.options.context);
     let context = eventContext;
-    if (defaults) {
+    if (dynamicContext || defaults) {
       context = { ...eventContext };
-      for (const key of Object.keys(defaults)) {
-        if (Object.keys(context).length >= 12) break;
-        if (!Object.prototype.hasOwnProperty.call(context, key)) context[key] = defaults[key];
+      for (const fields of [dynamicContext, defaults]) {
+        if (!fields) continue;
+        for (const key of Object.keys(fields)) {
+          if (Object.keys(context).length >= 12) break;
+          if (!Object.prototype.hasOwnProperty.call(context, key)) context[key] = fields[key];
+        }
       }
     }
     const network = this.cleanNetwork(extra.network);

@@ -68,10 +68,13 @@ The optional `@ihyeon/browser-error-log-react` package provides an Error Boundar
 ## Collection controls
 
 ```ts
+let currentAppSection = 'checkout';
+
 const errorLog = init({
   project: 'my-web',
   endpoint: '/api/events', // your collector or a same-origin proxy
-  context: { appSection: 'checkout', buildChannel: 'stable' },
+  context: { buildChannel: 'stable' },
+  getContext: () => ({ appSection: currentAppSection }),
   captureConsole: false,
   beforeSend(event) {
     if (event.message.includes('Expected diagnostic')) return null;
@@ -84,9 +87,11 @@ const errorLog = init({
     return status >= 500;
   },
 });
+
+currentAppSection = 'account'; // subsequent events use the current value
 ```
 
-Set `context` at initialization to attach common diagnostic fields to every event, including automatic captures. Per-error `captureException(error, { context })` values take priority, including within the limit of 12 scalar fields; common fields fill the remaining slots. The same sensitive-key, URL, and text filters apply, and `beforeSend` can edit or remove the combined context.
+Set `context` at initialization to attach common diagnostic fields to every event, including automatic captures. Use the synchronous `getContext` callback to read current app state once per captured event; returning `undefined` adds no dynamic fields. Per-error `captureException(error, { context })` values take priority over `getContext`, followed by initialization `context`, within the limit of 12 scalar fields. The same sensitive-key, URL, and text filters apply, and `beforeSend` can edit or remove the combined context. Already queued events keep their captured values. A throwing `getContext` drops that event without affecting the app.
 
 Set `captureConsole: true` to capture `console.error` calls. The combined message is preserved; the first `Error` created in the current window also contributes its name and stack, using the same redaction and `beforeSend` controls.
 

@@ -343,6 +343,94 @@ describe('browser error client', () => {
     expect(Object.keys(manual.context ?? {})).toHaveLength(12);
   });
 
+  it('snapshots dynamic context once per event with event and init context priority', async () => {
+    let state = 'first';
+    const getContext = vi.fn(() => ({ state, tier: 'dynamic', password: 'secret', request: '/api?token=hidden' }));
+    const defaults = Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`default${index}`, index]));
+    const instance = client({ context: { ...defaults, tier: 'init' }, getContext });
+    instance.captureException(new Error('one'), { context: { tier: 'event', own: true } });
+    state = 'second';
+    instance.captureException(new Error('two'));
+    await instance.flush();
+    expect(getContext).toHaveBeenCalledTimes(2);
+    const [first, second] = captured[0].events;
+    expect(first.context).toMatchObject({ tier: 'event', own: true, state: 'first', request: '/api', default0: 0 });
+    expect(second.context).toMatchObject({ tier: 'dynamic', state: 'second', request: '/api', default0: 0 });
+    expect(Object.keys(first.context ?? {})).toHaveLength(12);
+    expect(Object.keys(second.context ?? {})).toHaveLength(12);
+    expect(JSON.stringify(captured)).not.toMatch(/secret|token=hidden/);
+  });
+
+  it('drops a throwing dynamic resolver once and recovers for manual and automatic paths', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.stubGlobal('fetch', vi.fn((url: string) => url.includes('offline')
+      ? Promise.reject(new Error('offline')) : Promise.resolve(new Response(null, { status: 503 }))));
+    let throws = true;
+    const getContext = vi.fn(() => {
+      if (throws) throw new Error('resolver failed');
+      return { recovered: true };
+    });
+    const instance = client({ getContext, captureNetwork: true, endpoint: '/collector', captureConsole: true });
+    const error = new Error('manual');
+    expect(() => instance.captureException(error)).not.toThrow();
+    expect(() => window.dispatchEvent(new ErrorEvent('error', { message: 'global' }))).not.toThrow();
+    const rejection = new Event('unhandledrejection');
+    Object.defineProperty(rejection, 'reason', { value: new Error('promise') });
+    expect(() => window.dispatchEvent(rejection)).not.toThrow();
+    await window.fetch('/failed');
+    await expect(window.fetch('/offline')).rejects.toThrow('offline');
+    expect(() => console.error('console')).not.toThrow();
+    expect(instance.getStats()).toMatchObject({ queued: 0, dropped: 6 });
+    throws = false;
+    instance.captureException(error);
+    await window.fetch('/recovered');
+    await instance.flush();
+    expect(getContext).toHaveBeenCalledTimes(8);
+    expect(captured[0].events.map(event => event.context)).toEqual([{ recovered: true }, { recovered: true }]);
+    expect(instance.getStats()).toMatchObject({ sent: 2, dropped: 6 });
+  });
+
+  it('preserves native source fields ahead of dynamic context and honors beforeSend removal', async () => {
+    const dynamic = Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`dynamic${index}`, index]));
+    const instance = client({
+      context: { initOnly: true },
+      getContext: () => ({ filename: 'wrong', ...dynamic, password: 'secret' }),
+      beforeSend: event => {
+        if (event.message === 'remove') event.context = undefined;
+        return event;
+      },
+    });
+    window.dispatchEvent(new ErrorEvent('error', {
+      message: 'keep', filename: '/actual.js?token=hidden', lineno: 4, colno: 9,
+    }));
+    instance.captureException(new Error('remove'));
+    await instance.flush();
+    const [kept, removed] = captured[0].events;
+    expect(kept.context).toMatchObject({ filename: `${window.location.origin}/actual.js`, lineno: 4, colno: 9, dynamic0: 0 });
+    expect(Object.keys(kept.context ?? {})).toHaveLength(12);
+    expect(kept.context).not.toHaveProperty('initOnly');
+    expect(removed.context).toBeUndefined();
+    expect(JSON.stringify(captured)).not.toMatch(/secret|token=hidden/);
+  });
+
+  it('does not resolve dynamic context for disabled, server, destroyed, or deduped captures', async () => {
+    const getContext = vi.fn(() => ({ state: 'live' }));
+    const disabled = client({ enabled: false, getContext });
+    disabled.captureException(new Error('disabled'));
+    vi.stubGlobal('window', undefined);
+    const server = client({ getContext });
+    server.captureException(new Error('server'));
+    vi.unstubAllGlobals();
+    const active = client({ getContext });
+    const error = new Error('once');
+    active.captureException(error);
+    active.captureException(error);
+    await active.flush();
+    active.destroy();
+    active.captureException(new Error('destroyed'));
+    expect(getContext).toHaveBeenCalledTimes(1);
+  });
+
   it('captures shared context when Object.hasOwn is unavailable', async () => {
     const instance = client({ context: { team: 'default', attempt: 2 } });
     const original = Object.getOwnPropertyDescriptor(Object, 'hasOwn');

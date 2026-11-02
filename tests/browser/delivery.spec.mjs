@@ -88,21 +88,32 @@ test('delivers an uncaught runtime error to the local collector', async ({ page 
   expect(JSON.stringify(event)).not.toContain('synthetic-page-secret');
 });
 
-test('delivers shared metadata and a per-event override to the local collector', async ({ page }) => {
+test('delivers event-time metadata and a per-event override to the local collector', async ({ page }) => {
   const environment = randomUUID();
   await page.goto(`${origin}/`);
   await page.evaluate(async environment => {
     const { init } = await import('/sdk.js');
+    let screen = 'cart';
     const shared = { team: 'checkout', attempt: 2, password: 'synthetic-private-value' };
-    const client = init({ project: 'browser-test', environment, endpoint: '/api/events', context: shared });
-    client.captureException(new Error('shared metadata'), { context: { team: 'billing', source: 'button' } });
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events', context: shared,
+      getContext: () => ({ screen, team: 'dynamic' }) });
+    client.captureException(new Error('first state'), { context: { team: 'billing', source: 'button' } });
+    screen = 'payment';
+    client.captureException(new Error('second state'));
     await client.flush();
     client.destroy();
   }, environment);
-  await expect.poll(async () => (await events(environment)).length).toBe(1);
-  const [event] = await events(environment);
-  expect(event).toMatchObject({ type: 'manual', context: { team: 'billing', source: 'button', attempt: 2 } });
-  expect(JSON.stringify(event)).not.toContain('synthetic-private-value');
+  await expect.poll(async () => (await events(environment)).length).toBe(2);
+  const delivered = await events(environment);
+  const first = delivered.find(event => event.message === 'first state');
+  const second = delivered.find(event => event.message === 'second state');
+  expect(first).toMatchObject({ type: 'manual', message: 'first state', context: {
+    team: 'billing', source: 'button', screen: 'cart', attempt: 2,
+  } });
+  expect(second).toMatchObject({ type: 'manual', message: 'second state', context: {
+    team: 'dynamic', screen: 'payment', attempt: 2,
+  } });
+  expect(JSON.stringify(delivered)).not.toContain('synthetic-private-value');
 });
 
 test('delivers native source location for a primitive thrown by an external script', async ({ page }) => {
