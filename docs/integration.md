@@ -40,6 +40,8 @@ The micro server accepts at most 64 KiB and 100 events per request and validates
 
 `captureNavigation: true` optionally adds current-window, same-document History navigation to this existing trail. Navigation entries use category `navigation`, message `Navigation`, and scalar `data.from`, `data.to`, and `data.trigger` (`pushState`, `replaceState`, `popstate`, or `hashchange`). URLs use the SDK filters; equivalent filtered URLs are omitted. The server and JSON contract are unchanged. Manual breadcrumbs remain available for app-specific actions.
 
+`captureNetworkBreadcrumbs: true` optionally adds completed fetch/XHR metadata to the same trail. HTTP responses use category `http`, message `HTTP response`, and scalar `data.method`, `data.url`, `data.durationMs`, `data.status`; real transport failures use category `network`, message `Network failure`, and omit status. Native status `0` is retained for opaque responses. Intentional aborts and collector requests are excluded. No body, header, or failure-message data is included. Completion order is preserved; standalone error selection remains controlled by `captureNetwork`/`shouldCaptureHttp`. A custom transport requires an `endpoint` to enable automatic network reporting. Storage and JSON format are unchanged.
+
 ## Read events
 
 The viewer expects list and detail operations, with `/api` as its default base path:

@@ -61,4 +61,36 @@ describe('BreadcrumbTrail', () => {
     expect(container.querySelector('.breadcrumb-message')?.textContent).toBe(message);
     expect(container.querySelector('.breadcrumb-list')).not.toBeNull();
   });
+
+  it('shows HTTP and network summaries without opening details, with localized unavailable status', async () => {
+    const http = { ...earlier, category: 'http', message: 'HTTP response', data: { method: 'POST', url: '/orders', status: 503, durationMs: 12.5 } };
+    const network = { ...later, category: 'network', message: 'Network failure', data: { method: 'GET', url: '/orders', status: 0, durationMs: 0 } };
+    await act(async () => { root.render(<BreadcrumbTrail breadcrumbs={[http, network]}/>); });
+    const summaries = [...container.querySelectorAll('.breadcrumb-network-summary')];
+    expect(summaries.map(node => node.textContent)).toEqual(['POST /orders · 503 · 12.5 ms', 'GET /orders · Status unavailable · 0 ms']);
+    expect(container.querySelectorAll('details:not([open])')).toHaveLength(2);
+    await act(async () => { setLocale('ko'); });
+    expect(container.querySelectorAll('.breadcrumb-network-summary')[1]?.textContent).toBe('GET /orders · 상태 확인 불가 · 0 ms');
+    await act(async () => { root.render(<BreadcrumbTrail breadcrumbs={[{ ...network, data: { method: 'GET', url: '/orders', durationMs: 0 } }]}/>); });
+    expect(container.querySelector('.breadcrumb-network-summary')?.textContent).toBe('GET /orders · 상태 확인 불가 · 0 ms');
+  });
+
+  it('does not invent network fields for missing or invalid scalar metadata', async () => {
+    const entries = [
+      { ...earlier, category: 'http', data: { method: 7, url: '/orders', durationMs: 1 } },
+      { ...later, category: 'network', data: { method: 'GET', durationMs: 2 } },
+      { ...earlier, category: 'http', data: { method: 'GET', url: '/valid', status: -1, durationMs: -4 } },
+      { ...later, category: 'navigation', data: { method: 'GET', url: '/not-network', status: 200, durationMs: 3 } },
+    ];
+    await act(async () => { root.render(<BreadcrumbTrail breadcrumbs={entries}/>); });
+    expect([...container.querySelectorAll('.breadcrumb-network-summary')].map(node => node.textContent)).toEqual(['GET /valid · Status unavailable']);
+    expect(container.querySelectorAll('.breadcrumb-data')).toHaveLength(4);
+  });
+
+  it('renders URL text without creating markup or links', async () => {
+    const url = '<script>alert(1)</script><a href="https://example.com">visit</a>';
+    await act(async () => { root.render(<BreadcrumbTrail breadcrumbs={[{ ...earlier, category: 'http', data: { method: 'GET', url, status: 200, durationMs: 1 } }]}/>); });
+    expect(container.querySelector('.breadcrumb-network-summary')?.textContent).toContain(url);
+    expect(container.querySelector('script, a')).toBeNull();
+  });
 });

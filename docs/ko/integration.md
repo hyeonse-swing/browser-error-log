@@ -40,6 +40,8 @@
 
 `captureNavigation: true`를 선택하면 같은 창의 문서 내부 History 이동을 기존 작업 기록에 추가합니다. 분류는 `navigation`, 메시지는 `Navigation`, 단일 값 데이터는 `data.from`, `data.to`, `data.trigger`(`pushState`, `replaceState`, `popstate`, `hashchange`)입니다. URL 필터 적용 후 같은 URL이면 생략하며 서버·JSON 계약은 유지합니다. 앱별 동작에는 수동 작업 기록도 사용할 수 있습니다.
 
+`captureNetworkBreadcrumbs: true`는 완료된 fetch·XHR 정보를 같은 작업 기록에 추가합니다. HTTP 응답은 분류 `http`, 메시지 `HTTP response`, 단일 값 데이터 `data.method`, `data.url`, `data.durationMs`, `data.status`를 사용합니다. 실제 전송 실패는 분류 `network`, 메시지 `Network failure`이며 상태를 생략합니다. opaque 응답의 브라우저 상태 `0`은 유지합니다. 의도적인 취소·수집기 요청과 본문·헤더·실패 메시지는 제외합니다. 완료 순서를 유지하고 독립 오류 선택은 기존 `captureNetwork`·`shouldCaptureHttp`가 제어합니다. 사용자 지정 transport에는 자동 네트워크 보고를 위한 `endpoint`가 필요합니다. 저장·JSON 형식은 유지합니다.
+
 ## 이벤트 조회
 
 뷰어의 기본 API 경로는 `/api`이며 목록과 상세 조회를 사용합니다.

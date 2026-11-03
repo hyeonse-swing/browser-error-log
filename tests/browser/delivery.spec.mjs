@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
+import { createServer as createHttpServer } from 'node:http';
 import { copyFile, cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -77,6 +78,101 @@ test.afterAll(async () => {
     try { await closed; } finally { clearTimeout(timeout); }
   }
   if (scratch) await rm(scratch, { recursive: true, force: true });
+});
+
+test('keeps fetch and XHR context without creating error events or exposing payloads', async ({ page }) => {
+  const environment = randomUUID();
+  const received = [];
+  const network = createHttpServer((request, response) => {
+    response.setHeader('Access-Control-Allow-Origin', '*');
+    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Test-Request');
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    response.setHeader('Access-Control-Expose-Headers', 'X-Test-Response');
+    response.setHeader('X-Test-Response', 'private-response-header');
+    if (request.method === 'OPTIONS') { response.writeHead(204); response.end(); return; }
+    let body = '';
+    request.on('data', chunk => { body += chunk; });
+    request.on('end', () => {
+      received.push({ method: request.method, url: request.url, body, header: request.headers['x-test-request'] });
+      const finish = () => {
+        response.writeHead(request.url.startsWith('/missing') ? 404 : request.url.startsWith('/unavailable') ? 503 : 200,
+          { 'Content-Type': 'text/plain' });
+        response.end('private-response-body');
+      };
+      if (request.url.startsWith('/slow')) {
+        const timer = setTimeout(finish, 1000);
+        response.on('close', () => clearTimeout(timer));
+      } else finish();
+    });
+  });
+  await new Promise(resolve => network.listen(0, '127.0.0.1', resolve));
+  const networkOrigin = `http://127.0.0.1:${network.address().port}`;
+  const refusedPort = await availablePort();
+  try {
+    await page.goto(`${origin}/`);
+    const result = await page.evaluate(async ({ environment, networkOrigin, refusedPort }) => {
+      const { init } = await import('/sdk.js');
+      const client = init({ project: 'browser-test', environment, endpoint: '/api/events',
+        captureNetwork: false, captureNetworkBreadcrumbs: true });
+      const response = await fetch(`${networkOrigin}/ok?token=hidden`, { method: 'POST',
+        headers: { 'Content-Type': 'text/plain', 'X-Test-Request': 'private-request-header' }, body: 'private-request-body' });
+      const body = await response.text();
+      const header = response.headers.get('x-test-response');
+      const xhr = new XMLHttpRequest();
+      const finished = new Promise(resolve => xhr.addEventListener('loadend', resolve, { once: true }));
+      xhr.open('GET', `${networkOrigin}/missing?token=hidden`);
+      xhr.send();
+      await finished;
+      const unavailable = await fetch(`${networkOrigin}/unavailable?token=hidden`);
+      let rejected = false;
+      try { await fetch(`http://127.0.0.1:${refusedPort}/offline?token=hidden`); } catch { rejected = true; }
+      const controller = new AbortController();
+      const cancelled = fetch(`${networkOrigin}/slow?token=hidden`, { signal: controller.signal }).catch(error => error.name);
+      setTimeout(() => controller.abort(), 30);
+      const abortName = await cancelled;
+      const beforeCapture = client.getStats();
+      client.captureException(new Error('network context before error'));
+      await client.flush();
+      client.captureException(new Error('collector request stays excluded'));
+      await client.flush();
+      const afterCapture = client.getStats();
+      client.destroy();
+      return { status: response.status, body, header, xhrStatus: xhr.status, xhrBody: xhr.responseText,
+        unavailableStatus: unavailable.status, rejected, abortName, beforeCapture, afterCapture };
+    }, { environment, networkOrigin, refusedPort });
+    expect(result).toMatchObject({ status: 200, body: 'private-response-body', header: 'private-response-header',
+      xhrStatus: 404, xhrBody: 'private-response-body', unavailableStatus: 503, rejected: true, abortName: 'AbortError',
+      beforeCapture: { queued: 0, sent: 0, dropped: 0 }, afterCapture: { queued: 0, sent: 2, dropped: 0 } });
+    expect(received.find(request => request.method === 'POST')).toEqual({ method: 'POST', url: '/ok?token=hidden',
+      body: 'private-request-body', header: 'private-request-header' });
+    const delivered = await events(environment);
+    expect(delivered).toHaveLength(2);
+    const first = delivered.find(event => event.message === 'network context before error');
+    expect(first.breadcrumbs.map(entry => [entry.category, entry.data.method, entry.data.url, entry.data.status])).toEqual([
+      ['http', 'POST', `${networkOrigin}/ok`, 200], ['http', 'GET', `${networkOrigin}/missing`, 404],
+      ['http', 'GET', `${networkOrigin}/unavailable`, 503], ['network', 'GET', `http://127.0.0.1:${refusedPort}/offline`, undefined],
+    ]);
+    expect(first.breadcrumbs.every(entry => Number.isInteger(entry.data.durationMs) && entry.data.durationMs >= 0)).toBe(true);
+    expect(delivered.find(event => event.message === 'collector request stays excluded').breadcrumbs).toEqual(first.breadcrumbs);
+    expect(JSON.stringify(delivered)).not.toMatch(/private-request|private-response|token=|\/slow|\/api\/events/);
+    await page.goto(`${origin}/viewer.html`);
+    await page.locator('.language-switcher select').selectOption('en');
+    await page.locator('.dash-filters').getByLabel('Environment', { exact: true }).fill(environment);
+    await page.locator('.dash-filters').getByRole('button', { name: /Query/ }).click();
+    await page.getByRole('button').filter({ hasText: 'network context before error' }).click();
+    const trail = page.getByRole('dialog').locator('.breadcrumb-trail');
+    await expect(trail.locator('.breadcrumb-network-summary')).toHaveCount(4);
+    await expect(trail).toContainText('Status unavailable');
+    await expect(trail.locator('details[open]')).toHaveCount(0);
+    await trail.screenshot({ path: resolve(`output/playwright/network-${test.info().project.name}-desktop.png`) });
+    await page.setViewportSize({ width: 320, height: 800 });
+    await expect(trail).toBeVisible();
+    expect(await trail.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await trail.screenshot({ path: resolve(`output/playwright/network-${test.info().project.name}-mobile.png`) });
+  } finally {
+    network.closeAllConnections();
+    await new Promise(resolve => network.close(resolve));
+  }
 });
 
 test('records native SPA navigation without exposing state or changing History semantics', async ({ page }) => {

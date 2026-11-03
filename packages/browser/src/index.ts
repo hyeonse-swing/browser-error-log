@@ -27,6 +27,8 @@ export interface BrowserErrorLogOptions {
   captureNavigation?: boolean;
   /** Defaults to true. With a custom transport, automatic network capture requires endpoint for collector exclusion. */
   captureNetwork?: boolean;
+  /** Records sanitized fetch/XHR completion breadcrumbs; defaults to false. Custom transports require endpoint. */
+  captureNetworkBreadcrumbs?: boolean;
   beforeSend?: (event: ErrorEventRecord) => ErrorEventRecord | false | null | void;
   sanitizeUrl?: (url: string) => string;
   shouldCaptureHttp?: (status: number, url: string, method: string) => boolean;
@@ -131,6 +133,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
   private readonly endpoint?: string;
   private readonly options: BrowserErrorLogOptions;
   private readonly networkCaptureEnabled: boolean;
+  private readonly networkBreadcrumbCaptureEnabled: boolean;
   private readonly navigationCaptureEnabled: boolean;
   private readonly transportTimeoutMs: number;
   private readonly startedAt = now();
@@ -154,7 +157,9 @@ class Client implements BrowserErrorLogBreadcrumbClient {
   constructor(options: BrowserErrorLogOptions) {
     this.options = options;
     this.active = options.enabled !== false && typeof window !== 'undefined' && typeof document !== 'undefined';
-    this.networkCaptureEnabled = options.captureNetwork !== false && (!options.transport || Boolean(options.endpoint));
+    const automaticNetworkAllowed = !options.transport || Boolean(options.endpoint);
+    this.networkCaptureEnabled = options.captureNetwork !== false && automaticNetworkAllowed;
+    this.networkBreadcrumbCaptureEnabled = options.captureNetworkBreadcrumbs === true && automaticNetworkAllowed;
     this.navigationCaptureEnabled = options.captureNavigation === true;
     this.maxQueueSize = boundedNumber(options.maxQueueSize, 1, 100, 50);
     this.transportTimeoutMs = boundedNumber(options.transportTimeoutMs, 250, 60_000, 5_000);
@@ -166,7 +171,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
     window.addEventListener('error', this.onError);
     window.addEventListener('unhandledrejection', this.onRejection);
     document.addEventListener('visibilitychange', this.onVisibility);
-    if (this.networkCaptureEnabled) addNetworkClient(this);
+    if (this.networkCaptureEnabled || this.networkBreadcrumbCaptureEnabled) addNetworkClient(this);
     if (options.captureConsole === true) addConsoleClient(this);
     if (this.navigationCaptureEnabled) addNavigationClient(this);
     this.interval = setInterval(() => { void this.flush(); }, boundedNumber(options.flushIntervalMs, 10, 60_000, 10_000));
@@ -195,15 +200,42 @@ class Client implements BrowserErrorLogBreadcrumbClient {
     }
   }
 
-  reportNetwork(method: string, url: string, status: number | undefined, durationMs: number, failure?: unknown): void {
+  reportNetwork(method: string, url: string, status: number | undefined, durationMs: number,
+    failure?: unknown, allowErrorCapture = true): void {
     if (this.destroyed || !this.active || this.isCollectorUrl(url) || isAbort(failure)) return;
-    try {
-      if (status !== undefined) {
-        const include = this.options.shouldCaptureHttp
+    let captureError = this.networkCaptureEnabled && allowErrorCapture;
+    if (captureError && status !== undefined) {
+      try {
+        captureError = this.options.shouldCaptureHttp
           ? this.options.shouldCaptureHttp(status, url, method)
           : status >= 500;
-        if (!include) return;
+      } catch { this.dropped++; return; /* A failing hook cannot expose an unfiltered event or breadcrumb. */ }
+    }
+    if (this.networkBreadcrumbCaptureEnabled) {
+      try {
+        const cleaned = this.cleanBreadcrumbUrl(url);
+        if (cleaned.url) {
+          const data: NonNullable<Breadcrumb['data']> = {
+            method: this.cleanNetworkBreadcrumbMethod(method),
+            url: cleaned.url,
+            durationMs: boundedNumber(durationMs, 0, 3_600_000, 0),
+          };
+          if (status !== undefined && Number.isInteger(status) && status >= 0 && status <= 599) data.status = status;
+          this.breadcrumbs.push({ occurredAt: new Date().toISOString(),
+            category: status === undefined ? 'network' : 'http',
+            message: status === undefined ? 'Network failure' : 'HTTP response', data });
+          this.boundBreadcrumbs(this.breadcrumbs);
+        } else if (captureError && !cleaned.safeForError) {
+          this.dropped++;
+          return;
+        }
+      } catch {
+        if (captureError) this.dropped++;
+        return; // A failing URL hook cannot expose an unfiltered breadcrumb or selected error.
       }
+    }
+    if (!captureError) return;
+    try {
       const network = { method: trim(method || 'GET', 16).toUpperCase(), url, status, durationMs };
       const fields = failure === undefined ? undefined : errorFields(failure);
       const event = this.makeEvent(status === undefined ? 'network' : 'http',
@@ -211,6 +243,10 @@ class Client implements BrowserErrorLogBreadcrumbClient {
         { name: fields?.name, network });
       this.enqueue(event);
     } catch { this.dropped++; /* a failing hook must not expose an unfiltered event */ }
+  }
+
+  reportZeroStatusCompletion(method: string, url: string, durationMs: number): void {
+    if (this.networkBreadcrumbCaptureEnabled) this.reportNetwork(method, url, 0, durationMs, undefined, false);
   }
 
   captureConsole(values: unknown[]): void {
@@ -241,16 +277,9 @@ class Client implements BrowserErrorLogBreadcrumbClient {
   reportNavigation(fromHref: string, toHref: string, trigger: NavigationTrigger): void {
     if (!this.active || this.destroyed || !this.navigationCaptureEnabled) return;
     try {
-      const cleanFrom = this.cleanUrl(fromHref);
-      const cleanTo = this.cleanUrl(toHref);
-      // cleanUrl's malformed-input fallback is for general diagnostics; navigation only stores valid URLs.
-      const fromUrl = new URL(cleanFrom);
-      const toUrl = new URL(cleanTo);
-      if (![fromUrl.protocol, toUrl.protocol].every(protocol => protocol === 'http:' || protocol === 'https:')) return;
-      if (fromUrl.username || fromUrl.password || fromUrl.search || fromUrl.hash ||
-        toUrl.username || toUrl.password || toUrl.search || toUrl.hash) return;
-      const from = cleanFrom.slice(0, BREADCRUMB_LIMITS.dataString);
-      const to = cleanTo.slice(0, BREADCRUMB_LIMITS.dataString);
+      const from = this.cleanBreadcrumbUrl(fromHref).url;
+      const to = this.cleanBreadcrumbUrl(toHref).url;
+      if (!from || !to) return;
       if (from === to) return;
       this.breadcrumbs.push({ occurredAt: new Date().toISOString(), category: 'navigation',
         message: 'Navigation', data: { from, to, trigger } });
@@ -278,7 +307,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
       window.removeEventListener('error', this.onError);
       window.removeEventListener('unhandledrejection', this.onRejection);
       document.removeEventListener('visibilitychange', this.onVisibility);
-      if (this.networkCaptureEnabled) removeNetworkClient(this);
+      if (this.networkCaptureEnabled || this.networkBreadcrumbCaptureEnabled) removeNetworkClient(this);
       if (this.options.captureConsole === true) removeConsoleClient(this);
       if (this.navigationCaptureEnabled) removeNavigationClient(this);
     }
@@ -347,6 +376,24 @@ class Client implements BrowserErrorLogBreadcrumbClient {
       url.hash = '';
       return this.cleanText(url.href, 1024, false);
     } catch { return this.cleanText(value, 1024, false).split(/[?#]/, 1)[0]; }
+  }
+
+  private cleanBreadcrumbUrl(input: string): { url?: string; safeForError: boolean } {
+    const cleaned = this.cleanUrl(input);
+    if (cleaned === '[unsupported URL]') return { safeForError: true };
+    try {
+      // cleanUrl's malformed-input fallback is for general diagnostics; breadcrumbs need a valid URL.
+      const url = new URL(cleaned);
+      if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.username || url.password || url.search || url.hash) {
+        return { safeForError: false };
+      }
+      return { url: cleaned.slice(0, BREADCRUMB_LIMITS.dataString), safeForError: true };
+    } catch { return { safeForError: false }; }
+  }
+
+  private cleanNetworkBreadcrumbMethod(input: string): string {
+    const method = safeString(input || 'GET').trim().toUpperCase();
+    return /^[A-Z0-9!#$%&'*+.^_`|~-]{1,16}$/.test(method) ? method : 'GET';
   }
 
   private cleanText(input: unknown, length: number, replaceUrls = true): string {
@@ -881,7 +928,10 @@ function installNetwork(): Instrumentation {
         if (aborted) return;
         try {
           const status = this.status;
-          if (status === 0 && !failed) return;
+          if (status === 0 && !failed) {
+            for (const client of clients) client.reportZeroStatusCompletion(details.method, details.url, now() - started);
+            return;
+          }
           for (const client of clients) client.reportNetwork(details.method, details.url,
             status === 0 ? undefined : status, now() - started);
         } catch { /* XHR state may be unavailable */ }

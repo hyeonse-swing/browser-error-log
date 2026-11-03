@@ -94,6 +94,22 @@ const errorLog = init({
 
 초기화 이후부터 수동 기록과 같은 최대 20개·12,000바이트 버퍼를 공유합니다. `clearBreadcrumbs()`로 이후 오류의 기록을 비우면 다음 이동부터 다시 기록합니다. 버퍼는 현재 문서의 메모리에 있으며 전체 페이지 로드 간에는 이어지지 않습니다. History의 state와 title 인자는 작업 기록에 복사하지 않습니다. `sanitizeUrl`·`beforeSend` 제어를 유지하며 `destroy()`는 해당 클라이언트의 계측을 해제합니다. 호스트가 History 메서드를 잠그거나 교체하면 이동을 기록하지 못할 수 있습니다.
 
+## 네트워크 요청 자동 기록
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  captureNetworkBreadcrumbs: true,
+});
+```
+
+선택 옵션으로 완료된 fetch·XHR 응답(2xx·4xx·5xx 포함)과 실제 전송 실패를 기존 제한된 작업 기록에 붙입니다. 응답은 분류 `http`, 메시지 `HTTP response`, 단일 값 데이터 `data.method`, `data.url`, `data.durationMs`, `data.status`로 기록합니다. 전송 실패는 분류 `network`, 메시지 `Network failure`이며 상태 코드를 생략합니다. 브라우저가 opaque 응답에 상태 `0`을 반환하면 뷰어는 상태를 확인할 수 없다고 표시합니다. URL에는 기존 필터를 적용하고 최대 200자로 제한합니다. 본문·헤더·실패 메시지는 기록에 복사하지 않으며, 의도적인 취소와 수집기 요청도 제외합니다.
+
+요청은 완료 순서로 기록하고 진행 중인 요청은 아직 오류의 복사본에 포함하지 않습니다. 요청 기록만으로 별도 이벤트를 보내거나 오류 통계를 늘리지 않습니다. 독립적인 오류 이벤트는 기존 `captureNetwork`와 `shouldCaptureHttp`가 제어합니다. 요청 기록만 원하면 `captureNetwork: false`를 함께 지정하세요. 상태 선택 콜백이 false를 반환해도 요청 기록은 남으므로 기록 필터링에는 `beforeSend`를 사용합니다. 오류 수집이 켜진 상태에서 선택 콜백이 예외를 던지면 해당 요청의 보고를 제외합니다. `clearBreadcrumbs()`는 이후 수집에 사용할 공통 버퍼(최대 20개·12,000바이트)를 비웁니다.
+
+사용자 지정 transport에는 제외할 수집기의 `endpoint`를 제공해야 합니다. 없으면 두 자동 네트워크 경로를 모두 끕니다. 기존 breadcrumb 계약을 사용하므로 작업 기록을 지원하는 0.1.16 이상의 수집기·뷰어와 함께 사용할 수 있습니다.
+
 ## 수집 제어
 
 ```ts
@@ -126,7 +142,7 @@ currentAppSection = 'account'; // 이후 이벤트에는 현재 값을 사용
 
 기본 HTTP 수집은 5xx와 네트워크 실패를 포함하고 의도적인 취소와 수집기 endpoint를 제외합니다. SDK는 URL 쿼리·해시·자격 정보와 흔한 이메일/토큰 패턴을 제거합니다. 요청/응답 본문, 쿠키, DOM, 폼 입력, 세션 녹화는 수집하지 않습니다. 오류 메시지, URL 경로, 스택, 사용자 지정 context에는 민감정보가 남을 수 있으므로 앱별 필터를 설정하세요. `beforeSend`나 `sanitizeUrl`이 실패하면 이벤트를 버립니다.
 
-사용자 지정 `transport(batch, { signal })`에서는 요청에 `signal`을 전달하고 전송 실패 시 reject하세요. 자동 네트워크 수집을 원하면 자기 전송을 제외할 `endpoint`를 지정해야 합니다. 없으면 사용자 지정 transport에서 네트워크 수집을 끕니다. 기본 전송은 credentials를 보내지 않습니다.
+사용자 지정 `transport(batch, { signal })`에서는 요청에 `signal`을 전달하고 전송 실패 시 reject하세요. 자동 네트워크 오류 수집이나 요청 기록을 원하면 자기 전송을 제외할 `endpoint`를 지정해야 합니다. 없으면 사용자 지정 transport에서 두 경로를 모두 끕니다. 기본 전송은 credentials를 보내지 않습니다.
 
 ## 전달 제한
 

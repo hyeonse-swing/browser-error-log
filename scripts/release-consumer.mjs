@@ -103,7 +103,7 @@ await consumer('react', [
   import { init, type TransportContext, type BrowserErrorLogClient } from '@ihyeon/browser-error-log';
   import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
   import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';
-  const client = init({ project: 'registry-smoke', enabled: false, captureNavigation: true,
+  const client = init({ project: 'registry-smoke', enabled: false, captureNavigation: true, captureNetworkBreadcrumbs: true,
     transport: async (batch: EventBatch, context: TransportContext) => { void batch; void context.signal; } });
   client.captureException(new Error(EVENT_LABELS.manual));
   client.addBreadcrumb({ category: 'action', message: 'Registry consumer', data: { attempt: 1 } }); client.clearBreadcrumbs();

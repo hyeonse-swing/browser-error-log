@@ -94,6 +94,22 @@ This opt-in setting records current-window, same-document navigation through `hi
 
 Capture starts after initialization and shares the same 20-step/12,000-byte trail as manual steps. `clearBreadcrumbs()` starts a fresh trail for future errors; recording resumes on the next navigation. The trail stays in memory for this document and does not carry across a full page load. History state and title arguments are not copied into breadcrumbs. `sanitizeUrl` and `beforeSend` keep their existing controls, and `destroy()` removes this client's instrumentation. Host-locked or replaced History methods can prevent navigation capture.
 
+## Automatically record network activity
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  captureNetworkBreadcrumbs: true,
+});
+```
+
+This opt-in setting records completed fetch/XHR responses, including 2xx/4xx/5xx, and real transport failures in the same bounded trail. Response entries use category `http`, message `HTTP response`, and scalar `data.method`, `data.url`, `data.durationMs`, and `data.status`. Transport failures use category `network`, message `Network failure`, and omit status. A browser may report status `0` for an opaque response; the viewer shows unavailable status accordingly. URLs use the existing filters and are limited to 200 characters. Bodies, headers, and failure messages are not copied into these entries; intentional aborts and collector requests are excluded.
+
+Requests are recorded when they finish, in completion order; in-flight requests are not yet part of an error's snapshot. Recording a request does not send another event or increase error counters. `captureNetwork` and `shouldCaptureHttp` continue to control standalone error events: set `captureNetwork: false` if you want network context without automatic HTTP/network error events. A false status predicate does not remove request breadcrumbs; filter those with `beforeSend`. A throwing predicate still drops that request's reporting when standalone capture is enabled. `clearBreadcrumbs()` resets the shared 20-step/12,000-byte trail for future captures.
+
+With a custom transport, supply its collector `endpoint` for exclusion; without it, both automatic network channels are disabled. These entries use the existing breadcrumb contract and work with collectors/viewers supporting breadcrumbs since 0.1.16.
+
 ## Collection controls
 
 ```ts
@@ -126,7 +142,7 @@ Set `captureConsole: true` to capture `console.error` calls. The combined messag
 
 By default, HTTP capture records 5xx responses and network failures, excludes intentional aborts, and excludes the collector endpoint. The SDK strips URL queries, fragments, and credentials and masks common email/token patterns. It does not collect request/response bodies, cookies, DOM, form inputs, or session recordings. Error text, URL paths, stacks, and custom context may still contain sensitive data; set application-specific filters. A failing `beforeSend` or `sanitizeUrl` drops the event.
 
-For a custom `transport(batch, { signal })`, pass `signal` to your request and reject on delivery failure. Include `endpoint` for collector exclusion if you want automatic network capture; otherwise network capture is disabled for a custom transport. The default transport omits credentials.
+For a custom `transport(batch, { signal })`, pass `signal` to your request and reject on delivery failure. Include `endpoint` for collector exclusion when using automatic network error capture or network breadcrumbs; otherwise both are disabled for a custom transport. The default transport omits credentials.
 
 ## Delivery limits
 
