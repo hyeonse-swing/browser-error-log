@@ -32,11 +32,13 @@
 
 예시의 `sdkVersion`은 자리 표시자이며 SDK가 설치된 패키지 버전으로 설정합니다. 선택 필드는 `name`, `stack`, `componentStack`, `browser`, `context`, `network`입니다. `context` 값은 문자열, 유한한 숫자, boolean, null이며 `network`에는 `method`, `url`, `durationMs`, 선택적인 `status`가 있습니다. 발생 시각은 ISO UTC이고 서버는 `receivedAt`을 추가할 수 있습니다. 클라이언트가 제공하는 `project`와 `Origin`은 인증 정보가 아닙니다.
 
-선택 필드 `breadcrumbs`는 수동으로 남긴 최대 20개 작업(UTF-8 JSON 12,000바이트)을 기록 순서로 보존합니다. 각 항목은 표준 UTC `occurredAt`, `category`(40자), `message`(256자), 선택적인 단일 값 `data`(6개 키, 키 80자·문자열 값 200자)입니다. 프로토콜의 `isBreadcrumbTrail`로 검증하고 저장·JSON 내보내기에도 필드를 보존하세요. 스키마 v1의 선택 필드 추가이며 자체 호스팅 수집기·뷰어를 갱신해야 보존합니다. 이전 영속 수집기는 이 필드를 생략할 수 있습니다. 프로토콜 검증은 구조·크기를 확인하며 민감정보 제거는 SDK와 앱별 정책을 적용해야 합니다.
+선택 필드 `breadcrumbs`는 최대 20개 작업(UTF-8 JSON 12,000바이트)을 기록 순서로 보존합니다. 각 항목은 표준 UTC `occurredAt`, `category`(40자), `message`(256자), 선택적인 단일 값 `data`(6개 키, 키 80자·문자열 값 200자)입니다. 프로토콜의 `isBreadcrumbTrail`로 검증하고 저장·JSON 내보내기에도 필드를 보존하세요. 스키마 v1의 선택 필드 추가이며 자체 호스팅 수집기·뷰어를 갱신해야 보존합니다. 이전 영속 수집기는 이 필드를 생략할 수 있습니다. 프로토콜 검증은 구조·크기를 확인하며 민감정보 제거는 SDK와 앱별 정책을 적용해야 합니다.
 
 2xx 응답은 전체 배치의 수신 성공을 뜻하며 SDK는 본문을 사용하지 않습니다. 429, 5xx, 네트워크 실패는 첫 시도 후 같은 이벤트 ID로 최대 두 번 재시도합니다. 그 외 4xx는 영구 실패입니다. 시도별 기본 시간 제한은 5초입니다. SDK는 일부 수락을 해석할 수 없으므로 백엔드는 배치를 검증하고 원자적으로 영속 저장하거나 중복 확인을 마친 뒤 2xx를 반환하고 `(project, eventId)`로 중복을 제거해야 합니다.
 
 마이크로 서버는 요청당 최대 64 KiB와 100건을 허용하고 각 이벤트를 검증합니다. 이는 예제 서버의 제한이며 모든 백엔드의 계약 상수는 아닙니다. 자체 배포에서는 별도 요청 제한, 스키마 검증, 조회 인증, 보관 정책, 앱별 데이터 제거를 적용하세요.
+
+`captureNavigation: true`를 선택하면 같은 창의 문서 내부 History 이동을 기존 작업 기록에 추가합니다. 분류는 `navigation`, 메시지는 `Navigation`, 단일 값 데이터는 `data.from`, `data.to`, `data.trigger`(`pushState`, `replaceState`, `popstate`, `hashchange`)입니다. URL 필터 적용 후 같은 URL이면 생략하며 서버·JSON 계약은 유지합니다. 앱별 동작에는 수동 작업 기록도 사용할 수 있습니다.
 
 ## 이벤트 조회
 

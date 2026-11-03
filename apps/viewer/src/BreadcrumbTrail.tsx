@@ -8,7 +8,7 @@ export function BreadcrumbTrail({ breadcrumbs }: { breadcrumbs?: unknown }) {
 
   return <section className="breadcrumb-trail" aria-label={locale === 'ko' ? '오류 전 작업 기록' : 'Activity before this error'}>
     <h4>{locale === 'ko' ? '오류 전 작업 기록' : 'Activity before this error'}</h4>
-    <p className="breadcrumb-note">{locale === 'ko' ? '수동 기록 · 오래된 순' : 'Recorded manually, oldest first'}</p>
+    <p className="breadcrumb-note">{locale === 'ko' ? '작업 기록 · 오래된 순' : 'Recorded steps, oldest first'}</p>
     <ol className="breadcrumb-list">
       {breadcrumbs.map((entry, index) => <li className="breadcrumb-entry" key={`${entry.occurredAt}-${index}`}>
         <div className="breadcrumb-meta"><time dateTime={entry.occurredAt}>{new Date(entry.occurredAt).toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US', { hour12: false })}</time><span className="breadcrumb-category">{entry.category}</span></div>

@@ -74,11 +74,25 @@ errorLog.captureException(new Error('Order could not be completed'));
 errorLog.clearBreadcrumbs(); // start a new flow; captured errors keep their snapshot
 ```
 
-Each client keeps the latest 20 manually recorded steps, within a 12,000-byte UTF-8 JSON budget. Adding a step does not send a separate event; subsequent errors include an oldest-first snapshot. Steps have an SDK-generated UTC timestamp, a category (default `manual`, up to 40 characters), a message (up to 256 characters), and optional scalar data (six keys, 80 characters per key and 200 per string value). The existing sensitive-key, URL, and text filters apply; `beforeSend` can edit or remove `event.breadcrumbs`. `clearBreadcrumbs()` affects future captures, and `destroy()` also clears the local trail.
+Each client keeps the latest 20 recorded steps, within a 12,000-byte UTF-8 JSON budget. Adding a step does not send a separate event; subsequent errors include an oldest-first snapshot. Steps have an SDK-generated UTC timestamp, a category (default `manual`, up to 40 characters), a message (up to 256 characters), and optional scalar data (six keys, 80 characters per key and 200 per string value). The existing sensitive-key, URL, and text filters apply; `beforeSend` can edit or remove `event.breadcrumbs`. `clearBreadcrumbs()` affects future captures, and `destroy()` also clears the local trail.
 
 `init()` returns `BrowserErrorLogBreadcrumbClient`, extending the existing `BrowserErrorLogClient` contract. Existing clients and React Error Boundary mocks can keep the original interface; use the extended type when explicitly typing a client that calls the new methods.
 
-The viewer shows these steps in both error detail views and preserves them in history JSON. Update your self-hosted collector and viewer to this source version to retain and display the optional field; older collectors may accept an event while omitting its breadcrumbs. Custom backends can validate the trail with `isBreadcrumbTrail` from `@ihyeon/browser-error-log-protocol`.
+The viewer shows these steps in both error detail views and preserves them in history JSON. Use a collector and viewer with breadcrumb support (introduced in 0.1.16) to retain and display this optional field; older collectors may accept an event while omitting its breadcrumbs. Custom backends can validate the trail with `isBreadcrumbTrail` from `@ihyeon/browser-error-log-protocol`.
+
+## Automatically record SPA navigation
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  captureNavigation: true,
+});
+```
+
+This opt-in setting records current-window, same-document navigation through `history.pushState`, `history.replaceState`, and back/forward events. Each `navigation` breadcrumb contains filtered `from`/`to` URLs and its `trigger`. The default URL policy removes credentials, queries, and fragments; changes that produce the same filtered URL do not add a step. Hash-only routers therefore need explicit manual breadcrumbs or application-specific context.
+
+Capture starts after initialization and shares the same 20-step/12,000-byte trail as manual steps. `clearBreadcrumbs()` starts a fresh trail for future errors; recording resumes on the next navigation. The trail stays in memory for this document and does not carry across a full page load. History state and title arguments are not copied into breadcrumbs. `sanitizeUrl` and `beforeSend` keep their existing controls, and `destroy()` removes this client's instrumentation. Host-locked or replaced History methods can prevent navigation capture.
 
 ## Collection controls
 

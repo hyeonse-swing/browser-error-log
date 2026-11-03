@@ -64,7 +64,7 @@ npm(['install', ...tarballs, ...peers], consumer);
 writeFileSync(join(consumer, 'consumer.tsx'), `import { init, type TransportContext, type BrowserErrorLogClient, type BrowserErrorLogBreadcrumbClient } from '@ihyeon/browser-error-log';
 import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
 import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';
-const client = init({project:'consumer',enabled:false,context:{buildChannel:'stable'},getContext:()=>({appSection:'checkout'}),transport:async(batch:EventBatch,context:TransportContext)=>{void batch;void context.signal;}});
+const client = init({project:'consumer',enabled:false,context:{buildChannel:'stable'},getContext:()=>({appSection:'checkout'}),captureNavigation:true,transport:async(batch:EventBatch,context:TransportContext)=>{void batch;void context.signal;}});
 const extended: BrowserErrorLogBreadcrumbClient = client;
 extended.addBreadcrumb({message:'Checkout',data:{attempt:1}}); extended.clearBreadcrumbs();
 const oldClient: BrowserErrorLogClient = {captureException(){},flush:async()=>{},destroy(){},getStats:()=>({queued:0,sent:0,dropped:0})};

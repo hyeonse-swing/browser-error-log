@@ -23,6 +23,8 @@ export interface BrowserErrorLogOptions {
   runtime?: Runtime;
   enabled?: boolean;
   captureConsole?: boolean;
+  /** Records sanitized History navigation breadcrumbs; defaults to false. */
+  captureNavigation?: boolean;
   /** Defaults to true. With a custom transport, automatic network capture requires endpoint for collector exclusion. */
   captureNetwork?: boolean;
   beforeSend?: (event: ErrorEventRecord) => ErrorEventRecord | false | null | void;
@@ -129,6 +131,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
   private readonly endpoint?: string;
   private readonly options: BrowserErrorLogOptions;
   private readonly networkCaptureEnabled: boolean;
+  private readonly navigationCaptureEnabled: boolean;
   private readonly transportTimeoutMs: number;
   private readonly startedAt = now();
   private readonly viewId = newId();
@@ -152,6 +155,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
     this.options = options;
     this.active = options.enabled !== false && typeof window !== 'undefined' && typeof document !== 'undefined';
     this.networkCaptureEnabled = options.captureNetwork !== false && (!options.transport || Boolean(options.endpoint));
+    this.navigationCaptureEnabled = options.captureNavigation === true;
     this.maxQueueSize = boundedNumber(options.maxQueueSize, 1, 100, 50);
     this.transportTimeoutMs = boundedNumber(options.transportTimeoutMs, 250, 60_000, 5_000);
     this.destroySignal = new Promise(resolve => { this.resolveDestroy = resolve; });
@@ -164,6 +168,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
     document.addEventListener('visibilitychange', this.onVisibility);
     if (this.networkCaptureEnabled) addNetworkClient(this);
     if (options.captureConsole === true) addConsoleClient(this);
+    if (this.navigationCaptureEnabled) addNavigationClient(this);
     this.interval = setInterval(() => { void this.flush(); }, boundedNumber(options.flushIntervalMs, 10, 60_000, 10_000));
   }
 
@@ -233,6 +238,26 @@ class Client implements BrowserErrorLogBreadcrumbClient {
     } catch { /* Diagnostics must never affect the host app or error stats. */ }
   }
 
+  reportNavigation(fromHref: string, toHref: string, trigger: NavigationTrigger): void {
+    if (!this.active || this.destroyed || !this.navigationCaptureEnabled) return;
+    try {
+      const cleanFrom = this.cleanUrl(fromHref);
+      const cleanTo = this.cleanUrl(toHref);
+      // cleanUrl's malformed-input fallback is for general diagnostics; navigation only stores valid URLs.
+      const fromUrl = new URL(cleanFrom);
+      const toUrl = new URL(cleanTo);
+      if (![fromUrl.protocol, toUrl.protocol].every(protocol => protocol === 'http:' || protocol === 'https:')) return;
+      if (fromUrl.username || fromUrl.password || fromUrl.search || fromUrl.hash ||
+        toUrl.username || toUrl.password || toUrl.search || toUrl.hash) return;
+      const from = cleanFrom.slice(0, BREADCRUMB_LIMITS.dataString);
+      const to = cleanTo.slice(0, BREADCRUMB_LIMITS.dataString);
+      if (from === to) return;
+      this.breadcrumbs.push({ occurredAt: new Date().toISOString(), category: 'navigation',
+        message: 'Navigation', data: { from, to, trigger } });
+      this.boundBreadcrumbs(this.breadcrumbs);
+    } catch { /* A failing URL hook cannot affect navigation or expose an unfiltered breadcrumb. */ }
+  }
+
   clearBreadcrumbs(): void {
     if (!this.active || this.destroyed) return;
     this.breadcrumbs.length = 0;
@@ -255,6 +280,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
       document.removeEventListener('visibilitychange', this.onVisibility);
       if (this.networkCaptureEnabled) removeNetworkClient(this);
       if (this.options.captureConsole === true) removeConsoleClient(this);
+      if (this.navigationCaptureEnabled) removeNavigationClient(this);
     }
     this.dropped += this.queue.length + this.inFlight;
     this.queue.length = 0;
@@ -633,6 +659,123 @@ interface Instrumentation {
 
 let networkInstrumentation: Instrumentation | undefined;
 let consoleInstrumentation: Instrumentation | undefined;
+let navigationInstrumentation: Instrumentation | undefined;
+
+type NavigationTrigger = 'pushState' | 'replaceState' | 'popstate' | 'hashchange';
+
+function addNavigationClient(client: Client): void {
+  if (!navigationInstrumentation) navigationInstrumentation = installNavigation();
+  navigationInstrumentation?.clients.add(client);
+}
+
+function removeNavigationClient(client: Client): void {
+  const instrumentation = navigationInstrumentation;
+  if (!instrumentation) return;
+  instrumentation.clients.delete(client);
+  if (!instrumentation.clients.size) {
+    instrumentation.cleanup();
+    navigationInstrumentation = undefined;
+  }
+}
+
+function inheritedHistoryDescriptor(historyObject: History, key: 'pushState' | 'replaceState'): PropertyDescriptor | undefined {
+  const seen = new Set<object>();
+  let prototype = Object.getPrototypeOf(historyObject);
+  while (prototype && !seen.has(prototype)) {
+    seen.add(prototype);
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, key);
+    if (descriptor) return descriptor;
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  return undefined;
+}
+
+function installNavigation(): Instrumentation | undefined {
+  let historyObject: History;
+  let lastHref: string;
+  let originalPush: History['pushState'];
+  let originalReplace: History['replaceState'];
+  let ownPush: PropertyDescriptor | undefined;
+  let ownReplace: PropertyDescriptor | undefined;
+  let inheritedPush: PropertyDescriptor | undefined;
+  let inheritedReplace: PropertyDescriptor | undefined;
+  try {
+    historyObject = window.history;
+    lastHref = window.location.href;
+    ownPush = Object.getOwnPropertyDescriptor(historyObject, 'pushState');
+    ownReplace = Object.getOwnPropertyDescriptor(historyObject, 'replaceState');
+    inheritedPush = ownPush ? undefined : inheritedHistoryDescriptor(historyObject, 'pushState');
+    inheritedReplace = ownReplace ? undefined : inheritedHistoryDescriptor(historyObject, 'replaceState');
+    if ((ownPush && !('value' in ownPush)) || (ownReplace && !('value' in ownReplace))) return undefined;
+    if ((!ownPush && (!inheritedPush || !('value' in inheritedPush) || inheritedPush.writable !== true)) ||
+      (!ownReplace && (!inheritedReplace || !('value' in inheritedReplace) || inheritedReplace.writable !== true))) return undefined;
+    originalPush = ownPush ? ownPush.value : historyObject.pushState;
+    originalReplace = ownReplace ? ownReplace.value : historyObject.replaceState;
+    if (typeof originalPush !== 'function' || typeof originalReplace !== 'function') return undefined;
+    const canInstall = (own?: PropertyDescriptor) => own
+      ? own.configurable === true || own.writable === true
+      : Object.isExtensible(historyObject);
+    if (!canInstall(ownPush) || !canInstall(ownReplace)) return undefined;
+  } catch { return undefined; }
+
+  const clients = new Set<Client>();
+  const report = (trigger: NavigationTrigger): void => {
+    try {
+      const toHref = window.location.href;
+      if (toHref === lastHref) return;
+      const fromHref = lastHref;
+      lastHref = toHref;
+      for (const client of clients) {
+        try { client.reportNavigation(fromHref, toHref, trigger); }
+        catch { /* Telemetry must never alter a successful native call. */ }
+      }
+    } catch { /* Location can be unavailable in a restricted host. */ }
+  };
+  const wrappedPush: History['pushState'] = function (this: History, ...args: Parameters<History['pushState']>): void {
+    const result = Reflect.apply(originalPush, this, args);
+    report('pushState');
+    return result;
+  };
+  const wrappedReplace: History['replaceState'] = function (this: History, ...args: Parameters<History['replaceState']>): void {
+    const result = Reflect.apply(originalReplace, this, args);
+    report('replaceState');
+    return result;
+  };
+  const onPopState = () => { report('popstate'); };
+  const onHashChange = () => { report('hashchange'); };
+  const restore = (key: 'pushState' | 'replaceState', wrapper: History['pushState'], own?: PropertyDescriptor): void => {
+    try {
+      const current = Object.getOwnPropertyDescriptor(historyObject, key);
+      if (!current || !('value' in current) || current.value !== wrapper) return;
+      if (own) Object.defineProperty(historyObject, key, own);
+      else Reflect.deleteProperty(historyObject, key);
+    } catch { /* Keep a host-installed replacement and never throw during cleanup. */ }
+  };
+  let pushInstalled = false;
+  let replaceInstalled = false;
+  try {
+    Object.defineProperty(historyObject, 'pushState', { configurable: ownPush?.configurable ?? true,
+      enumerable: ownPush?.enumerable ?? false, writable: ownPush?.writable ?? true, value: wrappedPush });
+    pushInstalled = true;
+    Object.defineProperty(historyObject, 'replaceState', { configurable: ownReplace?.configurable ?? true,
+      enumerable: ownReplace?.enumerable ?? false, writable: ownReplace?.writable ?? true, value: wrappedReplace });
+    replaceInstalled = true;
+    window.addEventListener('popstate', onPopState);
+    window.addEventListener('hashchange', onHashChange);
+  } catch {
+    try { window.removeEventListener('hashchange', onHashChange); } catch { /* best effort */ }
+    try { window.removeEventListener('popstate', onPopState); } catch { /* best effort */ }
+    if (replaceInstalled) restore('replaceState', wrappedReplace, ownReplace);
+    if (pushInstalled) restore('pushState', wrappedPush, ownPush);
+    return undefined;
+  }
+  return { clients, cleanup() {
+    try { window.removeEventListener('popstate', onPopState); } catch { /* best effort */ }
+    try { window.removeEventListener('hashchange', onHashChange); } catch { /* best effort */ }
+    restore('pushState', wrappedPush, ownPush);
+    restore('replaceState', wrappedReplace, ownReplace);
+  } };
+}
 
 function addNetworkClient(client: Client): void {
   if (!networkInstrumentation) networkInstrumentation = installNetwork();

@@ -74,11 +74,25 @@ errorLog.captureException(new Error('주문을 완료하지 못했습니다'));
 errorLog.clearBreadcrumbs(); // 새 흐름 시작; 이미 수집한 오류는 당시 기록을 유지
 ```
 
-클라이언트마다 수동으로 남긴 최근 20개 작업을 UTF-8 JSON 기준 12,000바이트 안에서 유지합니다. 작업 추가만으로 별도 이벤트를 보내지 않으며 이후 오류에 오래된 순서의 복사본을 붙입니다. 각 작업에는 SDK가 만든 UTC 시각, 분류(기본 `manual`, 최대 40자), 메시지(최대 256자), 선택적인 단일 값 데이터(6개 키, 키 80자·문자열 값 200자)가 있습니다. 기존 민감 키·URL·텍스트 필터와 `beforeSend`가 적용되며 `event.breadcrumbs`를 수정하거나 제거할 수 있습니다. `clearBreadcrumbs()`는 이후 수집에 적용되고 `destroy()`도 로컬 작업 기록을 비웁니다.
+클라이언트마다 최근 20개 작업을 UTF-8 JSON 기준 12,000바이트 안에서 유지합니다. 작업 추가만으로 별도 이벤트를 보내지 않으며 이후 오류에 오래된 순서의 복사본을 붙입니다. 각 작업에는 SDK가 만든 UTC 시각, 분류(기본 `manual`, 최대 40자), 메시지(최대 256자), 선택적인 단일 값 데이터(6개 키, 키 80자·문자열 값 200자)가 있습니다. 기존 민감 키·URL·텍스트 필터와 `beforeSend`가 적용되며 `event.breadcrumbs`를 수정하거나 제거할 수 있습니다. `clearBreadcrumbs()`는 이후 수집에 적용되고 `destroy()`도 로컬 작업 기록을 비웁니다.
 
 `init()`은 기존 `BrowserErrorLogClient`를 확장한 `BrowserErrorLogBreadcrumbClient`를 반환합니다. 기존 클라이언트와 React Error Boundary 모형은 원래 인터페이스를 유지할 수 있습니다. 새 메서드를 쓰는 클라이언트의 타입을 직접 선언할 때는 확장 타입을 사용하세요.
 
-뷰어는 두 오류 상세 화면에 이 기록을 표시하고 히스토리 JSON에도 보존합니다. 자체 호스팅 수집기·뷰어를 이 소스 버전으로 갱신해야 새 선택 필드를 저장·표시합니다. 이전 수집기는 이벤트를 받아도 작업 기록을 생략할 수 있습니다. 자체 백엔드는 `@ihyeon/browser-error-log-protocol`의 `isBreadcrumbTrail`로 작업 기록을 검증할 수 있습니다.
+뷰어는 두 오류 상세 화면에 이 기록을 표시하고 히스토리 JSON에도 보존합니다. 자체 호스팅 수집기·뷰어는 작업 기록 지원 버전(0.1.16부터)에서 이 선택 필드를 저장·표시합니다. 이전 수집기는 이벤트를 받아도 작업 기록을 생략할 수 있습니다. 자체 백엔드는 `@ihyeon/browser-error-log-protocol`의 `isBreadcrumbTrail`로 작업 기록을 검증할 수 있습니다.
+
+## SPA 화면 이동 자동 기록
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  captureNavigation: true,
+});
+```
+
+선택 옵션으로 같은 창의 `history.pushState`, `history.replaceState`, 뒤로/앞으로 가기를 통한 문서 내부 이동을 기록합니다. 각 `navigation` 작업에는 필터를 적용한 `from`·`to` URL과 `trigger`가 있습니다. 기본 URL 정책은 자격 정보·쿼리·해시를 제거하며, 필터 후 URL이 같으면 작업을 추가하지 않습니다. 해시만 사용하는 라우터에는 수동 작업 기록이나 앱별 context를 사용하세요.
+
+초기화 이후부터 수동 기록과 같은 최대 20개·12,000바이트 버퍼를 공유합니다. `clearBreadcrumbs()`로 이후 오류의 기록을 비우면 다음 이동부터 다시 기록합니다. 버퍼는 현재 문서의 메모리에 있으며 전체 페이지 로드 간에는 이어지지 않습니다. History의 state와 title 인자는 작업 기록에 복사하지 않습니다. `sanitizeUrl`·`beforeSend` 제어를 유지하며 `destroy()`는 해당 클라이언트의 계측을 해제합니다. 호스트가 History 메서드를 잠그거나 교체하면 이동을 기록하지 못할 수 있습니다.
 
 ## 수집 제어
 

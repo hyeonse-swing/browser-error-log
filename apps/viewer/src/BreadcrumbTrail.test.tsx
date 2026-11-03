@@ -28,7 +28,7 @@ describe('BreadcrumbTrail', () => {
   it('keeps recording order when the clock moves backward, with local time and scalar details', async () => {
     await act(async () => { root.render(<BreadcrumbTrail breadcrumbs={[later, earlier]}/>); });
     expect(container.textContent).toContain('Activity before this error');
-    expect(container.textContent).toContain('Recorded manually, oldest first');
+    expect(container.textContent).toContain('Recorded steps, oldest first');
     expect([...container.querySelectorAll('.breadcrumb-entry .breadcrumb-message')].map(node => node.textContent))
       .toEqual(['Clicked pay', 'Opened /checkout']);
     const times = [...container.querySelectorAll('time')];
@@ -43,7 +43,7 @@ describe('BreadcrumbTrail', () => {
     await act(async () => { root.render(<BreadcrumbTrail breadcrumbs={[earlier]}/>); });
     await act(async () => { setLocale('ko'); });
     expect(container.textContent).toContain('오류 전 작업 기록');
-    expect(container.textContent).toContain('수동 기록 · 오래된 순');
+    expect(container.textContent).toContain('작업 기록 · 오래된 순');
     expect(container.querySelector('time')?.textContent).toBe(new Date(earlier.occurredAt).toLocaleString('ko-KR', { hour12: false }));
   });
 

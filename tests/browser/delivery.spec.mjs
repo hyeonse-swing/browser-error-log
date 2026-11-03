@@ -79,6 +79,64 @@ test.afterAll(async () => {
   if (scratch) await rm(scratch, { recursive: true, force: true });
 });
 
+test('records native SPA navigation without exposing state or changing History semantics', async ({ page }) => {
+  const optedOutEnvironment = randomUUID();
+  const environment = randomUUID();
+  await page.goto(`${origin}/`);
+  const native = await page.evaluate(async ({ environment, optedOutEnvironment }) => {
+    const { init } = await import('/sdk.js');
+    const originalPush = history.pushState;
+    const originalReplace = history.replaceState;
+    const errorName = callback => { try { callback(); return 'none'; } catch (error) { return error.name; } };
+    const baselineError = errorName(() => originalPush.call(history, {}, '', 'https://other.invalid/forbidden'));
+    const optedOut = init({ project: 'browser-test', environment: optedOutEnvironment, endpoint: '/api/events', captureNetwork: false });
+    history.pushState({ privateState: 'opted-out-state' }, '', '/cart?token=hidden#part');
+    optedOut.captureException(new Error('navigation opted out'));
+    await optedOut.flush();
+    optedOut.destroy();
+
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events', captureNetwork: false, captureNavigation: true });
+    const pushResult = history.pushState({ privateState: 'secret-state-payload' }, 'private title', '/checkout?token=hidden#part');
+    const keptState = history.state.privateState;
+    const replaceResult = history.replaceState({ privateState: 'replacement-state-payload' }, '', '/payment?token=hidden');
+    history.pushState({ privateState: 'query-state-payload' }, '', '/payment?token=changed#part');
+    const capturedError = errorName(() => history.pushState({}, '', 'https://other.invalid/forbidden'));
+    const cloneError = errorName(() => history.pushState({ callback: () => {} }, '', '/cannot-clone'));
+    const move = direction => new Promise(resolve => {
+      window.addEventListener('popstate', resolve, { once: true });
+      history[direction]();
+    });
+    await move('back'); // same filtered /payment URL: omitted
+    await move('back'); // /payment -> /cart
+    await move('forward'); // /cart -> /payment
+    client.captureException(new Error('navigation captured'));
+    client.clearBreadcrumbs();
+    history.pushState({ privateState: 'next-state-payload' }, '', '/account?token=hidden#part');
+    client.captureException(new Error('navigation after clear'));
+    await client.flush();
+    client.destroy();
+    return { pushResult, replaceResult, keptState, baselineError, capturedError, cloneError,
+      restored: history.pushState === originalPush && history.replaceState === originalReplace,
+      href: location.href, state: history.state };
+  }, { environment, optedOutEnvironment });
+  expect(native).toMatchObject({ pushResult: undefined, replaceResult: undefined, keptState: 'secret-state-payload',
+    baselineError: 'SecurityError', capturedError: 'SecurityError', cloneError: 'DataCloneError', restored: true,
+    href: `${origin}/account?token=hidden#part`, state: { privateState: 'next-state-payload' } });
+  expect((await events(optedOutEnvironment))[0].breadcrumbs).toBeUndefined();
+  const delivered = await events(environment);
+  const first = delivered.find(event => event.message === 'navigation captured');
+  expect(first.breadcrumbs.map(entry => [entry.category, entry.data.trigger, entry.data.from, entry.data.to])).toEqual([
+    ['navigation', 'pushState', `${origin}/cart`, `${origin}/checkout`],
+    ['navigation', 'replaceState', `${origin}/checkout`, `${origin}/payment`],
+    ['navigation', 'popstate', `${origin}/payment`, `${origin}/cart`],
+    ['navigation', 'popstate', `${origin}/cart`, `${origin}/payment`],
+  ]);
+  const second = delivered.find(event => event.message === 'navigation after clear');
+  expect(second.breadcrumbs).toHaveLength(1);
+  expect(second.breadcrumbs[0].data).toEqual({ from: `${origin}/payment`, to: `${origin}/account`, trigger: 'pushState' });
+  expect(JSON.stringify(delivered)).not.toMatch(/privateState|state-payload|private title|token=|#part|cannot-clone/);
+});
+
 test('preserves manual steps through SDK delivery, both viewer details, and history export', async ({ page }) => {
   const environment = randomUUID();
   await init(page, environment);
