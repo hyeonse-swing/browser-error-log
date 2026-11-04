@@ -38,6 +38,8 @@
 
 마이크로 서버는 요청당 최대 64 KiB와 100건을 허용하고 각 이벤트를 검증합니다. 이는 예제 서버의 제한이며 모든 백엔드의 계약 상수는 아닙니다. 자체 배포에서는 별도 요청 제한, 스키마 검증, 조회 인증, 보관 정책, 앱별 데이터 제거를 적용하세요.
 
+SDK의 선택 옵션 `maxEventsPerMinute`는 클라이언트별 직전 60초의 새 큐 진입 건수를 제한합니다. 유한한 값은 소수점을 내리고 1~1,000으로 조정하며, 생략하거나 유한하지 않으면 제한을 끕니다. 모든 오류 유형이 한도를 공유합니다. 초과 이벤트는 제외하고 기존 `dropped` 통계에 반영하며 집계·지연 이벤트를 별도로 보내지 않습니다. `beforeSend`가 제외한 이벤트와 객체 중복은 한도를 쓰지 않고, 한도가 가득 차면 초과 이벤트의 `beforeSend`를 생략합니다. flush·재시도·beacon 전송·작업 기록은 한도를 초기화하거나 추가로 쓰지 않습니다. 전송 필드가 바뀌지 않아 수집기 갱신이 필요하지 않습니다. 현재 문서의 클라이언트에만 적용하므로 서버 측 제한이나 HTTP 요청 수의 상한을 대신하지 않습니다.
+
 `captureNavigation: true`를 선택하면 같은 창의 문서 내부 History 이동을 기존 작업 기록에 추가합니다. 분류는 `navigation`, 메시지는 `Navigation`, 단일 값 데이터는 `data.from`, `data.to`, `data.trigger`(`pushState`, `replaceState`, `popstate`, `hashchange`)입니다. URL 필터 적용 후 같은 URL이면 생략하며 서버·JSON 계약은 유지합니다. 앱별 동작에는 수동 작업 기록도 사용할 수 있습니다.
 
 `captureNetworkBreadcrumbs: true`는 완료된 fetch·XHR 정보를 같은 작업 기록에 추가합니다. HTTP 응답은 분류 `http`, 메시지 `HTTP response`, 단일 값 데이터 `data.method`, `data.url`, `data.durationMs`, `data.status`를 사용합니다. 실제 전송 실패는 분류 `network`, 메시지 `Network failure`이며 상태를 생략합니다. opaque 응답의 브라우저 상태 `0`은 유지합니다. 의도적인 취소·수집기 요청과 본문·헤더·실패 메시지는 제외합니다. 완료 순서를 유지하고 독립 오류 선택은 기존 `captureNetwork`·`shouldCaptureHttp`가 제어합니다. 사용자 지정 transport에는 자동 네트워크 보고를 위한 `endpoint`가 필요합니다. 저장·JSON 형식은 유지합니다.

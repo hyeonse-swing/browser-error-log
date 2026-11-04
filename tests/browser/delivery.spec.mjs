@@ -80,6 +80,63 @@ test.afterAll(async () => {
   if (scratch) await rm(scratch, { recursive: true, force: true });
 });
 
+test('limits admitted browser events per client across sources and flushes', async ({ page }) => {
+  const environment = randomUUID();
+  const otherEnvironment = randomUUID();
+  await page.goto(`${origin}/`);
+  const result = await page.evaluate(async ({ environment, otherEnvironment }) => {
+    const { init } = await import('/sdk.js');
+    let beforeSendCalls = 0;
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureConsole: true, shouldCaptureHttp: () => true, maxEventsPerMinute: 2,
+      flushIntervalMs: 60_000, beforeSend: event => { beforeSendCalls++; return event; } });
+    client.addBreadcrumb({ category: 'action', message: 'Before capacity' });
+    console.error('capacity console', new Error('console failure'));
+    client.captureException(new Error('capacity manual'));
+    await client.flush();
+    const afterFirstFlush = client.getStats();
+
+    client.addBreadcrumb({ category: 'action', message: 'After capacity' });
+    const afterBreadcrumb = client.getStats();
+    const response = await fetch('/api/health');
+    const responseBody = await response.text();
+    const afterHttp = client.getStats();
+    client.captureException(new Error('throttled manual one'));
+    await client.flush();
+    client.captureException(new Error('throttled manual two'));
+    await client.flush();
+    const afterRetries = client.getStats();
+
+    let otherBeforeSendCalls = 0;
+    const otherClient = init({ project: 'browser-test', environment: otherEnvironment, endpoint: '/api/events',
+      captureNetwork: false, maxEventsPerMinute: 2, beforeSend: event => { otherBeforeSendCalls++; return event; } });
+    otherClient.captureException(new Error('independent client'));
+    await otherClient.flush();
+    const otherStats = otherClient.getStats();
+    otherClient.destroy();
+    client.destroy();
+    return { afterFirstFlush, afterBreadcrumb, afterHttp, afterRetries, otherStats,
+      beforeSendCalls, otherBeforeSendCalls, responseStatus: response.status, responseOk: response.ok,
+      responseBodyLength: responseBody.length };
+  }, { environment, otherEnvironment });
+
+  expect(result.afterFirstFlush).toMatchObject({ queued: 0, sent: 2, dropped: 0 });
+  expect(result.afterBreadcrumb).toEqual(result.afterFirstFlush);
+  expect(result).toMatchObject({ responseStatus: 200, responseOk: true,
+    afterHttp: { queued: 0, sent: 2, dropped: 1 },
+    afterRetries: { queued: 0, sent: 2, dropped: 3 },
+    otherStats: { queued: 0, sent: 1, dropped: 0 },
+    beforeSendCalls: 2, otherBeforeSendCalls: 1 });
+  expect(result.responseBodyLength).toBeGreaterThan(0);
+  await expect.poll(async () => (await events(environment)).length).toBe(2);
+  const delivered = await events(environment);
+  expect(delivered.map(event => event.type).sort()).toEqual(['console', 'manual']);
+  expect(delivered.find(event => event.type === 'console').message).toContain('capacity console');
+  expect(delivered.find(event => event.type === 'manual').message).toBe('capacity manual');
+  expect(delivered.find(event => event.type === 'manual').breadcrumbs.map(entry => entry.message)).toEqual(['Before capacity']);
+  expect((await events(otherEnvironment)).map(event => event.message)).toEqual(['independent client']);
+});
+
 test('keeps fetch and XHR context without creating error events or exposing payloads', async ({ page }) => {
   const environment = randomUUID();
   const received = [];

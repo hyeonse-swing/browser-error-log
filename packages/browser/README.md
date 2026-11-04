@@ -144,6 +144,22 @@ By default, HTTP capture records 5xx responses and network failures, excludes in
 
 For a custom `transport(batch, { signal })`, pass `signal` to your request and reject on delivery failure. Include `endpoint` for collector exclusion when using automatic network error capture or network breadcrumbs; otherwise both are disabled for a custom transport. The default transport omits credentials.
 
+## Limit error bursts
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  maxEventsPerMinute: 60,
+});
+```
+
+`maxEventsPerMinute` optionally caps new events admitted to each client's queue over the preceding 60 seconds. It is disabled by default. Finite values are rounded down and clamped to 1–1,000; omitted or non-finite values disable the limit. All error types share the same budget, including manual and React captures, global errors, promises, console, and selected HTTP/network failures. Excess events are discarded immediately and increase `getStats().dropped`; they are not delayed for later delivery. Capacity returns as each admitted event reaches 60 seconds of age.
+
+Flushing an empty queue does not reset the budget. Retries and beacon delivery reuse admitted events without consuming more capacity; breadcrumbs do not consume it. Duplicate Error objects and events filtered by `beforeSend` do not consume capacity. Once the budget is full, `beforeSend` is skipped for excess events. Admitted events still consume capacity if they are later evicted from the queue or fail delivery.
+
+The budget belongs to this client in the current document; a new client or full page load starts a new one. It limits queue admission, not HTTP request counts, bytes, server-wide traffic, or the work done to construct an event. Use independent server-side limits for your collector.
+
 ## Delivery limits
 
 The default queue holds 50 events and flushes every 10 seconds. Batches contain up to 20 events or 48,000 bytes. Each attempt has a 5-second deadline; retryable failures get up to two retries. `maxQueueSize`, `flushIntervalMs`, and `transportTimeoutMs` are configurable within bounded ranges. These are best-effort limits: offline operation, tab closure, buffer overflow, or exhausted retries can lose events. There is no persistent offline queue or exactly-once guarantee.

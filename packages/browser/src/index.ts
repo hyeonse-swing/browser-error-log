@@ -34,6 +34,8 @@ export interface BrowserErrorLogOptions {
   shouldCaptureHttp?: (status: number, url: string, method: string) => boolean;
   flushIntervalMs?: number;
   maxQueueSize?: number;
+  /** Maximum new events admitted in any rolling 60 seconds; disabled by default. */
+  maxEventsPerMinute?: number;
   /** Per-attempt deadline, clamped to 250–60000 ms; defaults to 5000 ms. */
   transportTimeoutMs?: number;
 }
@@ -142,6 +144,8 @@ class Client implements BrowserErrorLogBreadcrumbClient {
   private readonly queue: ErrorEventRecord[] = [];
   private readonly breadcrumbs: Breadcrumb[] = [];
   private readonly maxQueueSize: number;
+  private readonly maxEventsPerMinute?: number;
+  private readonly admittedAt: number[] = [];
   private readonly cancelWaits = new Set<() => void>();
   private readonly controllers = new Set<AbortController>();
   private readonly destroySignal: Promise<symbol>;
@@ -153,6 +157,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
   private sent = 0;
   private dropped = 0;
   private destroyed = false;
+  private lastAdmissionClock?: number;
 
   constructor(options: BrowserErrorLogOptions) {
     this.options = options;
@@ -162,6 +167,8 @@ class Client implements BrowserErrorLogBreadcrumbClient {
     this.networkBreadcrumbCaptureEnabled = options.captureNetworkBreadcrumbs === true && automaticNetworkAllowed;
     this.navigationCaptureEnabled = options.captureNavigation === true;
     this.maxQueueSize = boundedNumber(options.maxQueueSize, 1, 100, 50);
+    this.maxEventsPerMinute = typeof options.maxEventsPerMinute === 'number' && Number.isFinite(options.maxEventsPerMinute)
+      ? boundedNumber(options.maxEventsPerMinute, 1, 1000, 1) : undefined;
     this.transportTimeoutMs = boundedNumber(options.transportTimeoutMs, 250, 60_000, 5_000);
     this.destroySignal = new Promise(resolve => { this.resolveDestroy = resolve; });
     if (!this.active) return;
@@ -314,6 +321,8 @@ class Client implements BrowserErrorLogBreadcrumbClient {
     this.dropped += this.queue.length + this.inFlight;
     this.queue.length = 0;
     this.breadcrumbs.length = 0;
+    this.admittedAt.length = 0;
+    this.lastAdmissionClock = undefined;
     for (const cancel of this.cancelWaits) cancel();
     for (const controller of this.controllers) controller.abort();
     this.resolveDestroy(DESTROYED);
@@ -576,8 +585,22 @@ class Client implements BrowserErrorLogBreadcrumbClient {
     };
   }
 
+  private admissionTime(): number | undefined {
+    const reading = now();
+    const current = Number.isFinite(reading)
+      ? Math.max(0, reading, this.lastAdmissionClock ?? 0)
+      : this.lastAdmissionClock ?? 0;
+    this.lastAdmissionClock = current;
+    while (this.admittedAt.length && current - this.admittedAt[0] >= 60_000) this.admittedAt.shift();
+    return this.admittedAt.length < this.maxEventsPerMinute! ? current : undefined;
+  }
+
   private enqueue(event: ErrorEventRecord): boolean {
     if (this.destroyed) return false;
+    if (this.maxEventsPerMinute !== undefined && this.admissionTime() === undefined) {
+      this.dropped++;
+      return false;
+    }
     let finalEvent = event;
     if (this.options.beforeSend) {
       try {
@@ -591,8 +614,11 @@ class Client implements BrowserErrorLogBreadcrumbClient {
     }
     // A single event can never make a batch exceed its byte budget.
     if (byteLength(JSON.stringify(finalEvent)) > MAX_BATCH_BYTES) { this.dropped++; return false; }
+    const admittedAt = this.maxEventsPerMinute === undefined ? undefined : this.admissionTime();
+    if (this.maxEventsPerMinute !== undefined && admittedAt === undefined) { this.dropped++; return false; }
     if (this.queue.length >= this.maxQueueSize) { this.queue.shift(); this.dropped++; }
     this.queue.push(finalEvent);
+    if (admittedAt !== undefined) this.admittedAt.push(admittedAt);
     if (this.queue.length >= this.maxQueueSize) void this.flush();
     return true;
   }
