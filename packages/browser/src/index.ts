@@ -538,7 +538,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
       project: this.cleanText(this.options.project, 80),
       environment: this.cleanText(this.options.environment ?? 'development', 80),
       release: this.cleanText(this.options.release ?? 'unknown', 120),
-      sdkVersion: '0.1.18',
+      sdkVersion: '0.1.19',
       occurredAt: new Date().toISOString(),
       viewId: this.viewId,
       sequence: ++this.sequence,
