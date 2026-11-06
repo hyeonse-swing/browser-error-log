@@ -23,6 +23,8 @@ export interface BrowserErrorLogOptions {
   runtime?: Runtime;
   enabled?: boolean;
   captureConsole?: boolean;
+  /** Includes up to four sanitized Error.cause entries in exception stacks; defaults to false. */
+  captureErrorCause?: boolean;
   /** Records sanitized History navigation breadcrumbs; defaults to false. */
   captureNavigation?: boolean;
   /** Defaults to true. With a custom transport, automatic network capture requires endpoint for collector exclusion. */
@@ -154,6 +156,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   private readonly networkCaptureEnabled: boolean;
   private readonly networkBreadcrumbCaptureEnabled: boolean;
   private readonly navigationCaptureEnabled: boolean;
+  private readonly captureErrorCause: boolean;
   private readonly transportTimeoutMs: number;
   private readonly startedAt = now();
   private readonly viewId = newId();
@@ -189,6 +192,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     this.networkCaptureEnabled = options.captureNetwork !== false && automaticNetworkAllowed;
     this.networkBreadcrumbCaptureEnabled = options.captureNetworkBreadcrumbs === true && automaticNetworkAllowed;
     this.navigationCaptureEnabled = options.captureNavigation === true;
+    this.captureErrorCause = options.captureErrorCause === true;
     this.maxQueueSize = boundedNumber(options.maxQueueSize, 1, 100, 50);
     this.maxEventsPerMinute = typeof options.maxEventsPerMinute === 'number' && Number.isFinite(options.maxEventsPerMinute)
       ? boundedNumber(options.maxEventsPerMinute, 1, 1000, 1) : undefined;
@@ -213,7 +217,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
       if (error !== null && (typeof error === 'object' || typeof error === 'function')) {
         if (this.seenErrors.has(error)) { this.deduplicated++; return; }
       }
-      const fields = errorFields(error);
+      const fields = this.exceptionFields(error);
       const type = EVENT_TYPES.has(extra.type as EventType) ? extra.type! : 'manual';
       const event = this.makeEvent(type, fields.message, {
         name: fields.name,
@@ -285,9 +289,10 @@ class Client implements BrowserErrorLogDiagnosticsClient {
       const message = values.map(safeString).join(' ');
       let fields: ReturnType<typeof errorFields> | undefined;
       for (const value of values) {
-        try {
-          if (value instanceof Error) { fields = errorFields(value); break; }
-        } catch { /* a hostile value must not suppress the console event */ }
+        let isError = false;
+        try { isError = value instanceof Error; }
+        catch { /* a hostile value must not suppress the console event */ }
+        if (isError) { fields = this.exceptionFields(value); break; }
       }
       this.enqueue(this.makeEvent('console', message, { name: fields?.name, stack: fields?.stack }));
     }
@@ -459,6 +464,33 @@ class Client implements BrowserErrorLogDiagnosticsClient {
       .slice(0, length);
   }
 
+  private exceptionFields(error: unknown): ReturnType<typeof errorFields> {
+    const fields = errorFields(error);
+    if (!this.captureErrorCause || error === null || (typeof error !== 'object' && typeof error !== 'function')) return fields;
+    const seen = new WeakSet<object>([error]);
+    const segments: string[] = [];
+    let current: object = error;
+    for (let depth = 0; depth < 4; depth++) {
+      const cause = read(current, 'cause');
+      if (cause === null || (typeof cause !== 'object' && typeof cause !== 'function') || seen.has(cause)) break;
+      seen.add(cause);
+      const message = read(cause, 'message');
+      const stack = read(cause, 'stack');
+      if (typeof message !== 'string' && typeof stack !== 'string') break;
+      const name = read(cause, 'name');
+      const safeName = this.cleanText(typeof name === 'string' ? name : 'Error', 100);
+      const safeMessage = typeof message === 'string' ? this.cleanText(message, 256) : '';
+      const safeStack = typeof stack === 'string' ? this.cleanText(stack, 480) : '';
+      segments.push(`Caused by: ${safeName}: ${safeMessage}${safeStack ? `\n${safeStack}` : ''}`.slice(0, 480));
+      current = cause;
+    }
+    if (!segments.length) return fields;
+    const outer = fields.stack === undefined
+      ? `${this.cleanText(fields.name ?? 'Error', 100)}: ${this.cleanText(fields.message, 256)}`
+      : this.cleanText(fields.stack, 2048);
+    return { ...fields, stack: `${outer}\n${segments.join('\n')}` };
+  }
+
   private cleanContext(input: unknown): ErrorEventRecord['context'] {
     if (!input || typeof input !== 'object') return undefined;
     const output: NonNullable<ErrorEventRecord['context']> = {};
@@ -608,7 +640,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
       type: EVENT_TYPES.has(type as EventType) ? type as EventType : base.type,
       message: this.cleanText(read(candidate, 'message') ?? base.message, 1024),
       ...(name === undefined ? { name: base.name } : { name: this.cleanText(name, 100) }),
-      ...(stack === undefined ? { stack: base.stack } : { stack: this.cleanText(stack, 4096) }),
+      ...(stack === undefined ? { stack: undefined } : { stack: this.cleanText(stack, 4096) }),
       ...(componentStack === undefined ? { componentStack: base.componentStack } : { componentStack: this.cleanText(componentStack, 2048) }),
       page: this.cleanUrl(read(candidate, 'page') ?? base.page),
       runtime: RUNTIMES.has(runtime as Runtime) ? runtime as Runtime : base.runtime,

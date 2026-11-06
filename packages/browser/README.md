@@ -65,6 +65,25 @@ try {
 
 The optional `@ihyeon/browser-error-log-react` package provides an Error Boundary. The base SDK does not require React. Imports and initialization are safe during SSR but do not collect server-side errors; initialize in your framework's browser/client entry point.
 
+## Include linked error causes
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  captureErrorCause: true,
+});
+
+const cause = new TypeError('Invalid response');
+errorLog.captureException(new Error('Dashboard could not load', { cause }));
+```
+
+This opt-in setting follows up to four linked `cause` objects and appends their names, messages, and available stacks as `Caused by:` sections in the existing `stack` field. The outer error keeps its original name and message; causes do not produce separate events or consume additional rate-limit capacity. Manual, global, promise, and React captures use this path. With console capture enabled, it also applies to the first existing same-window Error argument. Automatic network error events keep their existing metadata-only behavior.
+
+Only objects with a string `message` or `stack` are followed, including Error objects from another window. Primitive causes, other object payloads, and `AggregateError.errors` are not expanded. Cycles and inaccessible properties stop or omit cause information without affecting the app. The option is disabled by default and is fixed at initialization; disabled capture does not read `cause`.
+
+When a valid cause is present, the outer stack uses up to 2,048 characters and each cause section up to 480, within the existing 4,096-character total stack limit. The existing text/URL filters run before section clipping. No new protocol fields or collector upgrade are needed, and existing viewer stack details show the chain. Review application-specific filters before opting in: cause messages and paths can contain additional sensitive data. `beforeSend` can edit the combined stack, remove it with `delete event.stack` or `event.stack = undefined`, or reject the event. A failing URL sanitizer drops the event rather than sending unfiltered cause data.
+
 ## Record the steps before an error
 
 ```ts

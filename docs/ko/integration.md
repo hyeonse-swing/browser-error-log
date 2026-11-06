@@ -46,6 +46,8 @@ SDK의 선택 옵션 `maxEventsPerMinute`는 클라이언트별 직전 60초의 
 
 `getDiagnostics()`는 `EventBatch`나 `ErrorEventRecord`에 포함되지 않는 SDK 로컬 API입니다. 큐·전송·폐기 총합, 전송 중인 이벤트 수, 별도의 `beforeSend` 제외·동일 객체 중복 제외 횟수, 원인별 `droppedByReason`(`rateLimit`, `queueOverflow`, `payloadTooLarge`, `processingError`, `deliveryError`, `destroyed`)를 제공합니다. 원인별 합은 기존 `dropped` 총합과 같습니다. 통계를 읽을 때는 콜백 실행이나 요청 없이 독립 복사본을 반환합니다. 서버 갱신이나 진단 endpoint가 필요 없으며 `getStats()`도 유지합니다. SDK가 관측한 판단과 최선형 전송 통계이므로 수집기의 저장 완료를 뜻하지는 않습니다.
 
+`captureErrorCause: true`는 오류 형태의 `cause` 객체를 최대 4단계 따라가 기존 `stack` 문자열에 `Caused by:` 구간으로 붙이는 선택 옵션입니다. 바깥 이름·메시지와 이벤트 수는 유지합니다. 문자열 이름·메시지·스택만 쓰며 임의의 원인 데이터나 AggregateError 배열은 직렬화하지 않습니다. 필터 적용 후 바깥 2,048자·각 원인 구간 480자로 전체 스택 4,096자 한도를 공유합니다. 예외 수집 경로와 기존 같은 창의 첫 console Error에 적용하고 자동 네트워크 이벤트는 기존 메타데이터 수집 방식을 유지합니다. `beforeSend`에서 stack을 삭제하거나 `undefined`로 지정하면 전체 스택을 제거합니다. 프로토콜 필드 추가나 수집기·뷰어 갱신은 필요 없습니다.
+
 ## 이벤트 조회
 
 뷰어의 기본 API 경로는 `/api`이며 목록과 상세 조회를 사용합니다.

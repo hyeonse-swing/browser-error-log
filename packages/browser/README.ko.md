@@ -65,6 +65,25 @@ try {
 
 선택적인 `@ihyeon/browser-error-log-react` 패키지는 Error Boundary를 제공합니다. 기본 SDK에는 React가 필요하지 않습니다. SSR에서 import·초기화할 수 있지만 서버 오류는 수집하지 않으므로 프레임워크의 브라우저/클라이언트 진입점에서 초기화하세요.
 
+## 연결된 원인 오류 수집
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  captureErrorCause: true,
+});
+
+const cause = new TypeError('Invalid response');
+errorLog.captureException(new Error('Dashboard could not load', { cause }));
+```
+
+선택 옵션으로 최대 4단계의 `cause` 객체를 따라가 이름·메시지·스택을 기존 `stack` 필드의 `Caused by:` 구간에 붙입니다. 바깥 오류의 이름과 메시지는 유지하며 원인별로 이벤트를 추가하거나 수집 한도를 더 쓰지 않습니다. 수동·전역·Promise·React 수집에 적용하고, console 수집이 켜져 있으면 기존처럼 같은 창의 첫 Error 인자에도 적용합니다. 자동 네트워크 오류 이벤트는 기존 메타데이터 수집 방식을 유지합니다.
+
+문자열 `message` 또는 `stack`이 있는 객체만 따라가며 다른 창에서 생성한 Error도 포함합니다. 원시 값 원인, 그 밖의 객체 데이터, `AggregateError.errors`는 펼치지 않습니다. 순환 참조나 읽을 수 없는 속성은 앱에 영향을 주지 않고 원인 정보 추적을 중단하거나 생략합니다. 기본값은 꺼짐이고 초기화 시 고정하며, 수집이 꺼져 있으면 `cause`를 읽지 않습니다.
+
+유효한 원인이 있으면 바깥 스택은 최대 2,048자, 각 원인 구간은 최대 480자를 사용하며 전체 스택은 기존 4,096자 안으로 제한합니다. 구간을 자르기 전에 기존 텍스트·URL 필터를 적용합니다. 프로토콜 필드나 수집기 갱신 없이 기존 뷰어의 스택 상세에서 볼 수 있습니다. 원인 메시지와 경로에도 민감정보가 있을 수 있으므로 앱별 필터를 검토한 뒤 켜세요. `beforeSend`에서 합쳐진 스택을 수정하거나 `delete event.stack`·`event.stack = undefined`로 제거하고 이벤트 전체를 제외할 수도 있습니다. URL 필터가 실패하면 필터링하지 않은 원인 정보를 보내지 않고 이벤트를 버립니다.
+
 ## 오류 전 작업 기록
 
 ```ts

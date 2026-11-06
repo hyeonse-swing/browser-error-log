@@ -46,6 +46,8 @@ The SDK's optional `maxEventsPerMinute` limits new queue admissions per client o
 
 `getDiagnostics()` is a local SDK API, not part of `EventBatch` or `ErrorEventRecord`. It exposes queue/sent/drop totals, in-flight event count, separate `beforeSend` filter and same-object deduplication counts, and `droppedByReason` (`rateLimit`, `queueOverflow`, `payloadTooLarge`, `processingError`, `deliveryError`, `destroyed`). The reason counts sum to the existing dropped total. Reads return independent counter snapshots without invoking hooks or making requests. No server upgrade or diagnostic endpoint is required; `getStats()` remains unchanged. These are SDK-observed decisions and best-effort delivery counts, not collector storage acknowledgements.
 
+`captureErrorCause: true` optionally appends up to four linked error-like `cause` objects to the existing `stack` string as `Caused by:` sections. Outer name/message and event count remain unchanged. Only string name/message/stack content is used; arbitrary cause payloads and aggregate error arrays are not serialized. Sanitized sections share the 4,096-character stack bound (outer 2,048, each cause section 480). It applies to exception paths and the existing first same-window console Error, while automatic network events retain their existing metadata-only behavior. `beforeSend` can remove the full stack by deleting it or assigning `undefined`. This option adds no protocol fields and requires no collector or viewer upgrade.
+
 ## Read events
 
 The viewer expects list and detail operations, with `/api` as its default base path:

@@ -26,7 +26,7 @@ async function availablePort() {
 
 async function events(environment) {
   const response = await fetch(`${origin}/api/events?project=browser-test&environment=${environment}`);
-  expect(response.ok).toBe(true);
+  expect(response.ok, `Collector query returned HTTP ${response.status}`).toBe(true);
   return (await response.json()).events;
 }
 
@@ -57,6 +57,7 @@ test.beforeAll(async () => {
   collector = spawn(process.execPath, [resolve('dist/micro-server/server.mjs')], {
     env: { ...env, MICRO_HOST: '127.0.0.1', MICRO_PORT: String(port),
       MICRO_PROJECTS: 'browser-test', MICRO_STORAGE: 'sqlite',
+      MICRO_REQUESTS_PER_MINUTE: '1000', // This suite exercises delivery; server rate limits have dedicated tests.
       MICRO_PUBLIC_DIR: publicDir, MICRO_DATA_DIR: join(scratch, 'data') },
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -78,6 +79,80 @@ test.afterAll(async () => {
     try { await closed; } finally { clearTimeout(timeout); }
   }
   if (scratch) await rm(scratch, { recursive: true, force: true });
+});
+
+test('delivers sanitized opt-in Error causes without changing the event wire shape', async ({ page }) => {
+  const defaultEnvironment = randomUUID();
+  const enabledEnvironment = randomUUID();
+  const collectorBodies = [];
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/events') {
+      collectorBodies.push(request.postDataJSON());
+    }
+  });
+  await page.goto(`${origin}/`);
+  const result = await page.evaluate(async ({ defaultEnvironment, enabledEnvironment }) => {
+    const { init } = await import('/sdk.js');
+    let causeReads = 0;
+    const defaultClient = init({ project: 'browser-test', environment: defaultEnvironment,
+      endpoint: '/api/events', captureNetwork: false, flushIntervalMs: 60_000 });
+    const defaultError = new Error('default outer');
+    Object.defineProperty(defaultError, 'cause', { get() {
+      causeReads++;
+      return new TypeError('default inner private');
+    } });
+    defaultClient.captureException(defaultError);
+    await defaultClient.flush();
+    const defaultStats = defaultClient.getStats();
+    defaultClient.destroy();
+
+    const enabledClient = init({ project: 'browser-test', environment: enabledEnvironment,
+      endpoint: '/api/events', captureNetwork: false, captureErrorCause: true, flushIntervalMs: 60_000,
+      beforeSend: event => {
+        if (event.message === 'remove stack') delete event.stack;
+        return event;
+      } });
+    const inner = new TypeError('inner failure');
+    inner.stack = 'TypeError: inner failure\n    at run (https://cause-user:cause-pass@example.test/private/path?token=cause-query-secret#cause-fragment-secret)\n    at person@example.test Bearer causeBearerSecret';
+    enabledClient.captureException(new Error('wrapped outer', { cause: inner }));
+    enabledClient.captureException(new Error('remove stack', { cause: new Error('hidden inner') }));
+    await enabledClient.flush();
+    const enabledStats = enabledClient.getStats();
+    enabledClient.destroy();
+    return { causeReads, defaultStats, enabledStats };
+  }, { defaultEnvironment, enabledEnvironment });
+
+  expect(result).toEqual({ causeReads: 0,
+    defaultStats: { queued: 0, sent: 1, dropped: 0 },
+    enabledStats: { queued: 0, sent: 2, dropped: 0 } });
+  expect(collectorBodies).toHaveLength(2);
+  expect(collectorBodies.every(batch => batch.schemaVersion === 1 && Object.keys(batch).sort().join(',') === 'events,schemaVersion')).toBe(true);
+  const defaultWire = collectorBodies.flatMap(batch => batch.events).filter(event => event.environment === defaultEnvironment);
+  const enabledWire = collectorBodies.flatMap(batch => batch.events).filter(event => event.environment === enabledEnvironment);
+  expect(defaultWire).toHaveLength(1);
+  expect(defaultWire[0]).toMatchObject({ type: 'manual', name: 'Error', message: 'default outer' });
+  expect(defaultWire[0].stack).not.toContain('default inner private');
+  expect(enabledWire).toHaveLength(2);
+  const wrapped = enabledWire.find(event => event.message === 'wrapped outer');
+  const removed = enabledWire.find(event => event.message === 'remove stack');
+  expect(wrapped).toMatchObject({ type: 'manual', name: 'Error', message: 'wrapped outer' });
+  expect(wrapped.stack).toContain('Caused by: TypeError: inner failure');
+  expect(wrapped.stack).toContain('https://example.test/private/path');
+  expect(wrapped.stack.length).toBeLessThanOrEqual(4096);
+  expect(removed).not.toHaveProperty('stack');
+  expect(JSON.stringify(collectorBodies)).not.toMatch(/cause-user|cause-pass|cause-query-secret|cause-fragment-secret|person@example.test|causeBearerSecret|default inner private|hidden inner/);
+  expect([...defaultWire, ...enabledWire].every(event => !Object.hasOwn(event, 'cause'))).toBe(true);
+
+  await expect.poll(async () => (await events(defaultEnvironment)).length).toBe(1);
+  await expect.poll(async () => (await events(enabledEnvironment)).length).toBe(2);
+  const defaultStored = await events(defaultEnvironment);
+  const enabledStored = await events(enabledEnvironment);
+  expect(defaultStored[0]).toMatchObject(defaultWire[0]);
+  for (const event of enabledWire) {
+    const stored = enabledStored.find(item => item.eventId === event.eventId);
+    expect(stored).toMatchObject(event);
+    expect(Object.hasOwn(stored, 'stack')).toBe(Object.hasOwn(event, 'stack'));
+  }
 });
 
 test('reports local diagnostics without changing delivery or the collector payload', async ({ page }) => {
