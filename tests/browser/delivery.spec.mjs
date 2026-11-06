@@ -81,6 +81,70 @@ test.afterAll(async () => {
   if (scratch) await rm(scratch, { recursive: true, force: true });
 });
 
+test('filters and sanitizes breadcrumbs at creation without changing error delivery', async ({ page }) => {
+  const environment = randomUUID();
+  const collectorBodies = [];
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/events') {
+      collectorBodies.push(request.postDataJSON());
+    }
+  });
+  await page.goto(`${origin}/`);
+  const result = await page.evaluate(async environment => {
+    const { init } = await import('/sdk.js');
+    const hookCalls = [];
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureNavigation: true, captureNetworkBreadcrumbs: true, captureNetwork: false,
+      flushIntervalMs: 60_000, beforeBreadcrumb: breadcrumb => {
+        hookCalls.push(`${breadcrumb.category}:${breadcrumb.message}`);
+        if (breadcrumb.message === 'Draft filtered step') return false;
+        if (breadcrumb.category === 'http' && breadcrumb.data?.url.endsWith('/api/health')) return null;
+        if (breadcrumb.message === 'Checkout click') {
+          breadcrumb.message = 'Checkout confirmed';
+          breadcrumb.occurredAt = '2000-01-01T00:00:00.000Z';
+          breadcrumb.data = { ...breadcrumb.data, route: '/checkout?token=manual-secret#fragment',
+            email: 'learner@example.test', authorization: 'Bearer authorization-secret',
+            note: 'Bearer note-secret' };
+          breadcrumb.privateExtra = 'unrecognized-secret';
+        }
+      } });
+    client.addBreadcrumb({ category: 'manual', message: 'Draft filtered step',
+      data: { note: 'filtered-step-secret' } });
+    client.addBreadcrumb({ category: 'manual', message: 'Checkout click', data: { amount: 1 } });
+    history.pushState({ privateState: 'history-state-secret' }, '', '/checkout?token=history-secret#fragment');
+    const response = await fetch('/api/health?token=http-secret');
+    const responseStatus = response.status;
+    client.captureException(new Error('breadcrumb hook failure'));
+    const callsAtCapture = [...hookCalls];
+    await client.flush();
+    const stats = client.getStats();
+    client.destroy();
+    return { hookCalls, callsAtCapture, responseStatus, stats };
+  }, environment);
+
+  const expectedCalls = ['manual:Draft filtered step', 'manual:Checkout click',
+    'navigation:Navigation', 'http:HTTP response'];
+  expect(result).toEqual({ hookCalls: expectedCalls, callsAtCapture: expectedCalls,
+    responseStatus: 200, stats: { queued: 0, sent: 1, dropped: 0 } });
+  expect(collectorBodies).toHaveLength(1);
+  expect(collectorBodies[0]).toMatchObject({ schemaVersion: 1, events: [
+    { type: 'manual', message: 'breadcrumb hook failure' },
+  ] });
+  const wire = collectorBodies[0].events[0];
+  expect(wire.breadcrumbs).toHaveLength(2);
+  expect(wire.breadcrumbs[0]).toMatchObject({ category: 'manual', message: 'Checkout confirmed',
+    data: { amount: 1, route: '/checkout', email: '[REDACTED_EMAIL]', note: 'Bearer [REDACTED]' } });
+  expect(Object.keys(wire.breadcrumbs[0]).sort()).toEqual(['category', 'data', 'message', 'occurredAt']);
+  expect(Object.keys(wire.breadcrumbs[0].data).sort()).toEqual(['amount', 'email', 'note', 'route']);
+  expect(wire.breadcrumbs[0].occurredAt).not.toBe('2000-01-01T00:00:00.000Z');
+  expect(wire.breadcrumbs[1]).toMatchObject({ category: 'navigation', message: 'Navigation',
+    data: { from: `${origin}/`, to: `${origin}/checkout`, trigger: 'pushState' } });
+  expect(JSON.stringify(collectorBodies)).not.toMatch(/Draft filtered step|filtered-step-secret|manual-secret|history-secret|history-state-secret|http-secret|learner@example.test|authorization-secret|note-secret|unrecognized-secret|api\/health/);
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+  const [stored] = await events(environment);
+  expect(stored.breadcrumbs).toEqual(wire.breadcrumbs);
+});
+
 test('opt-in resource load failures reach the collector and viewer without DOM details', async ({ page }) => {
   const defaultEnvironment = randomUUID();
   const environment = randomUUID();

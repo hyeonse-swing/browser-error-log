@@ -117,6 +117,28 @@ errorLog.clearBreadcrumbs(); // 새 흐름 시작; 이미 수집한 오류는 �
 
 뷰어는 두 오류 상세 화면에 이 기록을 표시하고 히스토리 JSON에도 보존합니다. 자체 호스팅 수집기·뷰어는 작업 기록 지원 버전(0.1.16부터)에서 이 선택 필드를 저장·표시합니다. 이전 수집기는 이벤트를 받아도 작업 기록을 생략할 수 있습니다. 자체 백엔드는 `@ihyeon/browser-error-log-protocol`의 `isBreadcrumbTrail`로 작업 기록을 검증할 수 있습니다.
 
+## 저장 전 작업 기록 필터
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  captureNetworkBreadcrumbs: true,
+  beforeBreadcrumb(breadcrumb) {
+    const url = breadcrumb.data?.url;
+    if (breadcrumb.category === 'http' && typeof url === 'string' && url.endsWith('/api/health')) return null;
+    if (breadcrumb.category === 'manual') breadcrumb.category = 'action';
+    return breadcrumb;
+  },
+});
+```
+
+동기 콜백 `beforeBreadcrumb`는 유효한 수동·화면 이동·네트워크 작업을 생성할 때 초기 SDK 정제 후 로컬 버퍼에 저장하기 전에 한 번 실행합니다. `false`·`null`을 반환하면 항목을 제외하고, `BreadcrumbInput`을 반환하면 교체하며, 반환하지 않으면 전달한 복사본의 수정 내용을 사용합니다. 반환값에도 기존 필터와 크기 제한을 다시 적용하고 발생 시각은 SDK의 원래 값을 유지하며 추가 필드는 무시합니다.
+
+콜백은 독립된 복사본을 받으므로 나중에 값을 바꿔도 현재 버퍼나 이미 큐에 담긴 오류의 기록을 수정하지 않습니다. 콜백 예외·잘못된 반환값·반환값 정제 실패는 해당 작업만 제외하며 오류 통계를 바꾸지 않습니다. 네트워크 작업을 제외해도 독립 HTTP·네트워크 오류 이벤트는 기존 수집 정책을 따릅니다. 오류 선택에는 `captureNetwork`·`shouldCaptureHttp`·`beforeSend`를 사용하세요. 콜백 실행 중 다시 추가하려는 작업은 무시하며, 콜백에서 클라이언트를 종료하면 이후 그 작업을 저장하지 않습니다.
+
+오류가 작업 기록을 복사할 때, `beforeSend` 반환값 정제, 통계 조회, 전송·재시도에서는 이 콜백을 다시 실행하지 않습니다. 최종 이벤트 필터는 기존 `beforeSend`입니다. 이 옵션으로 추가 이벤트·요청·프로토콜 필드를 만들지 않으며 수집기 갱신도 필요하지 않습니다.
+
 ## SPA 화면 이동 자동 기록
 
 ```ts

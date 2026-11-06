@@ -33,6 +33,8 @@ export interface BrowserErrorLogOptions {
   captureNetwork?: boolean;
   /** Records sanitized fetch/XHR completion breadcrumbs; defaults to false. Custom transports require endpoint. */
   captureNetworkBreadcrumbs?: boolean;
+  /** Filters or replaces each sanitized breadcrumb before it enters the trail. */
+  beforeBreadcrumb?: (breadcrumb: Breadcrumb) => BreadcrumbInput | false | null | void;
   beforeSend?: (event: ErrorEventRecord) => ErrorEventRecord | false | null | void;
   sanitizeUrl?: (url: string) => string;
   shouldCaptureHttp?: (status: number, url: string, method: string) => boolean;
@@ -166,6 +168,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   private readonly seenErrors = new WeakSet<object>();
   private readonly queue: ErrorEventRecord[] = [];
   private readonly breadcrumbs: Breadcrumb[] = [];
+  private recordingBreadcrumb = false;
   private readonly maxQueueSize: number;
   private readonly maxEventsPerMinute?: number;
   private readonly admittedAt: number[] = [];
@@ -260,10 +263,9 @@ class Client implements BrowserErrorLogDiagnosticsClient {
             durationMs: boundedNumber(durationMs, 0, 3_600_000, 0),
           };
           if (status !== undefined && Number.isInteger(status) && status >= 0 && status <= 599) data.status = status;
-          this.breadcrumbs.push({ occurredAt: new Date().toISOString(),
+          this.appendBreadcrumb({ occurredAt: new Date().toISOString(),
             category: status === undefined ? 'network' : 'http',
             message: status === undefined ? 'Network failure' : 'HTTP response', data });
-          this.boundBreadcrumbs(this.breadcrumbs);
         } else if (captureError && !cleaned.safeForError) {
           this.recordDrop('processingError');
           return;
@@ -305,13 +307,32 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   }
 
   addBreadcrumb(input: BreadcrumbInput): void {
-    if (!this.active || this.destroyed) return;
+    if (!this.active || this.destroyed || this.recordingBreadcrumb) return;
     try {
       const breadcrumb = this.cleanBreadcrumb(input, new Date().toISOString());
       if (!breadcrumb) return;
+      this.appendBreadcrumb(breadcrumb);
+    } catch { /* Diagnostics must never affect the host app or error stats. */ }
+  }
+
+  private appendBreadcrumb(breadcrumb: Breadcrumb): void {
+    if (this.recordingBreadcrumb || this.destroyed) return;
+    if (!this.options.beforeBreadcrumb) {
       this.breadcrumbs.push(breadcrumb);
       this.boundBreadcrumbs(this.breadcrumbs);
-    } catch { /* Diagnostics must never affect the host app or error stats. */ }
+      return;
+    }
+    this.recordingBreadcrumb = true;
+    try {
+      const copy = { ...breadcrumb, ...(breadcrumb.data ? { data: { ...breadcrumb.data } } : {}) };
+      const result = this.options.beforeBreadcrumb(copy);
+      if (result === false || result === null) return;
+      const cleaned = this.cleanBreadcrumb(result === undefined ? copy : result, breadcrumb.occurredAt);
+      if (!cleaned || this.destroyed) return;
+      this.breadcrumbs.push(cleaned);
+      this.boundBreadcrumbs(this.breadcrumbs);
+    } catch { /* A breadcrumb hook cannot affect the host app or error stats. */ }
+    finally { this.recordingBreadcrumb = false; }
   }
 
   reportNavigation(fromHref: string, toHref: string, trigger: NavigationTrigger): void {
@@ -321,9 +342,8 @@ class Client implements BrowserErrorLogDiagnosticsClient {
       const to = this.cleanBreadcrumbUrl(toHref).url;
       if (!from || !to) return;
       if (from === to) return;
-      this.breadcrumbs.push({ occurredAt: new Date().toISOString(), category: 'navigation',
+      this.appendBreadcrumb({ occurredAt: new Date().toISOString(), category: 'navigation',
         message: 'Navigation', data: { from, to, trigger } });
-      this.boundBreadcrumbs(this.breadcrumbs);
     } catch { /* A failing URL hook cannot affect navigation or expose an unfiltered breadcrumb. */ }
   }
 

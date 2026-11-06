@@ -117,6 +117,28 @@ Each client keeps the latest 20 recorded steps, within a 12,000-byte UTF-8 JSON 
 
 The viewer shows these steps in both error detail views and preserves them in history JSON. Use a collector and viewer with breadcrumb support (introduced in 0.1.16) to retain and display this optional field; older collectors may accept an event while omitting its breadcrumbs. Custom backends can validate the trail with `isBreadcrumbTrail` from `@ihyeon/browser-error-log-protocol`.
 
+## Filter steps before they are stored
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  captureNetworkBreadcrumbs: true,
+  beforeBreadcrumb(breadcrumb) {
+    const url = breadcrumb.data?.url;
+    if (breadcrumb.category === 'http' && typeof url === 'string' && url.endsWith('/api/health')) return null;
+    if (breadcrumb.category === 'manual') breadcrumb.category = 'action';
+    return breadcrumb;
+  },
+});
+```
+
+The synchronous `beforeBreadcrumb` hook runs once when a valid manual, navigation, or network step is created, after initial SDK sanitization and before local trail storage. Return `false` or `null` to omit the step, return a `BreadcrumbInput` replacement, or return nothing to keep changes to the supplied copy. Returned content is sanitized again with the existing limits. The SDK keeps its original occurrence time and ignores extra fields.
+
+The hook receives independent copies; retaining or changing them later does not rewrite the live trail or queued error snapshots. A throwing hook, invalid replacement, or replacement sanitization failure omits that step without changing error counters. Filtering a network breadcrumb does not suppress the corresponding standalone HTTP/network error; use `captureNetwork`, `shouldCaptureHttp`, or `beforeSend` for error selection. Nested breadcrumb creation during this hook is ignored, and a hook that destroys its client cannot add a step afterward.
+
+The hook is not called again when errors snapshot a trail, during `beforeSend` replacement sanitization, on reads, or on delivery/retries. `beforeSend` remains the final event filter. No additional event, request, protocol field, or collector upgrade is required for this hook.
+
 ## Automatically record SPA navigation
 
 ```ts
