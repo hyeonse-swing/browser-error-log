@@ -76,7 +76,7 @@ errorLog.clearBreadcrumbs(); // 새 흐름 시작; 이미 수집한 오류는 �
 
 클라이언트마다 최근 20개 작업을 UTF-8 JSON 기준 12,000바이트 안에서 유지합니다. 작업 추가만으로 별도 이벤트를 보내지 않으며 이후 오류에 오래된 순서의 복사본을 붙입니다. 각 작업에는 SDK가 만든 UTC 시각, 분류(기본 `manual`, 최대 40자), 메시지(최대 256자), 선택적인 단일 값 데이터(6개 키, 키 80자·문자열 값 200자)가 있습니다. 기존 민감 키·URL·텍스트 필터와 `beforeSend`가 적용되며 `event.breadcrumbs`를 수정하거나 제거할 수 있습니다. `clearBreadcrumbs()`는 이후 수집에 적용되고 `destroy()`도 로컬 작업 기록을 비웁니다.
 
-`init()`은 기존 `BrowserErrorLogClient`를 확장한 `BrowserErrorLogBreadcrumbClient`를 반환합니다. 기존 클라이언트와 React Error Boundary 모형은 원래 인터페이스를 유지할 수 있습니다. 새 메서드를 쓰는 클라이언트의 타입을 직접 선언할 때는 확장 타입을 사용하세요.
+`init()`은 `BrowserErrorLogBreadcrumbClient`와 원래 `BrowserErrorLogClient`를 확장한 `BrowserErrorLogDiagnosticsClient`를 반환합니다. 기존 클라이언트와 React Error Boundary 모형은 원래 인터페이스를 유지할 수 있습니다. 작업 기록이나 진단 메서드를 쓰는 클라이언트의 타입을 직접 선언할 때는 해당 확장 타입을 사용하세요.
 
 뷰어는 두 오류 상세 화면에 이 기록을 표시하고 히스토리 JSON에도 보존합니다. 자체 호스팅 수집기·뷰어는 작업 기록 지원 버전(0.1.16부터)에서 이 선택 필드를 저장·표시합니다. 이전 수집기는 이벤트를 받아도 작업 기록을 생략할 수 있습니다. 자체 백엔드는 `@ihyeon/browser-error-log-protocol`의 `isBreadcrumbTrail`로 작업 기록을 검증할 수 있습니다.
 
@@ -159,6 +159,30 @@ const errorLog = init({
 큐를 비우는 flush로 한도가 초기화되지 않습니다. 재시도와 beacon 전송은 이미 담긴 이벤트를 사용하므로 추가 한도를 쓰지 않고, 작업 기록도 한도를 쓰지 않습니다. 같은 Error 객체의 중복 수집과 `beforeSend`가 제외한 이벤트는 한도를 쓰지 않습니다. 한도가 가득 차면 초과 이벤트의 `beforeSend` 호출을 생략합니다. 큐에 담긴 이벤트가 나중에 큐에서 밀려나거나 전송에 실패해도 사용한 한도는 유지합니다.
 
 한도는 현재 문서의 해당 클라이언트에 속하며 새 클라이언트나 전체 페이지 로드에서는 새로 시작합니다. 큐 진입 건수를 제한하므로 HTTP 요청 수·바이트·서버 전체 트래픽이나 이벤트 생성 작업량의 상한을 뜻하지는 않습니다. 수집기에는 별도의 서버 측 제한을 적용하세요.
+
+## SDK 수집·전송 진단
+
+```ts
+await errorLog.flush();
+const diagnostics = errorLog.getDiagnostics();
+console.log(diagnostics.inFlight, diagnostics.filtered, diagnostics.deduplicated);
+console.table(diagnostics.droppedByReason);
+```
+
+`getDiagnostics()`는 기존 `queued`·`sent`·`dropped`에 `inFlight`(재시도 대기를 포함한 전송 배치 내 이벤트 수), `filtered`(`beforeSend`가 `false` 또는 `null`을 반환한 횟수), `deduplicated`(`captureException`의 기존 동일 객체 중복 제외 횟수)와 다음 원인별 건수를 더해 반환합니다.
+
+| `droppedByReason` 키 | 집계하는 이벤트 |
+| --- | --- |
+| `rateLimit` | `maxEventsPerMinute` 초과로 제외 |
+| `queueOverflow` | 큐가 가득 차서 밀려남 |
+| `payloadTooLarge` | 이벤트 또는 배치 바이트 한도 초과 |
+| `processingError` | 관측한 전처리·민감정보 필터·콜백 실패로 제외 |
+| `deliveryError` | 영구 전송 실패 또는 재시도 소진 |
+| `destroyed` | `destroy()`로 큐나 진행 중인 전송에서 폐기 |
+
+원인별 건수의 합은 `dropped`입니다. `filtered`와 `deduplicated`는 별도 항목으로 기존 `getStats()` 동작을 유지합니다. 재시도 횟수는 최종 전송 실패 전에는 버린 이벤트로 세지 않으며, beacon 시도가 실패하면 큐를 유지합니다. `sent`도 기존처럼 브라우저 beacon 큐의 수락을 포함하므로 수집기의 저장 완료를 보장하지 않습니다.
+
+호출마다 로컬 숫자 통계만 담은 독립 복사본을 반환합니다. 추가 이벤트를 전송하거나 수집 콜백을 실행하지 않고 URL·오류 원문·본문을 포함하지 않습니다. 통계는 클라이언트 수명 동안 누적되며 `destroy()` 후에도 읽을 수 있고 이때 `inFlight`는 0입니다. flush나 작업 기록 정리로 초기화하지 않으며 비활성·SSR 클라이언트는 0으로 시작합니다. 제외한 수집기 요청·의도적인 취소·선택하지 않은 HTTP 상태·무시한 작업 기록 입력은 통계를 늘리지 않습니다. SDK가 관측한 판단의 통계이므로 초기화 전 오류나 서버 전체 수신 여부를 보여주지는 않습니다. 수집기 갱신은 필요 없으며 기존 `getStats()`는 세 필드를 그대로 반환합니다.
 
 ## 전달 제한
 

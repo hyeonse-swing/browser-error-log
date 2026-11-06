@@ -54,6 +54,9 @@ execFileSync(process.execPath, ['--input-type=module', '-e', `
   try { require.resolve('react'); throw new Error('Browser package unexpectedly requires React'); }
   catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
   const client = init({ project: 'ssr' }); client.addBreadcrumb({ message: 'SSR no-op' }); client.clearBreadcrumbs(); await client.flush(); client.destroy();
+  const diagnostics = client.getDiagnostics();
+  if (diagnostics.dropped !== 0 || diagnostics.inFlight !== 0 || diagnostics.filtered !== 0 || diagnostics.deduplicated !== 0
+    || Object.values(diagnostics.droppedByReason).some(count => count !== 0)) throw Error('SSR diagnostics invalid');
 `], { cwd: browserConsumer, stdio: 'inherit' });
 
 // Repack installed peer/type dependencies, so the check needs neither registry
@@ -61,20 +64,25 @@ execFileSync(process.execPath, ['--input-type=module', '-e', `
 const peers = pack(['react', '@types/react', 'csstype'].map(p => join(root, 'node_modules', p)), scratch);
 const consumer = createConsumer('react-smoke');
 npm(['install', ...tarballs, ...peers], consumer);
-writeFileSync(join(consumer, 'consumer.tsx'), `import { init, type TransportContext, type BrowserErrorLogClient, type BrowserErrorLogBreadcrumbClient } from '@ihyeon/browser-error-log';
+writeFileSync(join(consumer, 'consumer.tsx'), `import { init, type TransportContext, type BrowserErrorLogClient, type BrowserErrorLogBreadcrumbClient, type BrowserErrorLogDiagnosticsClient, type BrowserErrorLogDiagnostics, type BrowserErrorLogDropReason } from '@ihyeon/browser-error-log';
 import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
 import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';
 const client = init({project:'consumer',enabled:false,context:{buildChannel:'stable'},getContext:()=>({appSection:'checkout'}),captureNavigation:true,captureNetworkBreadcrumbs:true,maxEventsPerMinute:60,transport:async(batch:EventBatch,context:TransportContext)=>{void batch;void context.signal;}});
 const extended: BrowserErrorLogBreadcrumbClient = client;
 extended.addBreadcrumb({message:'Checkout',data:{attempt:1}}); extended.clearBreadcrumbs();
 const oldClient: BrowserErrorLogClient = {captureException(){},flush:async()=>{},destroy(){},getStats:()=>({queued:0,sent:0,dropped:0})};
+const oldBreadcrumbClient: BrowserErrorLogBreadcrumbClient = {...oldClient,addBreadcrumb(){},clearBreadcrumbs(){}};
+const oldBreadcrumbNode = <ErrorBoundary client={oldBreadcrumbClient}><p>Compatible breadcrumbs</p></ErrorBoundary>; void oldBreadcrumbNode;
+const diagnosticClient: BrowserErrorLogDiagnosticsClient = client;
+const diagnostics: BrowserErrorLogDiagnostics = diagnosticClient.getDiagnostics();
+const reason: BrowserErrorLogDropReason = 'rateLimit'; void diagnostics.droppedByReason[reason];
 const oldNode = <ErrorBoundary client={oldClient}><p>Compatible</p></ErrorBoundary>; void oldNode;
 client.captureException(new Error(EVENT_LABELS.manual));
 const node = <ErrorBoundary client={client} fallback={<p>Fallback</p>}><p>Ready</p></ErrorBoundary>;
 void node; client.destroy();`);
 execFileSync(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--jsx', 'react-jsx', 'consumer.tsx'], { cwd: consumer, stdio: 'inherit' });
 execFileSync(process.execPath, ['--input-type=module', '-e', `import {init} from '@ihyeon/browser-error-log'; import {ErrorBoundary} from '@ihyeon/browser-error-log-react'; if(typeof ErrorBoundary!=='function') throw new Error('adapter missing'); const c=init({project:'ssr'}); await c.flush(); c.destroy();`], { cwd: consumer, stdio: 'inherit' });
-execFileSync(process.execPath, ['-e', `const {init}=require('@ihyeon/browser-error-log');const {SCHEMA_VERSION}=require('@ihyeon/browser-error-log-protocol');const {ErrorBoundary}=require('@ihyeon/browser-error-log-react');if(SCHEMA_VERSION!==1||typeof ErrorBoundary!=='function')throw Error('exports invalid');init({project:'ssr'}).destroy();`], { cwd: consumer, stdio: 'inherit' });
+execFileSync(process.execPath, ['-e', `const {init}=require('@ihyeon/browser-error-log');const {SCHEMA_VERSION}=require('@ihyeon/browser-error-log-protocol');const {ErrorBoundary}=require('@ihyeon/browser-error-log-react');if(SCHEMA_VERSION!==1||typeof ErrorBoundary!=='function')throw Error('exports invalid');const c=init({project:'ssr'});if(c.getDiagnostics().droppedByReason.rateLimit!==0)throw Error('CJS diagnostics missing');c.destroy();`], { cwd: consumer, stdio: 'inherit' });
 console.log('Offline tarball install, standalone protocol, browser without React, public TypeScript declarations, ESM/CJS and SSR smoke: PASS');
 console.log(`SDK tarballs: ${out}`);
 console.log(`Isolated consumer: ${consumer}`);

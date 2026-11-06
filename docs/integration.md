@@ -44,6 +44,8 @@ The SDK's optional `maxEventsPerMinute` limits new queue admissions per client o
 
 `captureNetworkBreadcrumbs: true` optionally adds completed fetch/XHR metadata to the same trail. HTTP responses use category `http`, message `HTTP response`, and scalar `data.method`, `data.url`, `data.durationMs`, `data.status`; real transport failures use category `network`, message `Network failure`, and omit status. Native status `0` is retained for opaque responses. Intentional aborts and collector requests are excluded. No body, header, or failure-message data is included. Completion order is preserved; standalone error selection remains controlled by `captureNetwork`/`shouldCaptureHttp`. A custom transport requires an `endpoint` to enable automatic network reporting. Storage and JSON format are unchanged.
 
+`getDiagnostics()` is a local SDK API, not part of `EventBatch` or `ErrorEventRecord`. It exposes queue/sent/drop totals, in-flight event count, separate `beforeSend` filter and same-object deduplication counts, and `droppedByReason` (`rateLimit`, `queueOverflow`, `payloadTooLarge`, `processingError`, `deliveryError`, `destroyed`). The reason counts sum to the existing dropped total. Reads return independent counter snapshots without invoking hooks or making requests. No server upgrade or diagnostic endpoint is required; `getStats()` remains unchanged. These are SDK-observed decisions and best-effort delivery counts, not collector storage acknowledgements.
+
 ## Read events
 
 The viewer expects list and detail operations, with `/api` as its default base path:

@@ -80,11 +80,16 @@ await consumer('browser-only', [
   const client = init({ project: 'registry-smoke' });
   client.addBreadcrumb({ message: 'SSR no-op' }); client.clearBreadcrumbs();
   await client.flush(); client.destroy();
+  const diagnostics = client.getDiagnostics();
+  if (diagnostics.dropped !== 0 || diagnostics.inFlight !== 0 || diagnostics.filtered !== 0 || diagnostics.deduplicated !== 0
+    || Object.values(diagnostics.droppedByReason).some(count => count !== 0)) throw Error('SSR diagnostics invalid');
 `, `
   const { init } = require('@ihyeon/browser-error-log');
   const { SDK_VERSION } = require('@ihyeon/browser-error-log-protocol');
   if (SDK_VERSION !== '${version}') throw Error('Protocol CJS version differs');
-  init({ project: 'registry-smoke' }).destroy();
+  const client = init({ project: 'registry-smoke' });
+  if (client.getDiagnostics().droppedByReason.rateLimit !== 0) throw Error('CJS diagnostics missing');
+  client.destroy();
 `);
 
 await consumer('react', [
@@ -100,7 +105,7 @@ await consumer('react', [
   if (typeof ErrorBoundary !== 'function') throw Error('React adapter CJS export missing');
   init({ project: 'registry-smoke' }).destroy();
 `, `
-  import { init, type TransportContext, type BrowserErrorLogClient } from '@ihyeon/browser-error-log';
+  import { init, type TransportContext, type BrowserErrorLogClient, type BrowserErrorLogBreadcrumbClient, type BrowserErrorLogDiagnosticsClient, type BrowserErrorLogDiagnostics, type BrowserErrorLogDropReason } from '@ihyeon/browser-error-log';
   import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
   import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';
   const client = init({ project: 'registry-smoke', enabled: false, captureNavigation: true, captureNetworkBreadcrumbs: true, maxEventsPerMinute: 60,
@@ -108,6 +113,11 @@ await consumer('react', [
   client.captureException(new Error(EVENT_LABELS.manual));
   client.addBreadcrumb({ category: 'action', message: 'Registry consumer', data: { attempt: 1 } }); client.clearBreadcrumbs();
   const oldClient: BrowserErrorLogClient = {captureException(){},flush:async()=>{},destroy(){},getStats:()=>({queued:0,sent:0,dropped:0})};
+  const oldBreadcrumbClient: BrowserErrorLogBreadcrumbClient = {...oldClient,addBreadcrumb(){},clearBreadcrumbs(){}};
+  const oldBreadcrumbView = <ErrorBoundary client={oldBreadcrumbClient}><p>Compatible breadcrumbs</p></ErrorBoundary>; void oldBreadcrumbView;
+  const diagnosticClient: BrowserErrorLogDiagnosticsClient = client;
+  const diagnostics: BrowserErrorLogDiagnostics = diagnosticClient.getDiagnostics();
+  const reason: BrowserErrorLogDropReason = 'deliveryError'; void diagnostics.droppedByReason[reason];
   const compatible = <ErrorBoundary client={oldClient}><p>Compatible</p></ErrorBoundary>; void compatible;
   const view = <ErrorBoundary client={client} fallback={<p>Fallback</p>}><p>Ready</p></ErrorBoundary>;
   void view; client.destroy();

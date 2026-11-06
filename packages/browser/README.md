@@ -76,7 +76,7 @@ errorLog.clearBreadcrumbs(); // start a new flow; captured errors keep their sna
 
 Each client keeps the latest 20 recorded steps, within a 12,000-byte UTF-8 JSON budget. Adding a step does not send a separate event; subsequent errors include an oldest-first snapshot. Steps have an SDK-generated UTC timestamp, a category (default `manual`, up to 40 characters), a message (up to 256 characters), and optional scalar data (six keys, 80 characters per key and 200 per string value). The existing sensitive-key, URL, and text filters apply; `beforeSend` can edit or remove `event.breadcrumbs`. `clearBreadcrumbs()` affects future captures, and `destroy()` also clears the local trail.
 
-`init()` returns `BrowserErrorLogBreadcrumbClient`, extending the existing `BrowserErrorLogClient` contract. Existing clients and React Error Boundary mocks can keep the original interface; use the extended type when explicitly typing a client that calls the new methods.
+`init()` returns `BrowserErrorLogDiagnosticsClient`, extending `BrowserErrorLogBreadcrumbClient` and the original `BrowserErrorLogClient`. Existing clients and React Error Boundary mocks can keep their original interfaces; use the corresponding extended type when explicitly typing a client that calls breadcrumb or diagnostic methods.
 
 The viewer shows these steps in both error detail views and preserves them in history JSON. Use a collector and viewer with breadcrumb support (introduced in 0.1.16) to retain and display this optional field; older collectors may accept an event while omitting its breadcrumbs. Custom backends can validate the trail with `isBreadcrumbTrail` from `@ihyeon/browser-error-log-protocol`.
 
@@ -159,6 +159,30 @@ const errorLog = init({
 Flushing an empty queue does not reset the budget. Retries and beacon delivery reuse admitted events without consuming more capacity; breadcrumbs do not consume it. Duplicate Error objects and events filtered by `beforeSend` do not consume capacity. Once the budget is full, `beforeSend` is skipped for excess events. Admitted events still consume capacity if they are later evicted from the queue or fail delivery.
 
 The budget belongs to this client in the current document; a new client or full page load starts a new one. It limits queue admission, not HTTP request counts, bytes, server-wide traffic, or the work done to construct an event. Use independent server-side limits for your collector.
+
+## Inspect SDK collection and delivery
+
+```ts
+await errorLog.flush();
+const diagnostics = errorLog.getDiagnostics();
+console.log(diagnostics.inFlight, diagnostics.filtered, diagnostics.deduplicated);
+console.table(diagnostics.droppedByReason);
+```
+
+`getDiagnostics()` returns the existing `queued`, `sent`, and `dropped` counts, plus `inFlight` (events in a delivery batch, including retry waits), `filtered` (`beforeSend` returned `false` or `null`), `deduplicated` (the existing same-object suppression in `captureException`), and these drop reasons:
+
+| `droppedByReason` key | Events counted |
+| --- | --- |
+| `rateLimit` | Rejected by `maxEventsPerMinute` |
+| `queueOverflow` | Evicted from a full queue |
+| `payloadTooLarge` | Exceeded the event or batch byte budget |
+| `processingError` | Dropped by an observed preprocessing, sanitizer, or callback failure |
+| `deliveryError` | Failed permanently or exhausted delivery retries |
+| `destroyed` | Discarded from the queue or an active delivery by `destroy()` |
+
+The reason counts sum to `dropped`. `filtered` and `deduplicated` are separate and preserve the existing `getStats()` behavior. Retry attempts do not count as dropped events unless delivery finally fails; a failed beacon attempt keeps the queue. `sent` retains its best-effort meaning, including browser beacon-queue acceptance rather than proof of collector storage.
+
+Each call returns independent copies containing only local counters. It does not send events, invoke capture hooks, or include URLs, error text, or payloads. Counts belong to this client for its lifetime, remain readable after `destroy()` (with `inFlight: 0`), and are not reset by flush or breadcrumb cleanup. Disabled/SSR clients start with zero counts. Excluded collector requests, intentional aborts, unselected HTTP statuses, and ignored breadcrumb input do not increment these counters. These counters cover SDK-observed decisions, not errors before initialization or proof of complete server ingestion. No collector upgrade is needed, and `getStats()` keeps its original three-field shape.
 
 ## Delivery limits
 

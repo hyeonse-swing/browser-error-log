@@ -80,6 +80,85 @@ test.afterAll(async () => {
   if (scratch) await rm(scratch, { recursive: true, force: true });
 });
 
+test('reports local diagnostics without changing delivery or the collector payload', async ({ page }) => {
+  const environment = randomUUID();
+  const failingEnvironment = randomUUID();
+  const collectorPosts = [];
+  const collectorBodies = [];
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/events') {
+      collectorBodies.push(request.postDataJSON());
+    }
+  });
+  page.on('response', response => {
+    if (response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/events') {
+      collectorPosts.push(response.status());
+    }
+  });
+  await page.goto(`${origin}/`);
+  const result = await page.evaluate(async ({ environment, failingEnvironment }) => {
+    const { init } = await import('/sdk.js');
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureNetwork: false, maxEventsPerMinute: 1, flushIntervalMs: 60_000,
+      beforeSend: event => event.message === 'filtered' ? false : event });
+    client.captureException(new Error('filtered'));
+    const afterFilter = client.getDiagnostics();
+    const shared = new Error('admitted');
+    client.captureException(shared);
+    client.captureException(shared);
+    client.captureException(new Error('rate limited'));
+    const snapshot = client.getDiagnostics();
+    const statsBeforeFlush = client.getStats();
+    snapshot.filtered = 99;
+    snapshot.droppedByReason.rateLimit = 99;
+    const afterMutation = client.getDiagnostics();
+    await client.flush();
+    const afterFlush = client.getDiagnostics();
+    const repeated = client.getDiagnostics();
+    const statsAfterFlush = client.getStats();
+
+    const failing = init({ project: 'browser-test', environment: failingEnvironment, endpoint: '/api/events',
+      captureNetwork: false, getContext: () => { throw new Error('context failed'); } });
+    failing.captureException(new Error('processing failed'));
+    const beforeDestroy = failing.getDiagnostics();
+    failing.destroy();
+    const afterDestroy = failing.getDiagnostics();
+    client.destroy();
+    return { afterFilter, afterMutation, afterFlush, repeated, statsBeforeFlush, statsAfterFlush,
+      beforeDestroy, afterDestroy };
+  }, { environment, failingEnvironment });
+
+  const emptyReasons = { rateLimit: 0, queueOverflow: 0, payloadTooLarge: 0,
+    processingError: 0, deliveryError: 0, destroyed: 0 };
+  expect(result.afterFilter).toEqual({ queued: 0, sent: 0, dropped: 0, inFlight: 0,
+    filtered: 1, deduplicated: 0, droppedByReason: emptyReasons });
+  expect(result.afterMutation).toEqual({ queued: 1, sent: 0, dropped: 1, inFlight: 0,
+    filtered: 1, deduplicated: 1, droppedByReason: { ...emptyReasons, rateLimit: 1 } });
+  expect(result.statsBeforeFlush).toEqual({ queued: 1, sent: 0, dropped: 1 });
+  const deliveredDiagnostics = { queued: 0, sent: 1, dropped: 1, inFlight: 0,
+    filtered: 1, deduplicated: 1, droppedByReason: { ...emptyReasons, rateLimit: 1 } };
+  expect(result.afterFlush).toEqual(deliveredDiagnostics);
+  expect(result.repeated).toEqual(deliveredDiagnostics);
+  expect(result.statsAfterFlush).toEqual({ queued: 0, sent: 1, dropped: 1 });
+  const processingDiagnostics = { queued: 0, sent: 0, dropped: 1, inFlight: 0,
+    filtered: 0, deduplicated: 0, droppedByReason: { ...emptyReasons, processingError: 1 } };
+  expect(result.beforeDestroy).toEqual(processingDiagnostics);
+  expect(result.afterDestroy).toEqual(processingDiagnostics);
+  for (const diagnostics of [result.afterMutation, result.afterFlush, result.afterDestroy]) {
+    expect(Object.values(diagnostics.droppedByReason).reduce((sum, count) => sum + count, 0)).toBe(diagnostics.dropped);
+  }
+  expect(collectorPosts).toEqual([200]);
+  expect(collectorBodies).toHaveLength(1);
+  expect(collectorBodies[0]).toMatchObject({ schemaVersion: 1, events: [{ message: 'admitted' }] });
+  expect(Object.keys(collectorBodies[0]).sort()).toEqual(['events', 'schemaVersion']);
+  expect(JSON.stringify(collectorBodies[0])).not.toMatch(/droppedByReason|filtered|deduplicated|rateLimit|inFlight/);
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+  const [delivered] = await events(environment);
+  expect(delivered.message).toBe('admitted');
+  expect(JSON.stringify(delivered)).not.toMatch(/droppedByReason|filtered|deduplicated|rateLimit|inFlight/);
+  expect(await events(failingEnvironment)).toHaveLength(0);
+});
+
 test('limits admitted browser events per client across sources and flushes', async ({ page }) => {
   const environment = randomUUID();
   const otherEnvironment = randomUUID();

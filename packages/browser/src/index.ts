@@ -58,6 +58,23 @@ export interface BrowserErrorLogBreadcrumbClient extends BrowserErrorLogClient {
   clearBreadcrumbs(): void;
 }
 
+export type BrowserErrorLogDropReason = 'rateLimit' | 'queueOverflow' | 'payloadTooLarge'
+  | 'processingError' | 'deliveryError' | 'destroyed';
+
+export interface BrowserErrorLogDiagnostics {
+  queued: number;
+  sent: number;
+  dropped: number;
+  inFlight: number;
+  filtered: number;
+  deduplicated: number;
+  droppedByReason: Record<BrowserErrorLogDropReason, number>;
+}
+
+export interface BrowserErrorLogDiagnosticsClient extends BrowserErrorLogBreadcrumbClient {
+  getDiagnostics(): BrowserErrorLogDiagnostics;
+}
+
 const MAX_BATCH_EVENTS = 20;
 const MAX_BATCH_BYTES = 48_000;
 const MAX_BEACON_EVENTS = 10;
@@ -130,7 +147,7 @@ class UrlSanitizationError extends Error {}
 
 class ContextResolutionError extends Error {}
 
-class Client implements BrowserErrorLogBreadcrumbClient {
+class Client implements BrowserErrorLogDiagnosticsClient {
   private readonly active: boolean;
   private readonly endpoint?: string;
   private readonly options: BrowserErrorLogOptions;
@@ -156,6 +173,12 @@ class Client implements BrowserErrorLogBreadcrumbClient {
   private inFlight = 0;
   private sent = 0;
   private dropped = 0;
+  private filtered = 0;
+  private deduplicated = 0;
+  private readonly droppedByReason: Record<BrowserErrorLogDropReason, number> = {
+    rateLimit: 0, queueOverflow: 0, payloadTooLarge: 0,
+    processingError: 0, deliveryError: 0, destroyed: 0,
+  };
   private destroyed = false;
   private lastAdmissionClock?: number;
 
@@ -188,7 +211,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
     if (!this.active || this.destroyed || isAbort(error)) return;
     try {
       if (error !== null && (typeof error === 'object' || typeof error === 'function')) {
-        if (this.seenErrors.has(error)) return;
+        if (this.seenErrors.has(error)) { this.deduplicated++; return; }
       }
       const fields = errorFields(error);
       const type = EVENT_TYPES.has(extra.type as EventType) ? extra.type! : 'manual';
@@ -202,7 +225,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
         this.seenErrors.add(error);
       }
     } catch (error) {
-      if (error instanceof UrlSanitizationError || error instanceof ContextResolutionError) this.dropped++;
+      if (error instanceof UrlSanitizationError || error instanceof ContextResolutionError) this.recordDrop('processingError');
       // Diagnostics must never affect the host app.
     }
   }
@@ -216,7 +239,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
         captureError = this.options.shouldCaptureHttp
           ? this.options.shouldCaptureHttp(status, url, method)
           : status >= 500;
-      } catch { this.dropped++; return; /* A failing hook cannot expose an unfiltered event or breadcrumb. */ }
+      } catch { this.recordDrop('processingError'); return; /* A failing hook cannot expose an unfiltered event or breadcrumb. */ }
     }
     if (this.networkBreadcrumbCaptureEnabled) {
       try {
@@ -233,11 +256,11 @@ class Client implements BrowserErrorLogBreadcrumbClient {
             message: status === undefined ? 'Network failure' : 'HTTP response', data });
           this.boundBreadcrumbs(this.breadcrumbs);
         } else if (captureError && !cleaned.safeForError) {
-          this.dropped++;
+          this.recordDrop('processingError');
           return;
         }
       } catch {
-        if (captureError) this.dropped++;
+        if (captureError) this.recordDrop('processingError');
         return; // A failing URL hook cannot expose an unfiltered breadcrumb or selected error.
       }
     }
@@ -249,7 +272,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
         status === undefined ? (fields?.message || 'Network request failed') : `HTTP ${status}`,
         { name: fields?.name, network });
       this.enqueue(event);
-    } catch { this.dropped++; /* a failing hook must not expose an unfiltered event */ }
+    } catch { this.recordDrop('processingError'); /* a failing hook must not expose an unfiltered event */ }
   }
 
   reportZeroStatusCompletion(method: string, url: string, durationMs: number): void {
@@ -268,7 +291,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
       }
       this.enqueue(this.makeEvent('console', message, { name: fields?.name, stack: fields?.stack }));
     }
-    catch { this.dropped++; /* console behavior is never changed by capture */ }
+    catch { this.recordDrop('processingError'); /* console behavior is never changed by capture */ }
   }
 
   addBreadcrumb(input: BreadcrumbInput): void {
@@ -318,7 +341,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
       if (this.options.captureConsole === true) removeConsoleClient(this);
       if (this.navigationCaptureEnabled) removeNavigationClient(this);
     }
-    this.dropped += this.queue.length + this.inFlight;
+    this.recordDrop('destroyed', this.queue.length + this.inFlight);
     this.queue.length = 0;
     this.breadcrumbs.length = 0;
     this.admittedAt.length = 0;
@@ -330,6 +353,17 @@ class Client implements BrowserErrorLogBreadcrumbClient {
 
   getStats(): { queued: number; sent: number; dropped: number } {
     return { queued: this.queue.length, sent: this.sent, dropped: this.dropped };
+  }
+
+  getDiagnostics(): BrowserErrorLogDiagnostics {
+    return { ...this.getStats(), inFlight: this.destroyed ? 0 : this.inFlight,
+      filtered: this.filtered, deduplicated: this.deduplicated,
+      droppedByReason: { ...this.droppedByReason } };
+  }
+
+  private recordDrop(reason: BrowserErrorLogDropReason, count = 1): void {
+    this.dropped += count;
+    this.droppedByReason[reason] += count;
   }
 
   private readonly onError = (event: ErrorEvent): void => {
@@ -344,7 +378,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
       this.captureException(read(event, 'error') ?? read(event, 'message') ?? 'Script error', {
         type: 'javascript', ...(Object.keys(context).length ? { context } : {}),
       });
-    } catch { this.dropped++; /* a failing URL hook must not affect the host app */ }
+    } catch { this.recordDrop('processingError'); /* a failing URL hook must not affect the host app */ }
   };
 
   private readonly onRejection = (event: PromiseRejectionEvent): void => {
@@ -598,7 +632,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
   private enqueue(event: ErrorEventRecord): boolean {
     if (this.destroyed) return false;
     if (this.maxEventsPerMinute !== undefined && this.admissionTime() === undefined) {
-      this.dropped++;
+      this.recordDrop('rateLimit');
       return false;
     }
     let finalEvent = event;
@@ -608,15 +642,15 @@ class Client implements BrowserErrorLogBreadcrumbClient {
           breadcrumbs: event.breadcrumbs?.map(crumb => ({ ...crumb, data: crumb.data && { ...crumb.data } })),
           network: event.network && { ...event.network } };
         const result = this.options.beforeSend(copy);
-        if (result === false || result === null) return false;
+        if (result === false || result === null) { this.filtered++; return false; }
         finalEvent = this.sanitizeReplacement(result === undefined ? copy : result, event);
-      } catch { this.dropped++; return false; }
+      } catch { this.recordDrop('processingError'); return false; }
     }
     // A single event can never make a batch exceed its byte budget.
-    if (byteLength(JSON.stringify(finalEvent)) > MAX_BATCH_BYTES) { this.dropped++; return false; }
+    if (byteLength(JSON.stringify(finalEvent)) > MAX_BATCH_BYTES) { this.recordDrop('payloadTooLarge'); return false; }
     const admittedAt = this.maxEventsPerMinute === undefined ? undefined : this.admissionTime();
-    if (this.maxEventsPerMinute !== undefined && admittedAt === undefined) { this.dropped++; return false; }
-    if (this.queue.length >= this.maxQueueSize) { this.queue.shift(); this.dropped++; }
+    if (this.maxEventsPerMinute !== undefined && admittedAt === undefined) { this.recordDrop('rateLimit'); return false; }
+    if (this.queue.length >= this.maxQueueSize) { this.queue.shift(); this.recordDrop('queueOverflow'); }
     this.queue.push(finalEvent);
     if (admittedAt !== undefined) this.admittedAt.push(admittedAt);
     if (this.queue.length >= this.maxQueueSize) void this.flush();
@@ -630,7 +664,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
       const next = this.queue[0];
       const size = byteLength(JSON.stringify(next)) + (events.length ? 1 : 0);
       if (events.length && bytes + size > maxBytes) break;
-      if (!events.length && bytes + size > maxBytes) { this.queue.shift(); this.dropped++; continue; }
+      if (!events.length && bytes + size > maxBytes) { this.queue.shift(); this.recordDrop('payloadTooLarge'); continue; }
       events.push(this.queue.shift()!);
       bytes += size;
     }
@@ -677,7 +711,7 @@ class Client implements BrowserErrorLogBreadcrumbClient {
       }
       if (retryDelay !== undefined) await this.wait(retryDelay);
     }
-    if (!this.destroyed) this.dropped += batch.events.length;
+    if (!this.destroyed) this.recordDrop('deliveryError', batch.events.length);
   }
 
   private async send(batch: EventBatch, signal: AbortSignal): Promise<void> {
@@ -1020,6 +1054,6 @@ function installConsole(): Instrumentation {
   return { clients, cleanup() { if (console.error === wrapped) console.error = original; } };
 }
 
-export function init(options: BrowserErrorLogOptions): BrowserErrorLogBreadcrumbClient {
+export function init(options: BrowserErrorLogOptions): BrowserErrorLogDiagnosticsClient {
   return new Client(options);
 }

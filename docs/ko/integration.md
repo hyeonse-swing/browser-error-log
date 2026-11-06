@@ -44,6 +44,8 @@ SDK의 선택 옵션 `maxEventsPerMinute`는 클라이언트별 직전 60초의 
 
 `captureNetworkBreadcrumbs: true`는 완료된 fetch·XHR 정보를 같은 작업 기록에 추가합니다. HTTP 응답은 분류 `http`, 메시지 `HTTP response`, 단일 값 데이터 `data.method`, `data.url`, `data.durationMs`, `data.status`를 사용합니다. 실제 전송 실패는 분류 `network`, 메시지 `Network failure`이며 상태를 생략합니다. opaque 응답의 브라우저 상태 `0`은 유지합니다. 의도적인 취소·수집기 요청과 본문·헤더·실패 메시지는 제외합니다. 완료 순서를 유지하고 독립 오류 선택은 기존 `captureNetwork`·`shouldCaptureHttp`가 제어합니다. 사용자 지정 transport에는 자동 네트워크 보고를 위한 `endpoint`가 필요합니다. 저장·JSON 형식은 유지합니다.
 
+`getDiagnostics()`는 `EventBatch`나 `ErrorEventRecord`에 포함되지 않는 SDK 로컬 API입니다. 큐·전송·폐기 총합, 전송 중인 이벤트 수, 별도의 `beforeSend` 제외·동일 객체 중복 제외 횟수, 원인별 `droppedByReason`(`rateLimit`, `queueOverflow`, `payloadTooLarge`, `processingError`, `deliveryError`, `destroyed`)를 제공합니다. 원인별 합은 기존 `dropped` 총합과 같습니다. 통계를 읽을 때는 콜백 실행이나 요청 없이 독립 복사본을 반환합니다. 서버 갱신이나 진단 endpoint가 필요 없으며 `getStats()`도 유지합니다. SDK가 관측한 판단과 최선형 전송 통계이므로 수집기의 저장 완료를 뜻하지는 않습니다.
+
 ## 이벤트 조회
 
 뷰어의 기본 API 경로는 `/api`이며 목록과 상세 조회를 사용합니다.
