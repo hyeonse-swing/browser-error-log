@@ -46,6 +46,8 @@ export interface BrowserErrorLogOptions {
   dedupeIntervalMs?: number;
   /** Per-attempt deadline, clamped to 250–60000 ms; defaults to 5000 ms. */
   transportTimeoutMs?: number;
+  /** Holds queued delivery and beacons while navigator.onLine is exactly false; defaults to false. */
+  pauseWhileOffline?: boolean;
 }
 
 export interface BrowserErrorLogClient {
@@ -174,6 +176,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   private readonly navigationCaptureEnabled: boolean;
   private readonly captureErrorCause: boolean;
   private readonly resourceCaptureEnabled: boolean;
+  private readonly pauseWhileOffline: boolean;
   private readonly transportTimeoutMs: number;
   private readonly startedAt = now();
   private readonly viewId = newId();
@@ -193,6 +196,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   private resolveDestroy!: (value: symbol) => void;
   private interval?: ReturnType<typeof setInterval>;
   private flushing?: Promise<void>;
+  private onlineFlushRequested = false;
   private sequence = 0;
   private inFlight = 0;
   private sent = 0;
@@ -215,6 +219,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     this.navigationCaptureEnabled = options.captureNavigation === true;
     this.captureErrorCause = options.captureErrorCause === true;
     this.resourceCaptureEnabled = options.captureResourceErrors === true;
+    this.pauseWhileOffline = options.pauseWhileOffline === true;
     this.maxQueueSize = boundedNumber(options.maxQueueSize, 1, 100, 50);
     this.maxEventsPerMinute = typeof options.maxEventsPerMinute === 'number' && Number.isFinite(options.maxEventsPerMinute)
       ? boundedNumber(options.maxEventsPerMinute, 1, 1000, 1) : undefined;
@@ -229,6 +234,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     if (this.resourceCaptureEnabled) window.addEventListener('error', this.onResourceError, true);
     window.addEventListener('unhandledrejection', this.onRejection);
     document.addEventListener('visibilitychange', this.onVisibility);
+    if (this.pauseWhileOffline) window.addEventListener('online', this.onOnline);
     if (this.networkCaptureEnabled || this.networkBreadcrumbCaptureEnabled) addNetworkClient(this);
     if (options.captureConsole === true) addConsoleClient(this);
     if (this.navigationCaptureEnabled) addNavigationClient(this);
@@ -371,7 +377,17 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   flush(): Promise<void> {
     if (!this.active || this.destroyed) return Promise.resolve();
     if (this.flushing) return this.flushing;
-    this.flushing = this.drain().finally(() => { this.flushing = undefined; });
+    let startDrain!: (result: Promise<void>) => void;
+    const drainResult = new Promise<void>(resolve => { startDrain = resolve; });
+    // Publish the flush before drain can enter a synchronous transport callback.
+    this.flushing = drainResult.finally(() => {
+      this.flushing = undefined;
+      if (this.onlineFlushRequested) {
+        this.onlineFlushRequested = false;
+        if (!this.destroyed && this.queue.length && !this.isExplicitlyOffline()) void this.flush();
+      }
+    });
+    startDrain(this.drain());
     return this.flushing;
   }
 
@@ -384,6 +400,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
       if (this.resourceCaptureEnabled) window.removeEventListener('error', this.onResourceError, true);
       window.removeEventListener('unhandledrejection', this.onRejection);
       document.removeEventListener('visibilitychange', this.onVisibility);
+      if (this.pauseWhileOffline) window.removeEventListener('online', this.onOnline);
       if (this.networkCaptureEnabled || this.networkBreadcrumbCaptureEnabled) removeNetworkClient(this);
       if (this.options.captureConsole === true) removeConsoleClient(this);
       if (this.navigationCaptureEnabled) removeNavigationClient(this);
@@ -496,6 +513,18 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   private readonly onVisibility = (): void => {
     if (document.visibilityState === 'hidden') this.tryBeacon();
   };
+
+  private readonly onOnline = (): void => {
+    if (!this.active || this.destroyed || !this.queue.length || this.isExplicitlyOffline()) return;
+    if (this.flushing) this.onlineFlushRequested = true;
+    else void this.flush();
+  };
+
+  private isExplicitlyOffline(): boolean {
+    if (!this.pauseWhileOffline) return false;
+    try { return typeof navigator !== 'undefined' && navigator.onLine === false; }
+    catch { return false; }
+  }
 
   private absoluteUrl(url: string): string {
     try { return new URL(url, window.location.href).href; }
@@ -831,7 +860,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   }
 
   private async drain(): Promise<void> {
-    while (!this.destroyed && this.queue.length) {
+    while (!this.destroyed && this.queue.length && !this.isExplicitlyOffline()) {
       const batch = this.takeBatch();
       if (batch.events.length) {
         this.inFlight += batch.events.length;
@@ -894,7 +923,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   }
 
   private tryBeacon(): void {
-    if (this.destroyed || this.options.transport || !this.endpoint || !this.queue.length) return;
+    if (this.destroyed || this.options.transport || !this.endpoint || !this.queue.length || this.isExplicitlyOffline()) return;
     try {
       const url = new URL(this.endpoint);
       if (url.origin !== window.location.origin || url.search || url.hash || url.username || url.password) return;

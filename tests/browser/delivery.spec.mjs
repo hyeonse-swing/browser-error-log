@@ -81,6 +81,73 @@ test.afterAll(async () => {
   if (scratch) await rm(scratch, { recursive: true, force: true });
 });
 
+test('holds queued errors offline and delivers the same events automatically on reconnect', async ({ page, context }) => {
+  const environment = randomUUID();
+  const collectorBodies = [];
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/events') {
+      collectorBodies.push(request.postDataJSON());
+    }
+  });
+  await page.goto(`${origin}/`);
+  await page.evaluate(async environment => {
+    const { init } = await import('/sdk.js');
+    window.onlineTransitions = [];
+    window.addEventListener('offline', () => window.onlineTransitions.push('offline'));
+    window.addEventListener('online', () => window.onlineTransitions.push('online'));
+    window.pendingEvents = [];
+    window.testClient = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureNetwork: false, pauseWhileOffline: true, flushIntervalMs: 60_000,
+      beforeSend: event => {
+        window.pendingEvents.push({ eventId: event.eventId, message: event.message });
+        return event;
+      } });
+  }, environment);
+
+  try {
+    expect(await page.evaluate(() => navigator.onLine)).toBe(true);
+    await context.setOffline(true);
+    await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+    const offline = await page.evaluate(async () => {
+      window.testClient.captureException(new Error('offline first'),
+        { context: { phase: 'first', password: 'hide-me' } });
+      window.testClient.captureException(new Error('offline second'), { context: { phase: 'second' } });
+      const beforeFlush = window.testClient.getStats();
+      await window.testClient.flush();
+      return { beforeFlush, afterFlush: window.testClient.getStats(),
+        pending: [...window.pendingEvents], transitions: [...window.onlineTransitions] };
+    });
+    expect(offline.beforeFlush).toEqual({ queued: 2, sent: 0, dropped: 0 });
+    expect(offline.afterFlush).toEqual(offline.beforeFlush);
+    expect(offline.pending.map(event => event.message)).toEqual(['offline first', 'offline second']);
+    expect(new Set(offline.pending.map(event => event.eventId)).size).toBe(2);
+    expect(offline.transitions).toContain('offline');
+    expect(collectorBodies).toHaveLength(0);
+    expect(await events(environment)).toHaveLength(0);
+
+    await context.setOffline(false);
+    await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(true);
+    await expect.poll(async () => (await events(environment)).length).toBe(2);
+    const stored = await events(environment);
+    const byId = (a, b) => a.eventId.localeCompare(b.eventId);
+    expect(stored.map(event => ({ eventId: event.eventId, message: event.message,
+      phase: event.context.phase })).sort(byId))
+      .toEqual(offline.pending.map((event, index) => ({ ...event,
+        phase: index === 0 ? 'first' : 'second' })).sort(byId));
+    await expect.poll(() => page.evaluate(() => window.testClient.getStats()))
+      .toEqual({ queued: 0, sent: 2, dropped: 0 });
+    expect(await page.evaluate(() => window.onlineTransitions)).toContain('online');
+    expect(collectorBodies).toHaveLength(1);
+    expect(collectorBodies[0].events.map(event => event.eventId))
+      .toEqual(offline.pending.map(event => event.eventId));
+    expect(Object.keys(collectorBodies[0]).sort()).toEqual(['events', 'schemaVersion']);
+    expect(JSON.stringify(collectorBodies)).not.toMatch(/pauseWhileOffline|hide-me/);
+  } finally {
+    await context.setOffline(false);
+    await page.evaluate(() => window.testClient?.destroy());
+  }
+});
+
 test('deduplicates fresh equivalent errors across flushes only when enabled', async ({ page }) => {
   const environment = randomUUID();
   const defaultEnvironment = randomUUID();

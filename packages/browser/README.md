@@ -235,6 +235,22 @@ Matching happens after `beforeSend` and the payload-size check. The existing ear
 
 Each client retains at most 50 sanitized fingerprints in memory. Expiration is checked lazily on later candidates; the oldest admitted fingerprints are evicted at capacity. Flush, retries, beacon delivery, and breadcrumb cleanup do not reset the cache. An admitted event remains a reference during its interval even if it is later evicted from the queue or fails delivery. `destroy()` clears the cache. This reduces captured occurrences rather than aggregating them on the server; captured counts are not the full occurrence frequency. The option changes no wire fields and needs no collector upgrade.
 
+## Keep queued errors while offline
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  pauseWhileOffline: true,
+});
+```
+
+This option is off by default and is read once at initialization. When enabled and `navigator.onLine` is exactly `false`, the SDK keeps queued events in memory instead of starting another delivery batch or hidden-page beacon. A flush started in that state resolves without sending or removing queued events. Both the default and custom transports follow this gate. An already active batch, including its retries and timeout, continues under the existing delivery policy; going offline does not abort or requeue it. Later queued batches wait.
+
+The browser's `online` event starts a flush when it no longer reports offline, without waiting for the interval. Pending events keep their original IDs, timestamps, context, and breadcrumb snapshots. Collection, `beforeSend`, queue overflow, rate limits, and deduplication keep their usual behavior; merely waiting offline does not increase `dropped`. `destroy()` removes the reconnect listener and discards pending events as usual.
+
+This uses only the browser's connectivity hint and sends no reachability probes. Missing or unreadable status permits normal delivery. As the [HTML standard explains](https://html.spec.whatwg.org/multipage/system-state.html#navigator.online), online status does not prove Internet or collector access, so ordinary delivery failures can still exhaust retries. Storage remains memory-only: queue overflow, page reload/closure, or destruction can lose events. No wire fields or collector upgrade are required.
+
 ## Inspect SDK collection and delivery
 
 ```ts

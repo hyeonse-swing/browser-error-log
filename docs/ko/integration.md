@@ -40,6 +40,8 @@
 
 SDK의 선택 옵션 `maxEventsPerMinute`는 클라이언트별 직전 60초의 새 큐 진입 건수를 제한합니다. 유한한 값은 소수점을 내리고 1~1,000으로 조정하며, 생략하거나 유한하지 않으면 제한을 끕니다. 모든 오류 유형이 한도를 공유합니다. 초과 이벤트는 제외하고 기존 `dropped` 통계에 반영하며 집계·지연 이벤트를 별도로 보내지 않습니다. `beforeSend`가 제외한 이벤트와 객체 중복은 한도를 쓰지 않고, 한도가 가득 차면 초과 이벤트의 `beforeSend`를 생략합니다. flush·재시도·beacon 전송·작업 기록은 한도를 초기화하거나 추가로 쓰지 않습니다. 전송 필드가 바뀌지 않아 수집기 갱신이 필요하지 않습니다. 현재 문서의 클라이언트에만 적용하므로 서버 측 제한이나 HTTP 요청 수의 상한을 대신하지 않습니다.
 
+선택 옵션 `pauseWhileOffline: true`는 `navigator.onLine`이 정확히 `false`일 때 새 전송 배치·숨겨진 페이지 beacon을 시작하지 않고 기존 한도의 메모리 큐에 이벤트를 보관합니다. 오프라인에서 시작한 flush는 큐를 비우지 않고 완료됩니다. 이미 시작한 배치는 기존 재시도·시간 제한을 따르고 다음 배치는 대기합니다. 브라우저의 `online` 이벤트에서 오프라인 표시가 해제되면 전송을 재개합니다. 기본·사용자 지정 transport에 모두 적용하며 초기화 시 설정을 고정하고 기본값은 꺼짐입니다. 상태가 없거나 읽을 수 없으면 전송을 허용합니다. 연결 표시는 수집기 접속 보장이 아니며 확인 요청·영속 저장은 없습니다. 큐 초과·새로고침·탭 종료·클라이언트 종료로 유실될 수 있습니다. 대기 자체는 폐기 건수에 더하지 않으며 기존 수집 한도·정제·진단·ID·전송 형식과 수집기 요구 사항은 유지합니다.
+
 `captureNavigation: true`를 선택하면 같은 창의 문서 내부 History 이동을 기존 작업 기록에 추가합니다. 분류는 `navigation`, 메시지는 `Navigation`, 단일 값 데이터는 `data.from`, `data.to`, `data.trigger`(`pushState`, `replaceState`, `popstate`, `hashchange`)입니다. URL 필터 적용 후 같은 URL이면 생략하며 서버·JSON 계약은 유지합니다. 앱별 동작에는 수동 작업 기록도 사용할 수 있습니다.
 
 `captureNetworkBreadcrumbs: true`는 완료된 fetch·XHR 정보를 같은 작업 기록에 추가합니다. HTTP 응답은 분류 `http`, 메시지 `HTTP response`, 단일 값 데이터 `data.method`, `data.url`, `data.durationMs`, `data.status`를 사용합니다. 실제 전송 실패는 분류 `network`, 메시지 `Network failure`이며 상태를 생략합니다. opaque 응답의 브라우저 상태 `0`은 유지합니다. 의도적인 취소·수집기 요청과 본문·헤더·실패 메시지는 제외합니다. 완료 순서를 유지하고 독립 오류 선택은 기존 `captureNetwork`·`shouldCaptureHttp`가 제어합니다. 사용자 지정 transport에는 자동 네트워크 보고를 위한 `endpoint`가 필요합니다. 저장·JSON 형식은 유지합니다.
