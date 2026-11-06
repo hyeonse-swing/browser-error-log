@@ -84,6 +84,24 @@ Only objects with a string `message` or `stack` are followed, including Error ob
 
 When a valid cause is present, the outer stack uses up to 2,048 characters and each cause section up to 480, within the existing 4,096-character total stack limit. The existing text/URL filters run before section clipping. No new protocol fields or collector upgrade are needed, and existing viewer stack details show the chain. Review application-specific filters before opting in: cause messages and paths can contain additional sensitive data. `beforeSend` can edit the combined stack, remove it with `delete event.stack` or `event.stack = undefined`, or reject the event. A failing URL sanitizer drops the event rather than sending unfiltered cause data.
 
+## Capture failed resource loads
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  captureResourceErrors: true,
+});
+```
+
+**Upgrade your collector and viewer to 0.2.0 or later before enabling this option.** Custom backends must accept `type: 'resource'` in their schema and type filters. Older collectors can reject an entire batch containing the new type. The option is off by default, so ordinary existing event types remain usable with older collectors.
+
+The SDK observes current-document loading errors from scripts, stylesheet links, and images after initialization. Events use type `resource`, name `ResourceLoadError`, a fixed message such as `Failed to load script resource`, and scalar `context.resourceTag` (`script`, `link`, or `img`) and `context.resourceUrl`. The image's selected `currentSrc` is used when available. Only HTTP(S) URLs are recorded, using the existing URL/text filters and context limits. HTML, element text, IDs, classes, alternate text, form values, and source-set lists are not copied. Collector URLs and unsupported resource kinds/schemes are excluded.
+
+Element error events do not expose an HTTP status or response body. These events therefore have no invented status, network timing, or stack. A failed load can have several causes, including a missing file, browser policy, or image decoding. Requests are not repeated or probed. The setting is independent of fetch/XHR capture; native element handlers and default behavior are preserved. Errors before initialization, inside other documents, or behind event boundaries that do not reach the window are not recovered.
+
+Resource events share normal context, breadcrumbs, `beforeSend`, rate limits, queue limits, and diagnostics. The two resource context fields take priority over common context within the existing 12-field limit. URL or context hook failures drop the event; a `beforeSend` veto filters it. `destroy()` removes the listener. Viewer type filters, charts, details, and history JSON support the new type in 0.2.0.
+
 ## Record the steps before an error
 
 ```ts
@@ -159,7 +177,7 @@ Set `context` at initialization to attach common diagnostic fields to every even
 
 Set `captureConsole: true` to capture `console.error` calls. The combined message is preserved; the first `Error` created in the current window also contributes its name and stack, using the same redaction and `beforeSend` controls.
 
-By default, HTTP capture records 5xx responses and network failures, excludes intentional aborts, and excludes the collector endpoint. The SDK strips URL queries, fragments, and credentials and masks common email/token patterns. It does not collect request/response bodies, cookies, DOM, form inputs, or session recordings. Error text, URL paths, stacks, and custom context may still contain sensitive data; set application-specific filters. A failing `beforeSend` or `sanitizeUrl` drops the event.
+By default, HTTP capture records 5xx responses and network failures, excludes intentional aborts, and excludes the collector endpoint. The SDK strips URL queries, fragments, and credentials and masks common email/token patterns. It does not collect request/response bodies, cookies, page HTML, element text, form inputs, or session recordings. Error text, URL paths, stacks, and custom context may still contain sensitive data; set application-specific filters. A failing `beforeSend` or `sanitizeUrl` drops the event.
 
 For a custom `transport(batch, { signal })`, pass `signal` to your request and reject on delivery failure. Include `endpoint` for collector exclusion when using automatic network error capture or network breadcrumbs; otherwise both are disabled for a custom transport. The default transport omits credentials.
 

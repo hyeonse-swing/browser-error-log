@@ -11,6 +11,14 @@ function event(overrides: Partial<ErrorEventRecord> = {}): ErrorEventRecord {
 }
 
 describe('buildAnalytics', () => {
+  it('counts resource failures separately from HTTP and transport failures', () => {
+    const result = buildAnalytics([event({ type: 'resource',
+      context: { resourceTag: 'script', resourceUrl: 'https://example.test/missing.js' } })]);
+    expect(result.types.find(row => row.key === 'resource')?.count).toBe(1);
+    expect(result.trend[0].types.resource).toBe(1);
+    expect(result.networkErrors).toBe(0);
+    expect(result.httpStatuses).toHaveLength(0);
+  });
   it('counts every distribution and groups top messages by project, type, and message', () => {
     const rows = [
       event({ eventId: 'a', message: 'same', occurredAt: '2026-10-02T00:00:00Z' }),
@@ -25,7 +33,7 @@ describe('buildAnalytics', () => {
     expect(result.uniqueErrors).toBe(5);
     expect(result.networkErrors).toBe(3);
     expect(result.projectsCount).toBe(2);
-    expect(result.types).toHaveLength(7);
+    expect(result.types).toHaveLength(8);
     expect(result.types.find(row => row.key === 'manual')?.count).toBe(0);
     expect(result.projects.map(row => [row.key, row.count])).toEqual([['web', 5], ['admin', 1]]);
     expect(result.releases).toEqual([

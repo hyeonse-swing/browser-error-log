@@ -1,7 +1,7 @@
 import type { ErrorEventRecord, EventFilter, EventPage, EventType } from '@ihyeon/browser-error-log-protocol';
 import { isBreadcrumbTrail } from '@ihyeon/browser-error-log-protocol';
 
-const types = new Set<EventType>(['javascript', 'promise', 'react', 'console', 'http', 'network', 'manual']);
+const types = new Set<EventType>(['javascript', 'promise', 'react', 'console', 'http', 'network', 'resource', 'manual']);
 const runtimes = new Set(['browser', 'webview-ios', 'webview-android', 'unknown']);
 export function isEventRecord(value: unknown): value is ErrorEventRecord {
   if (!value || typeof value !== 'object') return false;

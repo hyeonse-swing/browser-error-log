@@ -51,7 +51,8 @@ async function consumer(name, dependencies, expectedPackages, esm, cjs, typescri
 await consumer('protocol-only', [`@ihyeon/browser-error-log-protocol@${version}`],
   ['@ihyeon/browser-error-log-protocol'], `
   import { createRequire } from 'node:module';
-  import { SDK_VERSION, isBreadcrumbTrail, BREADCRUMB_LIMITS } from '@ihyeon/browser-error-log-protocol';
+  import { SDK_VERSION, EVENT_LABELS, isBreadcrumbTrail, BREADCRUMB_LIMITS } from '@ihyeon/browser-error-log-protocol';
+  if (EVENT_LABELS.resource !== 'Resource failure') throw Error('Resource contract export missing');
   if (!isBreadcrumbTrail([]) || BREADCRUMB_LIMITS.count !== 20) throw Error('Breadcrumb exports missing');
   if (SDK_VERSION !== '${version}') throw Error('Protocol version differs');
   const require = createRequire(import.meta.url);
@@ -60,10 +61,12 @@ await consumer('protocol-only', [`@ihyeon/browser-error-log-protocol@${version}`
     catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
   }
 `, `
-  const { SDK_VERSION } = require('@ihyeon/browser-error-log-protocol');
+  const { SDK_VERSION, EVENT_LABELS } = require('@ihyeon/browser-error-log-protocol');
+  if (EVENT_LABELS.resource !== 'Resource failure') throw Error('Resource CJS contract export missing');
   if (SDK_VERSION !== '${version}') throw Error('Protocol CJS version differs');
 `, `
-  import { SCHEMA_VERSION, type EventBatch } from '@ihyeon/browser-error-log-protocol';
+  import { SCHEMA_VERSION, type EventBatch, type EventType } from '@ihyeon/browser-error-log-protocol';
+  const resourceType: EventType = 'resource'; void resourceType;
   const batch: EventBatch = { schemaVersion: SCHEMA_VERSION, events: [] }; void batch;
 `);
 
@@ -108,7 +111,7 @@ await consumer('react', [
   import { init, type TransportContext, type BrowserErrorLogClient, type BrowserErrorLogBreadcrumbClient, type BrowserErrorLogDiagnosticsClient, type BrowserErrorLogDiagnostics, type BrowserErrorLogDropReason } from '@ihyeon/browser-error-log';
   import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
   import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';
-  const client = init({ project: 'registry-smoke', enabled: false, captureNavigation: true, captureNetworkBreadcrumbs: true, captureErrorCause: true, maxEventsPerMinute: 60,
+  const client = init({ project: 'registry-smoke', enabled: false, captureNavigation: true, captureNetworkBreadcrumbs: true, captureErrorCause: true, captureResourceErrors: true, maxEventsPerMinute: 60,
     transport: async (batch: EventBatch, context: TransportContext) => { void batch; void context.signal; } });
   client.captureException(new Error(EVENT_LABELS.manual));
   client.addBreadcrumb({ category: 'action', message: 'Registry consumer', data: { attempt: 1 } }); client.clearBreadcrumbs();

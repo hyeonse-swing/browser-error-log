@@ -48,6 +48,12 @@ The SDK's optional `maxEventsPerMinute` limits new queue admissions per client o
 
 `captureErrorCause: true` optionally appends up to four linked error-like `cause` objects to the existing `stack` string as `Caused by:` sections. Outer name/message and event count remain unchanged. Only string name/message/stack content is used; arbitrary cause payloads and aggregate error arrays are not serialized. Sanitized sections share the 4,096-character stack bound (outer 2,048, each cause section 480). It applies to exception paths and the existing first same-window console Error, while automatic network events retain their existing metadata-only behavior. `beforeSend` can remove the full stack by deleting it or assigning `undefined`. This option adds no protocol fields and requires no collector or viewer upgrade.
 
+## Resource event compatibility (0.2.0)
+
+`captureResourceErrors: true` enables the new `resource` event type for observable script, stylesheet-link, and image loading failures. The schema remains v1, using existing `context.resourceTag` (`script`, `link`, `img`) and `context.resourceUrl` scalar fields. These events do not include HTTP status, response data, timing, or stack; the element error event does not provide those facts. Existing context limits and SDK filters apply.
+
+**Deploy a 0.2.0-or-later collector/viewer before enabling resource capture.** Custom backends must extend accepted event types and query filters to include `resource`. Older validators can reject a whole mixed batch. The option defaults to false. The included collector, SQLite/JSONL storage, resource type queries, viewer charts/details, and history import/export support this type in 0.2.0 without a database migration. It is counted separately from fetch/XHR HTTP and transport failures.
+
 ## Read events
 
 The viewer expects list and detail operations, with `/api` as its default base path:
@@ -74,4 +80,4 @@ The viewer fetches up to 100 cursor pages and 10,000 unique events for a selecte
 
 ## Capture boundaries
 
-Initialization starts capture; earlier events cannot be recovered. Aborted requests are excluded. The SDK does not record request/response bodies, cookies, form values, DOM, or session replay. URL and message masking is best-effort and needs application-specific review. A custom transport without `endpoint` disables automatic network capture so its own requests cannot feed back into capture. `beforeSend` and `sanitizeUrl` failures drop events. Source-map resolution, native crashes, alerts, and server-wide aggregates are not implemented. See the [backend contract](server-request.md) for an independent implementation path.
+Initialization starts capture; earlier events cannot be recovered. Aborted requests are excluded. The SDK does not record request/response bodies, cookies, form values, page HTML, element text, or session replay. URL and message masking is best-effort and needs application-specific review. A custom transport without `endpoint` disables automatic fetch/XHR capture so its own requests cannot feed back into capture. Resource capture is independent and observes current-document HTTP(S) resource URLs only; unsupported elements, other documents, and events that do not reach the window are outside its scope. `beforeSend` and `sanitizeUrl` failures drop events. Source-map resolution, native crashes, alerts, and server-wide aggregates are not implemented. See the [backend contract](server-request.md) for an independent implementation path.

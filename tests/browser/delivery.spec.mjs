@@ -81,6 +81,171 @@ test.afterAll(async () => {
   if (scratch) await rm(scratch, { recursive: true, force: true });
 });
 
+test('opt-in resource load failures reach the collector and viewer without DOM details', async ({ page }) => {
+  const defaultEnvironment = randomUUID();
+  const environment = randomUUID();
+  const collectorBodies = [];
+  const resourceRequests = [];
+  const resourceResponses = [];
+  const failedResourceRequests = [];
+  page.on('request', request => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith('/missing-resource-')) resourceRequests.push(pathname);
+    if (request.method() === 'POST' && pathname === '/api/events') {
+      collectorBodies.push(request.postDataJSON());
+    }
+  });
+  page.on('requestfailed', request => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith('/missing-resource-')) failedResourceRequests.push(pathname);
+  });
+  page.on('response', response => {
+    if (new URL(response.url()).pathname.startsWith('/missing-resource-')) {
+      resourceResponses.push([new URL(response.url()).pathname, response.status()]);
+    }
+  });
+  await page.goto(`${origin}/`);
+  const result = await page.evaluate(async ({ defaultEnvironment, environment }) => {
+    const { init } = await import('/sdk.js');
+    const nativeErrors = [];
+    const loadMissing = (tag, path) => new Promise((resolve, reject) => {
+      const element = document.createElement(tag);
+      element.addEventListener('error', () => { nativeErrors.push(tag); resolve(); }, { once: true });
+      element.addEventListener('load', () => reject(new Error(`${tag} unexpectedly loaded`)), { once: true });
+      if (tag === 'link') { element.rel = 'stylesheet'; element.href = path; document.head.append(element); }
+      else if (tag === 'script') { element.src = path; document.head.append(element); }
+      else {
+        element.alt = 'private-alt-secret';
+        element.id = 'private-id-secret';
+        element.src = path;
+        document.body.append(element);
+      }
+    });
+    const defaultClient = init({ project: 'browser-test', environment: defaultEnvironment,
+      endpoint: '/api/events', captureNetwork: false, flushIntervalMs: 60_000 });
+    await loadMissing('img', '/missing-resource-default.png?token=default-secret#default-fragment');
+    await defaultClient.flush();
+    const defaultStats = defaultClient.getStats();
+    defaultClient.destroy();
+
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureNetwork: false, captureResourceErrors: true, flushIntervalMs: 60_000 });
+    await Promise.all([
+      loadMissing('script', '/missing-resource-script.js?token=resource-secret#private-fragment'),
+      loadMissing('link', '/missing-resource-link.css?token=resource-secret#private-fragment'),
+      loadMissing('img', '/missing-resource-img.png?token=resource-secret#private-fragment'),
+    ]);
+    const emptyImage = document.createElement('img');
+    emptyImage.setAttribute('src', '');
+    document.body.append(emptyImage);
+    emptyImage.dispatchEvent(new Event('error'));
+    await client.flush();
+    const stats = client.getStats();
+    client.destroy();
+    return { defaultStats, stats, nativeErrors: nativeErrors.sort() };
+  }, { defaultEnvironment, environment });
+
+  expect(result).toEqual({ defaultStats: { queued: 0, sent: 0, dropped: 0 },
+    stats: { queued: 0, sent: 3, dropped: 0 }, nativeErrors: ['img', 'img', 'link', 'script'] });
+  expect(resourceRequests.sort()).toEqual([
+    '/missing-resource-default.png', '/missing-resource-img.png',
+    '/missing-resource-link.css', '/missing-resource-script.js',
+  ]);
+  expect(resourceResponses.every(([, status]) => status === 404)).toBe(true);
+  expect(resourceResponses.filter(([path]) => path !== '/missing-resource-link.css').sort()).toEqual([
+    ['/missing-resource-default.png', 404], ['/missing-resource-img.png', 404],
+    ['/missing-resource-script.js', 404],
+  ]);
+  expect(resourceResponses.some(([path]) => path === '/missing-resource-link.css') ||
+    failedResourceRequests.includes('/missing-resource-link.css')).toBe(true);
+  expect((await fetch(`${origin}/missing-resource-link.css?token=fixture-secret`)).status).toBe(404);
+  expect(collectorBodies).toHaveLength(1);
+  expect(collectorBodies[0]).toMatchObject({ schemaVersion: 1, events: expect.any(Array) });
+  const wireEvents = collectorBodies[0].events;
+  expect(wireEvents).toHaveLength(3);
+  for (const [tag, extension] of [['script', 'js'], ['link', 'css'], ['img', 'png']]) {
+    const event = wireEvents.find(item => item.context?.resourceTag === tag);
+    expect(event).toMatchObject({ type: 'resource', name: 'ResourceLoadError',
+      message: `Failed to load ${tag} resource`,
+      context: { resourceTag: tag, resourceUrl: `${origin}/missing-resource-${tag}.${extension}` } });
+    expect(Object.keys(event.context).sort()).toEqual(['resourceTag', 'resourceUrl']);
+    for (const field of ['stack', 'network', 'status', 'durationMs']) expect(event).not.toHaveProperty(field);
+  }
+  expect(JSON.stringify(collectorBodies)).not.toMatch(/resource-secret|private-fragment|private-alt-secret|private-id-secret|default-secret|default-fragment/);
+  expect(await events(defaultEnvironment)).toHaveLength(0);
+  await expect.poll(async () => (await events(environment)).length).toBe(3);
+  const stored = await events(environment);
+  expect(stored.map(event => event.type)).toEqual(['resource', 'resource', 'resource']);
+  for (const event of wireEvents) expect(stored.find(item => item.eventId === event.eventId)).toMatchObject(event);
+  const filteredResponse = await fetch(`${origin}/api/events?project=browser-test&environment=${environment}&type=resource`);
+  expect(filteredResponse.ok).toBe(true);
+  expect((await filteredResponse.json()).events).toHaveLength(3);
+
+  await page.goto(`${origin}/viewer.html`);
+  await page.locator('.language-switcher select').selectOption('en');
+  await page.locator('.dash-filters').getByLabel('Environment', { exact: true }).fill(environment);
+  await page.locator('.dash-filters').getByLabel('Error types').selectOption('resource');
+  await expect(page.locator('.dash-filters select option:checked').first()).toHaveText('Resource failure');
+  await page.locator('.dash-filters').getByRole('button', { name: /Query/ }).click();
+  await expect(page.locator('.dash-summary')).toContainText('3 events');
+  await page.locator('.language-switcher select').selectOption('ko');
+  await expect(page.locator('.dash-filters').getByLabel('오류 유형')).toHaveValue('resource');
+  await expect(page.locator('.dash-filters select option:checked').first()).toHaveText('리소스 로딩 실패');
+  await page.locator('.language-switcher select').selectOption('en');
+  await page.getByRole('button', { name: 'Event Timeline', exact: true }).last().click();
+  await page.getByLabel('Environment', { exact: true }).last().fill(environment);
+  await page.getByLabel('Type', { exact: true }).last().selectOption('resource');
+  await expect(page.locator('.event-row')).toHaveCount(3);
+  await page.locator('.event-row').filter({ hasText: 'Failed to load script resource' }).click();
+  const inspector = page.locator('.detail-panel');
+  await expect(inspector).toContainText('resourceTag');
+  await expect(inspector).toContainText(`${origin}/missing-resource-script.js`);
+});
+
+test('captures a resource element adopted from another browser realm', async ({ page }) => {
+  const environment = randomUUID();
+  const collectorBodies = [];
+  const resourceRequests = [];
+  page.on('request', request => {
+    const path = new URL(request.url()).pathname;
+    if (path === '/missing-resource-adopted.png') resourceRequests.push(path);
+    if (request.method() === 'POST' && path === '/api/events') collectorBodies.push(request.postDataJSON());
+  });
+  await page.goto(`${origin}/`);
+  const result = await page.evaluate(async environment => {
+    const { init } = await import('/sdk.js');
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureNetwork: false, captureResourceErrors: true, flushIntervalMs: 60_000 });
+    const frame = document.createElement('iframe');
+    document.body.append(frame);
+    const foreignImage = frame.contentDocument.createElement('img');
+    const foreignRealm = foreignImage instanceof frame.contentWindow.HTMLImageElement;
+    const mainRealm = foreignImage instanceof HTMLImageElement;
+    foreignImage.alt = 'adopted-private-alt';
+    const nativeError = new Promise((resolve, reject) => {
+      foreignImage.addEventListener('error', resolve, { once: true });
+      foreignImage.addEventListener('load', () => reject(new Error('adopted image unexpectedly loaded')), { once: true });
+    });
+    foreignImage.src = '/missing-resource-adopted.png?token=adopted-secret#fragment';
+    document.body.append(foreignImage);
+    await nativeError;
+    await client.flush();
+    const stats = client.getStats();
+    client.destroy();
+    return { foreignRealm, mainRealm, nativeHandlerFired: true, stats };
+  }, environment);
+  expect(result).toEqual({ foreignRealm: true, mainRealm: false, nativeHandlerFired: true,
+    stats: { queued: 0, sent: 1, dropped: 0 } });
+  expect(resourceRequests).toEqual(['/missing-resource-adopted.png']);
+  expect(collectorBodies).toHaveLength(1);
+  expect(collectorBodies[0].events).toHaveLength(1);
+  expect(collectorBodies[0].events[0]).toMatchObject({ type: 'resource', name: 'ResourceLoadError',
+    message: 'Failed to load img resource',
+    context: { resourceTag: 'img', resourceUrl: `${origin}/missing-resource-adopted.png` } });
+  expect(JSON.stringify(collectorBodies)).not.toMatch(/adopted-secret|adopted-private-alt|#fragment/);
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+});
+
 test('delivers sanitized opt-in Error causes without changing the event wire shape', async ({ page }) => {
   const defaultEnvironment = randomUUID();
   const enabledEnvironment = randomUUID();

@@ -31,7 +31,7 @@ npm(['install', tarballs[0]], protocolConsumer);
 execFileSync(process.execPath, ['--input-type=module', '-e', `
   import { createRequire } from 'node:module';
   import { SCHEMA_VERSION, EVENT_LABELS, isBreadcrumbTrail, BREADCRUMB_LIMITS } from '@ihyeon/browser-error-log-protocol';
-  if (SCHEMA_VERSION !== 1 || EVENT_LABELS.manual !== 'Manual') throw Error('Protocol exports invalid');
+  if (SCHEMA_VERSION !== 1 || EVENT_LABELS.manual !== 'Manual' || EVENT_LABELS.resource !== 'Resource failure') throw Error('Protocol exports invalid');
   if (!isBreadcrumbTrail([]) || BREADCRUMB_LIMITS.count !== 20) throw Error('Breadcrumb contract exports invalid');
   const require = createRequire(import.meta.url);
   for (const name of ['@ihyeon/browser-error-log', '@ihyeon/browser-error-log-react', 'react']) {
@@ -40,7 +40,8 @@ execFileSync(process.execPath, ['--input-type=module', '-e', `
   }
 `], { cwd: protocolConsumer, stdio: 'inherit' });
 execFileSync(process.execPath, ['-e', `const {SCHEMA_VERSION}=require('@ihyeon/browser-error-log-protocol');if(SCHEMA_VERSION!==1)throw Error('Protocol CJS export invalid');`], { cwd: protocolConsumer, stdio: 'inherit' });
-writeFileSync(join(protocolConsumer, 'consumer.ts'), `import { SCHEMA_VERSION, type EventBatch } from '@ihyeon/browser-error-log-protocol';
+writeFileSync(join(protocolConsumer, 'consumer.ts'), `import { SCHEMA_VERSION, type EventBatch, type EventType } from '@ihyeon/browser-error-log-protocol';
+const resourceType: EventType = 'resource'; void resourceType;
 const batch: EventBatch = { schemaVersion: SCHEMA_VERSION, events: [] }; void batch;`);
 execFileSync(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', 'consumer.ts'], { cwd: protocolConsumer, stdio: 'inherit' });
 
@@ -67,7 +68,7 @@ npm(['install', ...tarballs, ...peers], consumer);
 writeFileSync(join(consumer, 'consumer.tsx'), `import { init, type TransportContext, type BrowserErrorLogClient, type BrowserErrorLogBreadcrumbClient, type BrowserErrorLogDiagnosticsClient, type BrowserErrorLogDiagnostics, type BrowserErrorLogDropReason } from '@ihyeon/browser-error-log';
 import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
 import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';
-const client = init({project:'consumer',enabled:false,context:{buildChannel:'stable'},getContext:()=>({appSection:'checkout'}),captureNavigation:true,captureNetworkBreadcrumbs:true,captureErrorCause:true,maxEventsPerMinute:60,transport:async(batch:EventBatch,context:TransportContext)=>{void batch;void context.signal;}});
+const client = init({project:'consumer',enabled:false,context:{buildChannel:'stable'},getContext:()=>({appSection:'checkout'}),captureNavigation:true,captureNetworkBreadcrumbs:true,captureErrorCause:true,captureResourceErrors:true,maxEventsPerMinute:60,transport:async(batch:EventBatch,context:TransportContext)=>{void batch;void context.signal;}});
 const extended: BrowserErrorLogBreadcrumbClient = client;
 extended.addBreadcrumb({message:'Checkout',data:{attempt:1}}); extended.clearBreadcrumbs();
 const oldClient: BrowserErrorLogClient = {captureException(){},flush:async()=>{},destroy(){},getStats:()=>({queued:0,sent:0,dropped:0})};

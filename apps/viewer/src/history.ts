@@ -6,7 +6,7 @@ export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 
 const PAGE_SIZE = 100;
 const MAX_PAGES = 100;
-const eventTypes = new Set<EventType>(['javascript', 'promise', 'react', 'console', 'http', 'network', 'manual']);
+const eventTypes = new Set<EventType>(['javascript', 'promise', 'react', 'console', 'http', 'network', 'resource', 'manual']);
 const runtimes = new Set<Runtime>(['browser', 'webview-ios', 'webview-android', 'unknown']);
 const isoDate = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|([+-])(\d{2}):(\d{2}))$/;
 

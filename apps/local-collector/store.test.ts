@@ -2,6 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { createSampleEvents, EventStore, isEventRecord } from './store';
 import { BREADCRUMB_LIMITS } from '@ihyeon/browser-error-log-protocol';
 describe('local collector contract', () => {
+  it('accepts and filters resource failures without inventing HTTP metadata', () => {
+    const resource = { ...createSampleEvents()[0], type: 'resource' as const,
+      name: 'ResourceLoadError', message: 'Failed to load script resource', stack: undefined,
+      context: { resourceTag: 'script', resourceUrl: 'https://example.test/assets/app.js' } };
+    expect(isEventRecord(resource)).toBe(true);
+    const store = new EventStore();
+    store.add(resource);
+    expect(store.list({ type: 'resource' }).events).toHaveLength(1);
+    expect(store.list({ type: 'javascript' }).events).toHaveLength(0);
+    expect(store.get(resource.project, resource.eventId)?.context).toEqual(resource.context);
+    expect(store.get(resource.project, resource.eventId)?.network).toBeUndefined();
+  });
   it('deduplicates retries without replacing the original event', () => {
     const store = new EventStore(); const e = createSampleEvents()[0];
     expect(store.add(e)).toBe(true); expect(store.add({ ...e, message: 'retry' })).toBe(false);

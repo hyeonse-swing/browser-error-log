@@ -10,7 +10,7 @@ import type { MicroConfig, MicroStorage } from './types.ts';
 const MAX_BODY_BYTES = 64 * 1024;
 const BODY_TIMEOUT_MS = 10_000;
 const DETAIL_PREFIX = '/api/events/';
-const EVENT_TYPES = new Set<EventType>(['javascript', 'promise', 'react', 'console', 'http', 'network', 'manual']);
+const EVENT_TYPES = new Set<EventType>(['javascript', 'promise', 'react', 'console', 'http', 'network', 'resource', 'manual']);
 const MIME_TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',

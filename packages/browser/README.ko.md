@@ -84,6 +84,24 @@ errorLog.captureException(new Error('Dashboard could not load', { cause }));
 
 유효한 원인이 있으면 바깥 스택은 최대 2,048자, 각 원인 구간은 최대 480자를 사용하며 전체 스택은 기존 4,096자 안으로 제한합니다. 구간을 자르기 전에 기존 텍스트·URL 필터를 적용합니다. 프로토콜 필드나 수집기 갱신 없이 기존 뷰어의 스택 상세에서 볼 수 있습니다. 원인 메시지와 경로에도 민감정보가 있을 수 있으므로 앱별 필터를 검토한 뒤 켜세요. `beforeSend`에서 합쳐진 스택을 수정하거나 `delete event.stack`·`event.stack = undefined`로 제거하고 이벤트 전체를 제외할 수도 있습니다. URL 필터가 실패하면 필터링하지 않은 원인 정보를 보내지 않고 이벤트를 버립니다.
 
+## 리소스 로딩 실패 수집
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  captureResourceErrors: true,
+});
+```
+
+**이 옵션을 켜기 전에 수집기와 뷰어를 0.2.0 이상으로 갱신하세요.** 자체 백엔드도 스키마와 유형 필터에서 `type: 'resource'`를 허용해야 합니다. 이전 수집기는 새 유형이 섞인 배치 전체를 거부할 수 있습니다. 기본값은 꺼짐이므로 기존 일반 이벤트 유형은 이전 수집기와 계속 사용할 수 있습니다.
+
+초기화 이후 현재 문서에서 발생하는 script·스타일시트 link·img의 로딩 오류를 관찰합니다. 이벤트 유형은 `resource`, 이름은 `ResourceLoadError`이며 `Failed to load script resource` 같은 고정 메시지와 단일 값 `context.resourceTag`(`script`, `link`, `img`)·`context.resourceUrl`을 기록합니다. 이미지의 선택된 `currentSrc`가 있으면 이를 사용합니다. HTTP(S) URL만 기존 URL·텍스트 필터와 context 한도로 기록하며 HTML·요소 텍스트·ID·class·alt·폼 값·srcset 목록은 복사하지 않습니다. 수집기 URL과 지원하지 않는 리소스 종류·스킴은 제외합니다.
+
+요소의 error 이벤트에는 HTTP 상태나 응답 본문이 없으므로 상태·네트워크 소요 시간·스택을 만들어 넣지 않습니다. 파일 누락, 브라우저 정책, 이미지 디코딩 등 여러 이유로 발생할 수 있으며 SDK가 요청을 반복하거나 확인용 요청을 보내지는 않습니다. fetch·XHR 수집과 독립적으로 동작하고 요소의 기존 핸들러와 기본 동작을 유지합니다. 초기화 전 오류나 다른 문서, window까지 전달되지 않는 이벤트 경계 안의 오류는 복원하지 못합니다.
+
+공통 context, 작업 기록, `beforeSend`, 수집 한도, 큐 한도, 진단 통계를 공유합니다. 기존 최대 12개 context 항목 안에서 두 리소스 항목을 공통 context보다 우선합니다. URL·context 콜백 실패 시 이벤트를 버리고 `beforeSend`가 제외하면 필터링으로 집계합니다. `destroy()`는 리스너를 해제합니다. 0.2.0 뷰어의 유형 필터·차트·상세·이력 JSON도 새 유형을 지원합니다.
+
 ## 오류 전 작업 기록
 
 ```ts
@@ -159,7 +177,7 @@ currentAppSection = 'account'; // 이후 이벤트에는 현재 값을 사용
 
 `captureConsole: true`로 `console.error` 호출을 수집할 수 있습니다. 인자를 합친 메시지는 유지하며, 같은 창에서 생성된 첫 번째 `Error` 인자의 이름과 스택도 기록합니다. 동일한 민감정보 필터와 `beforeSend` 제어가 적용됩니다.
 
-기본 HTTP 수집은 5xx와 네트워크 실패를 포함하고 의도적인 취소와 수집기 endpoint를 제외합니다. SDK는 URL 쿼리·해시·자격 정보와 흔한 이메일/토큰 패턴을 제거합니다. 요청/응답 본문, 쿠키, DOM, 폼 입력, 세션 녹화는 수집하지 않습니다. 오류 메시지, URL 경로, 스택, 사용자 지정 context에는 민감정보가 남을 수 있으므로 앱별 필터를 설정하세요. `beforeSend`나 `sanitizeUrl`이 실패하면 이벤트를 버립니다.
+기본 HTTP 수집은 5xx와 네트워크 실패를 포함하고 의도적인 취소와 수집기 endpoint를 제외합니다. SDK는 URL 쿼리·해시·자격 정보와 흔한 이메일/토큰 패턴을 제거합니다. 요청/응답 본문, 쿠키, 페이지 HTML, 요소 텍스트, 폼 입력, 세션 녹화는 수집하지 않습니다. 오류 메시지, URL 경로, 스택, 사용자 지정 context에는 민감정보가 남을 수 있으므로 앱별 필터를 설정하세요. `beforeSend`나 `sanitizeUrl`이 실패하면 이벤트를 버립니다.
 
 사용자 지정 `transport(batch, { signal })`에서는 요청에 `signal`을 전달하고 전송 실패 시 reject하세요. 자동 네트워크 오류 수집이나 요청 기록을 원하면 자기 전송을 제외할 `endpoint`를 지정해야 합니다. 없으면 사용자 지정 transport에서 두 경로를 모두 끕니다. 기본 전송은 credentials를 보내지 않습니다.
 

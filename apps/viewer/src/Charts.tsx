@@ -9,7 +9,7 @@ import './charts.css';
 const eventTypes = Object.keys(EVENT_LABELS) as EventType[];
 const typeColors: Record<EventType, string> = {
   javascript: '#2563eb', promise: '#7c3aed', react: '#0d9488',
-  console: '#525252', http: '#ea580c', network: '#dc2626', manual: '#a3a3a3',
+  console: '#525252', http: '#ea580c', network: '#dc2626', resource: '#b45309', manual: '#a3a3a3',
 };
 const dateText = (value: number | string, locale: Locale, withDate = false) => new Intl.DateTimeFormat(locale === 'ko' ? 'ko-KR' : 'en-US', {
   month: withDate ? '2-digit' : undefined, day: withDate ? '2-digit' : undefined,

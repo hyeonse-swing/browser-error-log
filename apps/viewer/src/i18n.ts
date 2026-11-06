@@ -87,7 +87,7 @@ export function t(locale: Locale, english: string): string {
 
 const koreanTypes: Record<EventType, string> = {
   javascript: 'JavaScript 오류', promise: 'Promise 오류', react: 'React 오류', console: '콘솔 오류',
-  http: 'HTTP 오류', network: '네트워크 실패', manual: '직접 기록',
+  http: 'HTTP 오류', network: '네트워크 실패', resource: '리소스 로딩 실패', manual: '직접 기록',
 };
 
 export function eventLabel(locale: Locale, type: EventType): string {

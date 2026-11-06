@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { BREADCRUMB_LIMITS, isBreadcrumbTrail, type Breadcrumb } from './index';
+import { BREADCRUMB_LIMITS, EVENT_LABELS, isBreadcrumbTrail, type Breadcrumb, type EventType } from './index';
+
+it('exposes resource failures as a distinct event type', () => {
+  const type: EventType = 'resource';
+  expect(EVENT_LABELS[type]).toBe('Resource failure');
+});
 
 const entry = (): Breadcrumb => ({
   occurredAt: '2026-11-02T00:00:00.000Z', category: 'navigation', message: 'Checkout opened',

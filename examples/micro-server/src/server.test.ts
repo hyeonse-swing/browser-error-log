@@ -122,6 +122,19 @@ describe('micro-server HTTP boundary', () => {
     expect((await fetch(`${base}/api/events`, { method: 'OPTIONS', headers: { Origin: origin, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'authorization' } })).status).toBe(403);
   });
 
+  it('ingests resource events and accepts their authenticated type filter', async () => {
+    await start();
+    const resource = { ...event, type: 'resource', stack: undefined,
+      context: { resourceTag: 'img', resourceUrl: 'https://example.test/missing.png' } };
+    const posted = await fetch(`${base}/api/events`, { method: 'POST',
+      headers: { Origin: origin, 'Content-Type': 'application/json' }, body: batch([resource]) });
+    expect(posted.status).toBe(200);
+    expect(storage.writeBatch).toHaveBeenCalledWith([expect.objectContaining({ type: 'resource', context: resource.context })]);
+    const list = await fetch(`${base}/api/events?project=my-web&type=resource`, { headers: auth });
+    expect(list.status).toBe(200);
+    expect(storage.list).toHaveBeenCalledWith(expect.objectContaining({ project: 'my-web', type: 'resource' }));
+  });
+
   it('rejects invalid batches atomically and reports size/content errors', async () => {
     await start();
     const post = (body: string, contentType = 'application/json') => fetch(`${base}/api/events`, { method: 'POST', headers: { 'Content-Type': contentType }, body });

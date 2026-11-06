@@ -1,7 +1,7 @@
 export const SCHEMA_VERSION = 1 as const;
 export const SDK_VERSION = '0.1.21';
 
-export type EventType = 'javascript' | 'promise' | 'react' | 'console' | 'http' | 'network' | 'manual';
+export type EventType = 'javascript' | 'promise' | 'react' | 'console' | 'http' | 'network' | 'resource' | 'manual';
 export type Runtime = 'browser' | 'webview-ios' | 'webview-android' | 'unknown';
 
 export const BREADCRUMB_LIMITS = {
@@ -84,5 +84,5 @@ export interface EventDataSource {
 
 export const EVENT_LABELS: Record<EventType, string> = {
   javascript: 'JavaScript', promise: 'Promise', react: 'React', console: 'Console',
-  http: 'HTTP error', network: 'Network failure', manual: 'Manual',
+  http: 'HTTP error', network: 'Network failure', resource: 'Resource failure', manual: 'Manual',
 };

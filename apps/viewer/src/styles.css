@@ -619,7 +619,7 @@ a {
   padding: 3px var(--spacing-8);
 }
 
-.type-network,.type-http {
+.type-network,.type-http,.type-resource {
   color: var(--color-warning-ink);
   background: var(--surface-orange-wash);
 }

@@ -25,6 +25,8 @@ export interface BrowserErrorLogOptions {
   captureConsole?: boolean;
   /** Includes up to four sanitized Error.cause entries in exception stacks; defaults to false. */
   captureErrorCause?: boolean;
+  /** Captures script, stylesheet link, and image load errors; defaults to false. */
+  captureResourceErrors?: boolean;
   /** Records sanitized History navigation breadcrumbs; defaults to false. */
   captureNavigation?: boolean;
   /** Defaults to true. With a custom transport, automatic network capture requires endpoint for collector exclusion. */
@@ -83,7 +85,7 @@ const MAX_BEACON_EVENTS = 10;
 const MAX_BEACON_BYTES = 24_000;
 const RETRY_DELAYS_MS = [250, 500];
 const SENSITIVE_KEY = /(?:password|passwd|token|secret|authorization|cookie|session|api.?key|credential|bearer|private.?key)/i;
-const EVENT_TYPES = new Set<EventType>(['javascript', 'promise', 'react', 'console', 'http', 'network', 'manual']);
+const EVENT_TYPES = new Set<EventType>(['javascript', 'promise', 'react', 'console', 'http', 'network', 'manual', 'resource']);
 const RUNTIMES = new Set<Runtime>(['browser', 'webview-ios', 'webview-android', 'unknown']);
 let fallbackId = 0;
 
@@ -157,6 +159,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   private readonly networkBreadcrumbCaptureEnabled: boolean;
   private readonly navigationCaptureEnabled: boolean;
   private readonly captureErrorCause: boolean;
+  private readonly resourceCaptureEnabled: boolean;
   private readonly transportTimeoutMs: number;
   private readonly startedAt = now();
   private readonly viewId = newId();
@@ -193,6 +196,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     this.networkBreadcrumbCaptureEnabled = options.captureNetworkBreadcrumbs === true && automaticNetworkAllowed;
     this.navigationCaptureEnabled = options.captureNavigation === true;
     this.captureErrorCause = options.captureErrorCause === true;
+    this.resourceCaptureEnabled = options.captureResourceErrors === true;
     this.maxQueueSize = boundedNumber(options.maxQueueSize, 1, 100, 50);
     this.maxEventsPerMinute = typeof options.maxEventsPerMinute === 'number' && Number.isFinite(options.maxEventsPerMinute)
       ? boundedNumber(options.maxEventsPerMinute, 1, 1000, 1) : undefined;
@@ -203,6 +207,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     if (!options.transport && !options.endpoint) throw new Error('endpoint or transport is required');
     this.endpoint = options.endpoint ? this.absoluteUrl(options.endpoint) : undefined;
     window.addEventListener('error', this.onError);
+    if (this.resourceCaptureEnabled) window.addEventListener('error', this.onResourceError, true);
     window.addEventListener('unhandledrejection', this.onRejection);
     document.addEventListener('visibilitychange', this.onVisibility);
     if (this.networkCaptureEnabled || this.networkBreadcrumbCaptureEnabled) addNetworkClient(this);
@@ -340,6 +345,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     if (this.interval) clearInterval(this.interval);
     if (this.active) {
       window.removeEventListener('error', this.onError);
+      if (this.resourceCaptureEnabled) window.removeEventListener('error', this.onResourceError, true);
       window.removeEventListener('unhandledrejection', this.onRejection);
       document.removeEventListener('visibilitychange', this.onVisibility);
       if (this.networkCaptureEnabled || this.networkBreadcrumbCaptureEnabled) removeNetworkClient(this);
@@ -373,6 +379,8 @@ class Client implements BrowserErrorLogDiagnosticsClient {
 
   private readonly onError = (event: ErrorEvent): void => {
     try {
+      // Browsers can expose a Window proxy as the target; only global errors belong here.
+      if (!(read(event, 'target') instanceof Window)) return;
       const filename = read(event, 'filename');
       const lineno = read(event, 'lineno');
       const colno = read(event, 'colno');
@@ -384,6 +392,63 @@ class Client implements BrowserErrorLogDiagnosticsClient {
         type: 'javascript', ...(Object.keys(context).length ? { context } : {}),
       });
     } catch { this.recordDrop('processingError'); /* a failing URL hook must not affect the host app */ }
+  };
+
+  private readonly onResourceError = (event: Event): void => {
+    if (this.destroyed || !this.active) return;
+    try {
+      const target = read(event, 'target');
+      if (read(target, 'ownerDocument') !== document || !document.contains(target as Node)) return;
+      if (read(target, 'namespaceURI') !== 'http://www.w3.org/1999/xhtml') return;
+      const localName = read(target, 'localName');
+      if (localName !== 'script' && localName !== 'link' && localName !== 'img') return;
+      const getAttribute = read(target, 'getAttribute');
+      if (typeof getAttribute !== 'function') return;
+      const attribute = (name: string): unknown => {
+        try { return Reflect.apply(getAttribute, target, [name]); }
+        catch { return undefined; }
+      };
+      const tag: 'script' | 'link' | 'img' = localName;
+      let rawUrl: unknown;
+      if (tag === 'script') {
+        const src = attribute('src');
+        if (typeof src !== 'string' || !src.trim()) return;
+        rawUrl = read(target, 'src');
+      } else if (tag === 'link') {
+        const rel = read(target, 'rel');
+        if (typeof rel !== 'string' || !rel.split(/\s+/).some(token => token.toLowerCase() === 'stylesheet')) return;
+        const href = attribute('href');
+        if (typeof href !== 'string' || !href.trim()) return;
+        rawUrl = read(target, 'href');
+      } else {
+        const currentSrc = read(target, 'currentSrc');
+        if (typeof currentSrc === 'string' && currentSrc.trim()) rawUrl = currentSrc;
+        else {
+          const src = attribute('src');
+          if (typeof src !== 'string' || !src.trim()) return;
+          rawUrl = read(target, 'src');
+        }
+      }
+      if (typeof rawUrl !== 'string' || !rawUrl.trim()) return;
+      let source: URL;
+      try { source = new URL(rawUrl, window.location.href); }
+      catch { return; }
+      if (source.protocol !== 'http:' && source.protocol !== 'https:') return;
+      if (this.isCollectorUrl(source.href)) return;
+      const resourceUrl = this.cleanUrl(source.href);
+      let cleaned: URL;
+      try { cleaned = new URL(resourceUrl); }
+      catch { throw new UrlSanitizationError('Invalid resource URL'); }
+      if ((cleaned.protocol !== 'http:' && cleaned.protocol !== 'https:') || cleaned.username || cleaned.password || cleaned.search || cleaned.hash) {
+        throw new UrlSanitizationError('Unsafe resource URL');
+      }
+      this.enqueue(this.makeEvent('resource', `Failed to load ${tag} resource`, {
+        name: 'ResourceLoadError', context: { resourceTag: tag, resourceUrl },
+      }));
+    } catch (error) {
+      if (error instanceof UrlSanitizationError || error instanceof ContextResolutionError) this.recordDrop('processingError');
+      // A hostile DOM value or hook must not change the host application's error behavior.
+    }
   };
 
   private readonly onRejection = (event: PromiseRejectionEvent): void => {

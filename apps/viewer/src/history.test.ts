@@ -78,6 +78,13 @@ describe('historical loading', () => {
 });
 
 describe('portable history', () => {
+  it('preserves resource failures through import, filtering, and export', () => {
+    const resource = event({ type: 'resource', name: 'ResourceLoadError',
+      context: { resourceTag: 'link', resourceUrl: 'https://example.test/missing.css' } });
+    const imported = parseHistoryJson(JSON.stringify([resource, event({ eventId: 'other' })]));
+    expect(filterHistory(imported.events, { type: 'resource' })).toEqual([resource]);
+    expect(parseHistoryJson(serializeHistory(imported.events)).events.find(row => row.type === 'resource')).toEqual(resource);
+  });
   it('retains a cloned breadcrumb trail through loading, export, and import', async () => {
     const trail = [{ occurredAt: '2026-10-02T00:00:00.000Z', category: 'navigation', message: 'Opened page', data: { route: '/home' } }];
     const original = event({ breadcrumbs: trail });
