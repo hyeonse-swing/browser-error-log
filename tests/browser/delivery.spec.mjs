@@ -81,6 +81,71 @@ test.afterAll(async () => {
   if (scratch) await rm(scratch, { recursive: true, force: true });
 });
 
+test('deduplicates fresh equivalent errors across flushes only when enabled', async ({ page }) => {
+  const environment = randomUUID();
+  const defaultEnvironment = randomUUID();
+  const collectorBodies = [];
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/events') {
+      collectorBodies.push(request.postDataJSON());
+    }
+  });
+  await page.goto(`${origin}/`);
+  const result = await page.evaluate(async ({ environment, defaultEnvironment }) => {
+    const { init } = await import('/sdk.js');
+    const freshError = () => {
+      const error = new Error('duplicate failure');
+      error.stack = 'Error: duplicate failure\n    at fixedFrame (bundle.js:1:1)';
+      return error;
+    };
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureNetwork: false, dedupeIntervalMs: 60_000,
+      flushIntervalMs: 60_000 });
+    client.captureException(freshError(), { context: { phase: 'same' } });
+    client.captureException(freshError(), { context: { phase: 'same' } });
+    const afterDuplicate = client.getDiagnostics();
+    client.captureException(freshError(), { context: { phase: 'different' } });
+    const beforeFlush = client.getDiagnostics();
+    await client.flush();
+    const afterFlush = client.getDiagnostics();
+    client.captureException(freshError(), { context: { phase: 'same' } });
+    await client.flush();
+    const afterRepeat = client.getDiagnostics();
+    const stats = client.getStats();
+    client.destroy();
+
+    const defaultClient = init({ project: 'browser-test', environment: defaultEnvironment,
+      endpoint: '/api/events', captureNetwork: false, flushIntervalMs: 60_000 });
+    defaultClient.captureException(freshError());
+    defaultClient.captureException(freshError());
+    await defaultClient.flush();
+    const defaultStats = defaultClient.getStats();
+    const defaultDiagnostics = defaultClient.getDiagnostics();
+    defaultClient.destroy();
+    return { afterDuplicate, beforeFlush, afterFlush, afterRepeat, stats,
+      defaultStats, defaultDiagnostics };
+  }, { environment, defaultEnvironment });
+
+  expect(result.afterDuplicate).toMatchObject({ queued: 1, sent: 0, dropped: 0, deduplicated: 1 });
+  expect(result.beforeFlush).toMatchObject({ queued: 2, sent: 0, dropped: 0, deduplicated: 1 });
+  expect(result.afterFlush).toMatchObject({ queued: 0, sent: 2, dropped: 0, deduplicated: 1 });
+  expect(result.afterRepeat).toMatchObject({ queued: 0, sent: 2, dropped: 0, deduplicated: 2 });
+  expect(result.stats).toEqual({ queued: 0, sent: 2, dropped: 0 });
+  expect(result.defaultStats).toEqual({ queued: 0, sent: 2, dropped: 0 });
+  expect(result.defaultDiagnostics).toMatchObject({ queued: 0, sent: 2, dropped: 0, deduplicated: 0 });
+  expect(collectorBodies).toHaveLength(2);
+  expect(collectorBodies.every(batch => batch.schemaVersion === 1)).toBe(true);
+  const wire = collectorBodies.flatMap(batch => batch.events);
+  expect(wire).toHaveLength(4);
+  expect(new Set(wire.map(event => event.eventId)).size).toBe(4);
+  expect(wire.filter(event => event.environment === environment).map(event => event.context.phase).sort()).toEqual(['different', 'same']);
+  expect(wire.filter(event => event.environment === defaultEnvironment)).toHaveLength(2);
+  expect(JSON.stringify(collectorBodies)).not.toMatch(/dedupeIntervalMs|deduplicated|fingerprint/);
+  await expect.poll(async () => (await events(environment)).length).toBe(2);
+  await expect.poll(async () => (await events(defaultEnvironment)).length).toBe(2);
+  expect((await events(environment)).map(event => event.context.phase).sort()).toEqual(['different', 'same']);
+});
+
 test('filters and sanitizes breadcrumbs at creation without changing error delivery', async ({ page }) => {
   const environment = randomUUID();
   const collectorBodies = [];

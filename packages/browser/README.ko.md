@@ -219,6 +219,22 @@ const errorLog = init({
 
 한도는 현재 문서의 해당 클라이언트에 속하며 새 클라이언트나 전체 페이지 로드에서는 새로 시작합니다. 큐 진입 건수를 제한하므로 HTTP 요청 수·바이트·서버 전체 트래픽이나 이벤트 생성 작업량의 상한을 뜻하지는 않습니다. 수집기에는 별도의 서버 측 제한을 적용하세요.
 
+## 같은 내용의 반복 오류 제한
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  dedupeIntervalMs: 5_000,
+});
+```
+
+클라이언트가 설정 시간 안에 큐에 담은 이벤트와 최종 정제 내용이 같으면 새 이벤트를 제외하는 선택 옵션입니다. 기본값은 꺼짐이며 유한한 값은 소수점을 내리고 0~60,000ms로 조정합니다. 0·생략·숫자가 아닌 값·유한하지 않은 값은 제한을 끕니다. 유형·이름·메시지·스택·컴포넌트 스택·프로젝트·환경·릴리스·페이지·런타임·브라우저·키를 정렬한 단일 값 context·네트워크 메서드/URL/상태를 비교합니다. ID·시각·순서·경과 시간·작업 기록·요청 소요 시간은 비교에서 제외합니다. context의 리소스 URL이나 다른 비교 값이 다르면 별도로 수집합니다.
+
+`beforeSend`와 크기 검사를 통과한 뒤 비교합니다. 기존 `maxEventsPerMinute`의 사전 검사는 먼저 실행하므로 한도가 가득 차면 `beforeSend`나 내용 비교 없이 분당 한도 초과로 집계합니다. 그 외 중복은 `getDiagnostics().deduplicated`에 한 번 반영하고 폐기 건수나 큐 진입 한도에 더하지 않으며 제한 시간을 연장하지 않습니다. `captureException`에서 같은 Error 객체를 클라이언트 수명 동안 제외하던 동작도 별도로 유지합니다.
+
+클라이언트마다 정제된 비교 값을 메모리에 최대 50개 보관합니다. 이후 후보가 생길 때 만료를 확인하고, 한도에 닿으면 가장 오래 전에 담은 값을 제거합니다. flush·재시도·beacon 전송·작업 기록 정리는 이 버퍼를 초기화하지 않습니다. 큐에 담긴 이벤트가 나중에 밀려나거나 전송에 실패해도 설정 시간 동안 비교 기준으로 남으며 `destroy()`는 버퍼를 비웁니다. 서버에서 발생 횟수를 합치는 기능이 아니므로 수집 건수가 전체 발생 빈도를 뜻하지는 않습니다. 전송 필드 변경이나 수집기 갱신은 필요 없습니다.
+
 ## SDK 수집·전송 진단
 
 ```ts
@@ -228,7 +244,7 @@ console.log(diagnostics.inFlight, diagnostics.filtered, diagnostics.deduplicated
 console.table(diagnostics.droppedByReason);
 ```
 
-`getDiagnostics()`는 기존 `queued`·`sent`·`dropped`에 `inFlight`(재시도 대기를 포함한 전송 배치 내 이벤트 수), `filtered`(`beforeSend`가 `false` 또는 `null`을 반환한 횟수), `deduplicated`(`captureException`의 기존 동일 객체 중복 제외 횟수)와 다음 원인별 건수를 더해 반환합니다.
+`getDiagnostics()`는 기존 `queued`·`sent`·`dropped`에 `inFlight`(재시도 대기를 포함한 전송 배치 내 이벤트 수), `filtered`(`beforeSend`가 `false` 또는 `null`을 반환한 횟수), `deduplicated`(동일 객체 및 선택적인 시간 구간 내 내용 중복 제외 횟수)와 다음 원인별 건수를 더해 반환합니다.
 
 | `droppedByReason` 키 | 집계하는 이벤트 |
 | --- | --- |

@@ -219,6 +219,22 @@ Flushing an empty queue does not reset the budget. Retries and beacon delivery r
 
 The budget belongs to this client in the current document; a new client or full page load starts a new one. It limits queue admission, not HTTP request counts, bytes, server-wide traffic, or the work done to construct an event. Use independent server-side limits for your collector.
 
+## Suppress repeated equivalent errors
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  dedupeIntervalMs: 5_000,
+});
+```
+
+This optional setting suppresses new events whose final sanitized content matches an event admitted by this client within the interval. It is off by default. Finite values are rounded down and clamped to 0–60,000 ms; zero, omitted, non-number, and non-finite values disable it. The SDK compares type, name, message, stack, component stack, project, environment, release, page, runtime, browser, sorted scalar context, and network method/URL/status. IDs, timestamps, sequence, elapsed time, breadcrumbs, and request duration do not distinguish equivalent events. Different resource URLs in context or other compared context values remain separate.
+
+Matching happens after `beforeSend` and the payload-size check. The existing early `maxEventsPerMinute` gate still runs first: when it is full, the candidate counts as a rate-limit drop without running `beforeSend` or value comparison. Otherwise, suppressing a match increments `getDiagnostics().deduplicated` once, does not count as dropped or consume admission capacity, and does not extend the interval. The same Error object's existing lifetime suppression in `captureException` remains independent of this option.
+
+Each client retains at most 50 sanitized fingerprints in memory. Expiration is checked lazily on later candidates; the oldest admitted fingerprints are evicted at capacity. Flush, retries, beacon delivery, and breadcrumb cleanup do not reset the cache. An admitted event remains a reference during its interval even if it is later evicted from the queue or fails delivery. `destroy()` clears the cache. This reduces captured occurrences rather than aggregating them on the server; captured counts are not the full occurrence frequency. The option changes no wire fields and needs no collector upgrade.
+
 ## Inspect SDK collection and delivery
 
 ```ts
@@ -228,7 +244,7 @@ console.log(diagnostics.inFlight, diagnostics.filtered, diagnostics.deduplicated
 console.table(diagnostics.droppedByReason);
 ```
 
-`getDiagnostics()` returns the existing `queued`, `sent`, and `dropped` counts, plus `inFlight` (events in a delivery batch, including retry waits), `filtered` (`beforeSend` returned `false` or `null`), `deduplicated` (the existing same-object suppression in `captureException`), and these drop reasons:
+`getDiagnostics()` returns the existing `queued`, `sent`, and `dropped` counts, plus `inFlight` (events in a delivery batch, including retry waits), `filtered` (`beforeSend` returned `false` or `null`), `deduplicated` (same-object suppression and optional interval-based suppression), and these drop reasons:
 
 | `droppedByReason` key | Events counted |
 | --- | --- |

@@ -42,6 +42,8 @@ export interface BrowserErrorLogOptions {
   maxQueueSize?: number;
   /** Maximum new events admitted in any rolling 60 seconds; disabled by default. */
   maxEventsPerMinute?: number;
+  /** Suppresses matching sanitized events for this many milliseconds; disabled by default. */
+  dedupeIntervalMs?: number;
   /** Per-attempt deadline, clamped to 250–60000 ms; defaults to 5000 ms. */
   transportTimeoutMs?: number;
 }
@@ -145,6 +147,16 @@ function boundedNumber(value: unknown, minimum: number, maximum: number, fallbac
     : fallback;
 }
 
+function eventFingerprint(event: ErrorEventRecord): string {
+  return JSON.stringify([
+    event.type, event.name ?? null, event.message, event.stack ?? null,
+    event.componentStack ?? null, event.project, event.environment, event.release,
+    event.page, event.runtime, event.browser ?? null,
+    event.context === undefined ? null : Object.keys(event.context).sort().map(key => [key, event.context![key]]),
+    event.network === undefined ? null : [event.network.method, event.network.url, event.network.status ?? null],
+  ]);
+}
+
 class HttpDeliveryError extends Error {
   constructor(readonly status: number) { super(`Collector responded ${status}`); }
 }
@@ -171,6 +183,9 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   private recordingBreadcrumb = false;
   private readonly maxQueueSize: number;
   private readonly maxEventsPerMinute?: number;
+  private readonly dedupeIntervalMs: number;
+  private readonly dedupeCache = new Map<string, number>();
+  private lastDedupeClock?: number;
   private readonly admittedAt: number[] = [];
   private readonly cancelWaits = new Set<() => void>();
   private readonly controllers = new Set<AbortController>();
@@ -203,6 +218,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     this.maxQueueSize = boundedNumber(options.maxQueueSize, 1, 100, 50);
     this.maxEventsPerMinute = typeof options.maxEventsPerMinute === 'number' && Number.isFinite(options.maxEventsPerMinute)
       ? boundedNumber(options.maxEventsPerMinute, 1, 1000, 1) : undefined;
+    this.dedupeIntervalMs = boundedNumber(options.dedupeIntervalMs, 0, 60_000, 0);
     this.transportTimeoutMs = boundedNumber(options.transportTimeoutMs, 250, 60_000, 5_000);
     this.destroySignal = new Promise(resolve => { this.resolveDestroy = resolve; });
     if (!this.active) return;
@@ -377,6 +393,8 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     this.breadcrumbs.length = 0;
     this.admittedAt.length = 0;
     this.lastAdmissionClock = undefined;
+    this.dedupeCache.clear();
+    this.lastDedupeClock = undefined;
     for (const cancel of this.cancelWaits) cancel();
     for (const controller of this.controllers) controller.abort();
     this.resolveDestroy(DESTROYED);
@@ -746,6 +764,15 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     return this.admittedAt.length < this.maxEventsPerMinute! ? current : undefined;
   }
 
+  private dedupeTime(): number {
+    const reading = now();
+    const current = Number.isFinite(reading)
+      ? Math.max(0, reading, this.lastDedupeClock ?? 0)
+      : this.lastDedupeClock ?? 0;
+    this.lastDedupeClock = current;
+    return current;
+  }
+
   private enqueue(event: ErrorEventRecord): boolean {
     if (this.destroyed) return false;
     if (this.maxEventsPerMinute !== undefined && this.admissionTime() === undefined) {
@@ -763,13 +790,28 @@ class Client implements BrowserErrorLogDiagnosticsClient {
         finalEvent = this.sanitizeReplacement(result === undefined ? copy : result, event);
       } catch { this.recordDrop('processingError'); return false; }
     }
+    if (this.destroyed) return false;
     // A single event can never make a batch exceed its byte budget.
     if (byteLength(JSON.stringify(finalEvent)) > MAX_BATCH_BYTES) { this.recordDrop('payloadTooLarge'); return false; }
+    let fingerprint: string | undefined;
+    let dedupeAt: number | undefined;
+    if (this.dedupeIntervalMs > 0) {
+      dedupeAt = this.dedupeTime();
+      for (const [key, acceptedAt] of this.dedupeCache) {
+        if (dedupeAt - acceptedAt >= this.dedupeIntervalMs) this.dedupeCache.delete(key);
+      }
+      fingerprint = eventFingerprint(finalEvent);
+      if (this.dedupeCache.has(fingerprint)) { this.deduplicated++; return false; }
+    }
     const admittedAt = this.maxEventsPerMinute === undefined ? undefined : this.admissionTime();
     if (this.maxEventsPerMinute !== undefined && admittedAt === undefined) { this.recordDrop('rateLimit'); return false; }
     if (this.queue.length >= this.maxQueueSize) { this.queue.shift(); this.recordDrop('queueOverflow'); }
     this.queue.push(finalEvent);
     if (admittedAt !== undefined) this.admittedAt.push(admittedAt);
+    if (fingerprint !== undefined && dedupeAt !== undefined) {
+      this.dedupeCache.set(fingerprint, dedupeAt);
+      if (this.dedupeCache.size > 50) this.dedupeCache.delete(this.dedupeCache.keys().next().value!);
+    }
     if (this.queue.length >= this.maxQueueSize) void this.flush();
     return true;
   }
