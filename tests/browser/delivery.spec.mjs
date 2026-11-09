@@ -81,6 +81,29 @@ test.afterAll(async () => {
   if (scratch) await rm(scratch, { recursive: true, force: true });
 });
 
+test('delivers a queued error on native pagehide without the visibility handler', async ({ page }) => {
+  const environment = randomUUID();
+  await page.goto(`${origin}/`);
+  const pending = await page.evaluate(async environment => {
+    const { init } = await import('/sdk.js');
+    // Isolate the fallback while leaving the browser's native navigation events intact.
+    document.addEventListener('visibilitychange', event => event.stopImmediatePropagation(), true);
+    const captured = [];
+    window.testClient = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureNetwork: false, flushIntervalMs: 60_000,
+      beforeSend: event => { captured.push({ eventId: event.eventId, message: event.message }); } });
+    window.testClient.captureException('leaving this document');
+    return { captured, stats: window.testClient.getStats() };
+  }, environment);
+  expect(pending.stats).toEqual({ queued: 1, sent: 0, dropped: 0 });
+  expect(await events(environment)).toHaveLength(0);
+
+  await page.goto(`${origin}/?after-pagehide=1`);
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+  const stored = await events(environment);
+  expect(stored.map(event => ({ eventId: event.eventId, message: event.message }))).toEqual(pending.captured);
+});
+
 test('holds queued errors offline and delivers the same events automatically on reconnect', async ({ page, context }) => {
   const environment = randomUUID();
   const collectorBodies = [];

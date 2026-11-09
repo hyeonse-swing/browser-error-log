@@ -234,6 +234,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     if (this.resourceCaptureEnabled) window.addEventListener('error', this.onResourceError, true);
     window.addEventListener('unhandledrejection', this.onRejection);
     document.addEventListener('visibilitychange', this.onVisibility);
+    window.addEventListener('pagehide', this.onPageHide);
     if (this.pauseWhileOffline) window.addEventListener('online', this.onOnline);
     if (this.networkCaptureEnabled || this.networkBreadcrumbCaptureEnabled) addNetworkClient(this);
     if (options.captureConsole === true) addConsoleClient(this);
@@ -400,6 +401,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
       if (this.resourceCaptureEnabled) window.removeEventListener('error', this.onResourceError, true);
       window.removeEventListener('unhandledrejection', this.onRejection);
       document.removeEventListener('visibilitychange', this.onVisibility);
+      window.removeEventListener('pagehide', this.onPageHide);
       if (this.pauseWhileOffline) window.removeEventListener('online', this.onOnline);
       if (this.networkCaptureEnabled || this.networkBreadcrumbCaptureEnabled) removeNetworkClient(this);
       if (this.options.captureConsole === true) removeConsoleClient(this);
@@ -512,6 +514,10 @@ class Client implements BrowserErrorLogDiagnosticsClient {
 
   private readonly onVisibility = (): void => {
     if (document.visibilityState === 'hidden') this.tryBeacon();
+  };
+
+  private readonly onPageHide = (): void => {
+    this.tryBeacon();
   };
 
   private readonly onOnline = (): void => {

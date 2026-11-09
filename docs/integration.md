@@ -60,6 +60,8 @@ The SDK's optional `maxEventsPerMinute` limits new queue admissions per client o
 
 **Deploy a 0.2.0-or-later collector/viewer before enabling resource capture.** Custom backends must extend accepted event types and query filters to include `resource`. Older validators can reject a whole mixed batch. The option defaults to false. The included collector, SQLite/JSONL storage, resource type queries, viewer charts/details, and history import/export support this type in 0.2.0 without a database migration. It is counted separately from fetch/XHR HTTP and transport failures.
 
+The SDK additionally attempts its existing bounded beacon on `window.pagehide`, while retaining hidden `visibilitychange` as the primary trigger. The same clean same-origin endpoint, native-transport, offline gate, and accepted-only dequeue rules apply. A cached document is not destroyed by `pagehide`, and `destroy()` removes the listener. The fallback adds no wire fields or collector requirements and remains best effort.
+
 ## Read events
 
 The viewer expects list and detail operations, with `/api` as its default base path:

@@ -279,6 +279,10 @@ Each call returns independent copies containing only local counters. It does not
 
 The default queue holds 50 events and flushes every 10 seconds. Batches contain up to 20 events or 48,000 bytes. Each attempt has a 5-second deadline; retryable failures get up to two retries. `maxQueueSize`, `flushIntervalMs`, and `transportTimeoutMs` are configurable within bounded ranges. These are best-effort limits: offline operation, tab closure, buffer overflow, or exhausted retries can lose events. There is no persistent offline queue or exactly-once guarantee.
 
+The SDK attempts the same bounded beacon on `window.pagehide` as a supplementary path when leaving a document. `visibilitychange` remains the primary trigger. Both paths share the existing same-origin, clean-endpoint, native-transport checks, `pauseWhileOffline` gate, and 10-event/24,000-byte limit. Only accepted candidates leave the queue, so the two events do not resend an already accepted candidate. A rejected beacon keeps its events available for another attempt. `pagehide` does not destroy the client, including when the browser may cache the document for back/forward navigation; `destroy()` removes its listener.
+
+Lifecycle events and beacon acceptance are best effort, not collector storage acknowledgements. As described in the [browser API documentation](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/sendBeacon#legacy_events), lifecycle events may be absent when a mobile browser is terminated. This supplementary path does not guarantee delivery on tab closure or process termination.
+
 ## Hosting and costs
 
 This project distributes software, not a managed monitoring service. Infrastructure is not included. Hosting, servers, databases, storage, bandwidth, domains, backups, and third-party services are selected and paid for by each operator. Any charges are billed independently by their providers, not by this project or its maintainers. Self-hosting does not mean that your infrastructure is free.
