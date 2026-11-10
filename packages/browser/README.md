@@ -137,7 +137,7 @@ The synchronous `beforeBreadcrumb` hook runs once when a valid manual, navigatio
 
 The hook receives independent copies; retaining or changing them later does not rewrite the live trail or queued error snapshots. A throwing hook, invalid replacement, or replacement sanitization failure omits that step without changing error counters. Filtering a network breadcrumb does not suppress the corresponding standalone HTTP/network error; use `captureNetwork`, `shouldCaptureHttp`, or `beforeSend` for error selection. Nested breadcrumb creation during this hook is ignored, and a hook that destroys its client cannot add a step afterward.
 
-The hook is not called again when errors snapshot a trail, during `beforeSend` replacement sanitization, on reads, or on delivery/retries. `beforeSend` remains the final event filter. No additional event, request, protocol field, or collector upgrade is required for this hook.
+The hook is not called again when errors snapshot a trail, during `beforeSend` replacement sanitization, on reads, or on delivery/retries. `beforeSend` remains the event customization hook. No additional event, request, protocol field, or collector upgrade is required for this hook.
 
 ## Automatically record SPA navigation
 
@@ -203,6 +203,20 @@ By default, HTTP capture records 5xx responses and network failures, excludes in
 
 For a custom `transport(batch, { signal })`, pass `signal` to your request and reject on delivery failure. Include `endpoint` for collector exclusion when using automatic network error capture or network breadcrumbs; otherwise both are disabled for a custom transport. The default transport omits credentials.
 
+## Ignore expected messages
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  ignoreMessages: ['ResizeObserver loop'],
+});
+```
+
+`ignoreMessages` is an optional list of case-sensitive literal substrings. An event is omitted when its final sanitized `message` contains any entry. The list is copied at initialization, defaults to empty, and ignores empty strings or non-string entries; later list or option mutations do not change the client's filters. Matching uses the message after `beforeSend` and replacement sanitization, so configure entries against the sanitized message. Name, stack, and context are not searched.
+
+A match increments `getDiagnostics().filtered` once, without increasing `dropped` or consuming queue admission or dedupe capacity. As with the existing hook, the early `maxEventsPerMinute` gate takes precedence: a full budget counts a rate-limit drop and skips `beforeSend` and message matching. This filter applies to all event sources using normal queue admission. Queued events retain their original capture decision; retries and beacon delivery do not run matching again. No wire fields or collector upgrade are required.
+
 ## Limit error bursts
 
 ```ts
@@ -215,7 +229,7 @@ const errorLog = init({
 
 `maxEventsPerMinute` optionally caps new events admitted to each client's queue over the preceding 60 seconds. It is disabled by default. Finite values are rounded down and clamped to 1–1,000; omitted or non-finite values disable the limit. All error types share the same budget, including manual and React captures, global errors, promises, console, and selected HTTP/network failures. Excess events are discarded immediately and increase `getStats().dropped`; they are not delayed for later delivery. Capacity returns as each admitted event reaches 60 seconds of age.
 
-Flushing an empty queue does not reset the budget. Retries and beacon delivery reuse admitted events without consuming more capacity; breadcrumbs do not consume it. Duplicate Error objects and events filtered by `beforeSend` do not consume capacity. Once the budget is full, `beforeSend` is skipped for excess events. Admitted events still consume capacity if they are later evicted from the queue or fail delivery.
+Flushing an empty queue does not reset the budget. Retries and beacon delivery reuse admitted events without consuming more capacity; breadcrumbs do not consume it. Duplicate Error objects and events filtered by `beforeSend` or `ignoreMessages` do not consume capacity. Once the budget is full, `beforeSend` is skipped for excess events. Admitted events still consume capacity if they are later evicted from the queue or fail delivery.
 
 The budget belongs to this client in the current document; a new client or full page load starts a new one. It limits queue admission, not HTTP request counts, bytes, server-wide traffic, or the work done to construct an event. Use independent server-side limits for your collector.
 
@@ -260,7 +274,7 @@ console.log(diagnostics.inFlight, diagnostics.filtered, diagnostics.deduplicated
 console.table(diagnostics.droppedByReason);
 ```
 
-`getDiagnostics()` returns the existing `queued`, `sent`, and `dropped` counts, plus `inFlight` (events in a delivery batch, including retry waits), `filtered` (`beforeSend` returned `false` or `null`), `deduplicated` (same-object suppression and optional interval-based suppression), and these drop reasons:
+`getDiagnostics()` returns the existing `queued`, `sent`, and `dropped` counts, plus `inFlight` (events in a delivery batch, including retry waits), `filtered` (`beforeSend` returned `false` or `null`, or `ignoreMessages` matched), `deduplicated` (same-object suppression and optional interval-based suppression), and these drop reasons:
 
 | `droppedByReason` key | Events counted |
 | --- | --- |

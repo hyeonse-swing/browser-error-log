@@ -137,7 +137,7 @@ const errorLog = init({
 
 콜백은 독립된 복사본을 받으므로 나중에 값을 바꿔도 현재 버퍼나 이미 큐에 담긴 오류의 기록을 수정하지 않습니다. 콜백 예외·잘못된 반환값·반환값 정제 실패는 해당 작업만 제외하며 오류 통계를 바꾸지 않습니다. 네트워크 작업을 제외해도 독립 HTTP·네트워크 오류 이벤트는 기존 수집 정책을 따릅니다. 오류 선택에는 `captureNetwork`·`shouldCaptureHttp`·`beforeSend`를 사용하세요. 콜백 실행 중 다시 추가하려는 작업은 무시하며, 콜백에서 클라이언트를 종료하면 이후 그 작업을 저장하지 않습니다.
 
-오류가 작업 기록을 복사할 때, `beforeSend` 반환값 정제, 통계 조회, 전송·재시도에서는 이 콜백을 다시 실행하지 않습니다. 최종 이벤트 필터는 기존 `beforeSend`입니다. 이 옵션으로 추가 이벤트·요청·프로토콜 필드를 만들지 않으며 수집기 갱신도 필요하지 않습니다.
+오류가 작업 기록을 복사할 때, `beforeSend` 반환값 정제, 통계 조회, 전송·재시도에서는 이 콜백을 다시 실행하지 않습니다. 이벤트 수정에는 기존 `beforeSend`를 사용합니다. 이 옵션으로 추가 이벤트·요청·프로토콜 필드를 만들지 않으며 수집기 갱신도 필요하지 않습니다.
 
 ## SPA 화면 이동 자동 기록
 
@@ -203,6 +203,20 @@ currentAppSection = 'account'; // 이후 이벤트에는 현재 값을 사용
 
 사용자 지정 `transport(batch, { signal })`에서는 요청에 `signal`을 전달하고 전송 실패 시 reject하세요. 자동 네트워크 오류 수집이나 요청 기록을 원하면 자기 전송을 제외할 `endpoint`를 지정해야 합니다. 없으면 사용자 지정 transport에서 두 경로를 모두 끕니다. 기본 전송은 credentials를 보내지 않습니다.
 
+## 예상된 메시지 제외
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  ignoreMessages: ['ResizeObserver loop'],
+});
+```
+
+선택 옵션 `ignoreMessages`는 대소문자를 구분하는 문자열 부분 일치 목록입니다. 최종 정제된 `message`에 항목 중 하나라도 포함되면 이벤트를 제외합니다. 초기화 때 목록을 복사하며 기본값은 빈 목록이고, 빈 문자열·문자열이 아닌 항목은 무시합니다. 이후 원래 목록이나 옵션을 바꿔도 클라이언트 필터는 바뀌지 않습니다. `beforeSend`와 반환값 정제 후 메시지를 비교하므로 정제된 메시지를 기준으로 문구를 지정하세요. 이름·스택·context는 검색하지 않습니다.
+
+일치하면 `getDiagnostics().filtered`에 한 번 반영하고 `dropped`나 큐 진입·내용 중복 한도를 쓰지 않습니다. 기존 콜백과 마찬가지로 사전 `maxEventsPerMinute` 검사가 우선하므로 한도가 가득 차면 분당 한도 초과로 집계하고 `beforeSend`와 문구 비교를 생략합니다. 일반 큐 진입을 사용하는 모든 오류 유형에 적용합니다. 이미 큐에 담긴 이벤트의 수집 판단은 유지하며 재시도·beacon 전송에서는 다시 비교하지 않습니다. 전송 필드 변경이나 수집기 갱신은 필요 없습니다.
+
 ## 오류 폭주 제한
 
 ```ts
@@ -215,7 +229,7 @@ const errorLog = init({
 
 `maxEventsPerMinute`는 클라이언트별로 직전 60초 동안 큐에 새로 담는 이벤트 수를 제한하는 선택 옵션입니다. 기본값은 제한 없음입니다. 유한한 값은 소수점을 내리고 1~1,000 범위로 조정하며, 생략하거나 유한하지 않은 값을 지정하면 제한을 끕니다. 수동·React 수집, 전역 오류, Promise, console, 선택한 HTTP·네트워크 실패가 같은 한도를 공유합니다. 초과 이벤트는 나중에 보내도록 보관하지 않고 즉시 제외하며 `getStats().dropped`에 반영합니다. 각 이벤트를 큐에 담은 지 60초가 지나면 그만큼 다시 수집할 수 있습니다.
 
-큐를 비우는 flush로 한도가 초기화되지 않습니다. 재시도와 beacon 전송은 이미 담긴 이벤트를 사용하므로 추가 한도를 쓰지 않고, 작업 기록도 한도를 쓰지 않습니다. 같은 Error 객체의 중복 수집과 `beforeSend`가 제외한 이벤트는 한도를 쓰지 않습니다. 한도가 가득 차면 초과 이벤트의 `beforeSend` 호출을 생략합니다. 큐에 담긴 이벤트가 나중에 큐에서 밀려나거나 전송에 실패해도 사용한 한도는 유지합니다.
+큐를 비우는 flush로 한도가 초기화되지 않습니다. 재시도와 beacon 전송은 이미 담긴 이벤트를 사용하므로 추가 한도를 쓰지 않고, 작업 기록도 한도를 쓰지 않습니다. 같은 Error 객체의 중복 수집과 `beforeSend`·`ignoreMessages`가 제외한 이벤트는 한도를 쓰지 않습니다. 한도가 가득 차면 초과 이벤트의 `beforeSend` 호출을 생략합니다. 큐에 담긴 이벤트가 나중에 큐에서 밀려나거나 전송에 실패해도 사용한 한도는 유지합니다.
 
 한도는 현재 문서의 해당 클라이언트에 속하며 새 클라이언트나 전체 페이지 로드에서는 새로 시작합니다. 큐 진입 건수를 제한하므로 HTTP 요청 수·바이트·서버 전체 트래픽이나 이벤트 생성 작업량의 상한을 뜻하지는 않습니다. 수집기에는 별도의 서버 측 제한을 적용하세요.
 
@@ -260,7 +274,7 @@ console.log(diagnostics.inFlight, diagnostics.filtered, diagnostics.deduplicated
 console.table(diagnostics.droppedByReason);
 ```
 
-`getDiagnostics()`는 기존 `queued`·`sent`·`dropped`에 `inFlight`(재시도 대기를 포함한 전송 배치 내 이벤트 수), `filtered`(`beforeSend`가 `false` 또는 `null`을 반환한 횟수), `deduplicated`(동일 객체 및 선택적인 시간 구간 내 내용 중복 제외 횟수)와 다음 원인별 건수를 더해 반환합니다.
+`getDiagnostics()`는 기존 `queued`·`sent`·`dropped`에 `inFlight`(재시도 대기를 포함한 전송 배치 내 이벤트 수), `filtered`(`beforeSend`가 `false`·`null`을 반환하거나 `ignoreMessages`에 일치해 제외한 횟수), `deduplicated`(동일 객체 및 선택적인 시간 구간 내 내용 중복 제외 횟수)와 다음 원인별 건수를 더해 반환합니다.
 
 | `droppedByReason` 키 | 집계하는 이벤트 |
 | --- | --- |

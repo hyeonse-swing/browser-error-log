@@ -618,6 +618,46 @@ test('reports local diagnostics without changing delivery or the collector paylo
   expect(await events(failingEnvironment)).toHaveLength(0);
 });
 
+test('ignores final sanitized messages without spending browser rate capacity', async ({ page }) => {
+  const environment = randomUUID();
+  const collectorBodies = [];
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/events') {
+      collectorBodies.push(request.postDataJSON());
+    }
+  });
+  await page.goto(`${origin}/`);
+  const diagnostics = await page.evaluate(async environment => {
+    const { init } = await import('/sdk.js');
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureNetwork: false, flushIntervalMs: 60_000, maxEventsPerMinute: 1,
+      ignoreMessages: ['Expected noise'],
+      beforeSend: event => {
+        if (event.message === 'alias noise') event.message = 'Expected noise normalized';
+        return event;
+      } });
+    try {
+      client.captureException(new Error('Expected noise from manual capture'));
+      client.captureException(new Error('alias noise'));
+      client.captureException(new Error('unexpected error'));
+      await client.flush();
+      return client.getDiagnostics();
+    } finally {
+      client.destroy();
+    }
+  }, environment);
+
+  expect(diagnostics).toMatchObject({ queued: 0, sent: 1, dropped: 0, filtered: 2,
+    droppedByReason: { rateLimit: 0 } });
+  expect(collectorBodies).toHaveLength(1);
+  expect(collectorBodies[0]).toMatchObject({ schemaVersion: 1, events: [{ message: 'unexpected error' }] });
+  expect(Object.keys(collectorBodies[0]).sort()).toEqual(['events', 'schemaVersion']);
+  expect(collectorBodies[0].events).toHaveLength(1);
+  expect(JSON.stringify(collectorBodies[0])).not.toMatch(/ignoreMessages|Expected noise/);
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+  expect((await events(environment)).map(event => event.message)).toEqual(['unexpected error']);
+});
+
 test('limits admitted browser events per client across sources and flushes', async ({ page }) => {
   const environment = randomUUID();
   const otherEnvironment = randomUUID();
