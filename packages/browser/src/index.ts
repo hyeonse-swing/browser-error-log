@@ -23,6 +23,8 @@ export interface BrowserErrorLogOptions {
   runtime?: Runtime;
   enabled?: boolean;
   captureConsole?: boolean;
+  /** Captures unhandled promise rejections automatically; defaults to true. */
+  captureUnhandledRejections?: boolean;
   /** Includes up to four sanitized Error.cause entries in exception stacks; defaults to false. */
   captureErrorCause?: boolean;
   /** Captures script, stylesheet link, and image load errors; defaults to false. */
@@ -177,6 +179,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   private readonly networkBreadcrumbCaptureEnabled: boolean;
   private readonly navigationCaptureEnabled: boolean;
   private readonly captureErrorCause: boolean;
+  private readonly captureUnhandledRejections: boolean;
   private readonly resourceCaptureEnabled: boolean;
   private readonly pauseWhileOffline: boolean;
   private readonly transportTimeoutMs: number;
@@ -221,6 +224,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     this.networkBreadcrumbCaptureEnabled = options.captureNetworkBreadcrumbs === true && automaticNetworkAllowed;
     this.navigationCaptureEnabled = options.captureNavigation === true;
     this.captureErrorCause = options.captureErrorCause === true;
+    this.captureUnhandledRejections = options.captureUnhandledRejections !== false;
     this.resourceCaptureEnabled = options.captureResourceErrors === true;
     this.pauseWhileOffline = options.pauseWhileOffline === true;
     this.maxQueueSize = boundedNumber(options.maxQueueSize, 1, 100, 50);
@@ -238,7 +242,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     this.endpoint = options.endpoint ? this.absoluteUrl(options.endpoint) : undefined;
     window.addEventListener('error', this.onError);
     if (this.resourceCaptureEnabled) window.addEventListener('error', this.onResourceError, true);
-    window.addEventListener('unhandledrejection', this.onRejection);
+    if (this.captureUnhandledRejections) window.addEventListener('unhandledrejection', this.onRejection);
     document.addEventListener('visibilitychange', this.onVisibility);
     window.addEventListener('pagehide', this.onPageHide);
     if (this.pauseWhileOffline) window.addEventListener('online', this.onOnline);
@@ -405,7 +409,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     if (this.active) {
       window.removeEventListener('error', this.onError);
       if (this.resourceCaptureEnabled) window.removeEventListener('error', this.onResourceError, true);
-      window.removeEventListener('unhandledrejection', this.onRejection);
+      if (this.captureUnhandledRejections) window.removeEventListener('unhandledrejection', this.onRejection);
       document.removeEventListener('visibilitychange', this.onVisibility);
       window.removeEventListener('pagehide', this.onPageHide);
       if (this.pauseWhileOffline) window.removeEventListener('online', this.onOnline);
