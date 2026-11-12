@@ -1027,6 +1027,48 @@ test('keeps manual promise and native errors when automatic promise capture is d
       { type: 'javascript', message: 'native javascript' }].sort(byMessage));
 });
 
+test('keeps manual javascript and promise errors when automatic javascript capture is disabled', async ({ page }) => {
+  const enabledEnvironment = randomUUID();
+  const disabledEnvironment = randomUUID();
+  await page.goto(`${origin}/`);
+  await page.evaluate(async ({ enabledEnvironment, disabledEnvironment }) => {
+    const { init } = await import('/sdk.js');
+    window.beforeSendCalls = { enabled: 0, disabled: 0 };
+    const common = { project: 'browser-test', endpoint: '/api/events', captureNetwork: false, flushIntervalMs: 60_000 };
+    window.enabledClient = init({ ...common, environment: enabledEnvironment,
+      beforeSend: event => { window.beforeSendCalls.enabled++; return event; } });
+    window.disabledClient = init({ ...common, environment: disabledEnvironment, captureGlobalErrors: false,
+      beforeSend: event => { window.beforeSendCalls.disabled++; return event; } });
+    setTimeout(() => { throw new Error('automatic javascript'); }, 0);
+  }, { enabledEnvironment, disabledEnvironment });
+  await expect.poll(() => page.evaluate(() => window.enabledClient.getStats().queued)).toBe(1);
+  expect(await page.evaluate(() => ({ stats: window.disabledClient.getStats(), calls: window.beforeSendCalls })))
+    .toEqual({ stats: { queued: 0, sent: 0, dropped: 0 }, calls: { enabled: 1, disabled: 0 } });
+
+  await page.evaluate(() => {
+    window.disabledClient.captureException(new Error('manual javascript'), { type: 'javascript' });
+    void Promise.reject(new Error('automatic rejection'));
+  });
+  await expect.poll(() => page.evaluate(() => ({
+    enabled: window.enabledClient.getStats().queued, disabled: window.disabledClient.getStats().queued,
+  }))).toEqual({ enabled: 2, disabled: 2 });
+  expect(await page.evaluate(() => window.beforeSendCalls)).toEqual({ enabled: 2, disabled: 2 });
+  await page.evaluate(async () => {
+    await Promise.all([window.enabledClient.flush(), window.disabledClient.flush()]);
+    window.enabledClient.destroy();
+    window.disabledClient.destroy();
+  });
+  await expect.poll(async () => (await events(enabledEnvironment)).length).toBe(2);
+  await expect.poll(async () => (await events(disabledEnvironment)).length).toBe(2);
+  const byMessage = (a, b) => a.message.localeCompare(b.message);
+  expect((await events(enabledEnvironment)).map(({ type, message }) => ({ type, message })).sort(byMessage))
+    .toEqual([{ type: 'javascript', message: 'automatic javascript' },
+      { type: 'promise', message: 'automatic rejection' }].sort(byMessage));
+  expect((await events(disabledEnvironment)).map(({ type, message }) => ({ type, message })).sort(byMessage))
+    .toEqual([{ type: 'promise', message: 'automatic rejection' },
+      { type: 'javascript', message: 'manual javascript' }].sort(byMessage));
+});
+
 test('opt-in console.error delivers the first named Error without changing native return', async ({ page }) => {
   const optedOutEnvironment = randomUUID();
   await init(page, optedOutEnvironment);

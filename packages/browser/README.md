@@ -203,6 +203,20 @@ By default, HTTP capture records 5xx responses and network failures, excludes in
 
 For a custom `transport(batch, { signal })`, pass `signal` to your request and reject on delivery failure. Include `endpoint` for collector exclusion when using automatic network error capture or network breadcrumbs; otherwise both are disabled for a custom transport. The default transport omits credentials.
 
+## Control automatic JavaScript capture
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  captureGlobalErrors: false,
+});
+```
+
+Global JavaScript error capture is on by default. Set `captureGlobalErrors: false` when your application reports these failures separately. Each client snapshots the setting at initialization and uses it for listener cleanup. Other clients with global capture enabled continue to receive the same browser event.
+
+An uncaptured global error invokes no capture hooks, spends no admission capacity, and increments neither `filtered` nor `dropped`. Explicit `captureException(error, { type: 'javascript' })` remains available. Promise capture follows `captureUnhandledRejections`, and resource-element errors follow the independent `captureResourceErrors` option; other sources keep their own settings. Browser default handling and application listeners continue normally. This changes no wire fields or collector requirements.
+
 ## Control automatic promise capture
 
 ```ts
@@ -215,7 +229,7 @@ const errorLog = init({
 
 Automatic `unhandledrejection` capture is on by default. Set `captureUnhandledRejections: false` when your application reports these failures separately. The setting is copied at initialization for each client; changing the original options later does not change capture or cleanup. Other clients with automatic capture enabled continue to receive the same browser event.
 
-With automatic capture disabled, that client does not register its rejection listener, invoke capture hooks for the event, consume admission capacity, or increment `filtered`/`dropped`. You can still report an error explicitly with `captureException(error, { type: 'promise' })`, and global JavaScript and other configured error sources remain active. Browser default handling and application listeners continue normally. This changes no wire fields or collector requirements.
+With automatic capture disabled, that client does not register its rejection listener, invoke capture hooks for the event, consume admission capacity, or increment `filtered`/`dropped`. You can still report an error explicitly with `captureException(error, { type: 'promise' })`, and other error sources follow their own capture settings. Browser default handling and application listeners continue normally. This changes no wire fields or collector requirements.
 
 ## Ignore expected messages
 

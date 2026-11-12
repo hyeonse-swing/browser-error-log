@@ -23,6 +23,8 @@ export interface BrowserErrorLogOptions {
   runtime?: Runtime;
   enabled?: boolean;
   captureConsole?: boolean;
+  /** Captures global JavaScript errors automatically; defaults to true. */
+  captureGlobalErrors?: boolean;
   /** Captures unhandled promise rejections automatically; defaults to true. */
   captureUnhandledRejections?: boolean;
   /** Includes up to four sanitized Error.cause entries in exception stacks; defaults to false. */
@@ -179,6 +181,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   private readonly networkBreadcrumbCaptureEnabled: boolean;
   private readonly navigationCaptureEnabled: boolean;
   private readonly captureErrorCause: boolean;
+  private readonly captureGlobalErrors: boolean;
   private readonly captureUnhandledRejections: boolean;
   private readonly resourceCaptureEnabled: boolean;
   private readonly pauseWhileOffline: boolean;
@@ -224,6 +227,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     this.networkBreadcrumbCaptureEnabled = options.captureNetworkBreadcrumbs === true && automaticNetworkAllowed;
     this.navigationCaptureEnabled = options.captureNavigation === true;
     this.captureErrorCause = options.captureErrorCause === true;
+    this.captureGlobalErrors = options.captureGlobalErrors !== false;
     this.captureUnhandledRejections = options.captureUnhandledRejections !== false;
     this.resourceCaptureEnabled = options.captureResourceErrors === true;
     this.pauseWhileOffline = options.pauseWhileOffline === true;
@@ -240,7 +244,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     if (!options.project || typeof options.project !== 'string') throw new Error('project is required');
     if (!options.transport && !options.endpoint) throw new Error('endpoint or transport is required');
     this.endpoint = options.endpoint ? this.absoluteUrl(options.endpoint) : undefined;
-    window.addEventListener('error', this.onError);
+    if (this.captureGlobalErrors) window.addEventListener('error', this.onError);
     if (this.resourceCaptureEnabled) window.addEventListener('error', this.onResourceError, true);
     if (this.captureUnhandledRejections) window.addEventListener('unhandledrejection', this.onRejection);
     document.addEventListener('visibilitychange', this.onVisibility);
@@ -407,7 +411,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     this.destroyed = true;
     if (this.interval) clearInterval(this.interval);
     if (this.active) {
-      window.removeEventListener('error', this.onError);
+      if (this.captureGlobalErrors) window.removeEventListener('error', this.onError);
       if (this.resourceCaptureEnabled) window.removeEventListener('error', this.onResourceError, true);
       if (this.captureUnhandledRejections) window.removeEventListener('unhandledrejection', this.onRejection);
       document.removeEventListener('visibilitychange', this.onVisibility);

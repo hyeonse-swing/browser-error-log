@@ -203,6 +203,20 @@ currentAppSection = 'account'; // 이후 이벤트에는 현재 값을 사용
 
 사용자 지정 `transport(batch, { signal })`에서는 요청에 `signal`을 전달하고 전송 실패 시 reject하세요. 자동 네트워크 오류 수집이나 요청 기록을 원하면 자기 전송을 제외할 `endpoint`를 지정해야 합니다. 없으면 사용자 지정 transport에서 두 경로를 모두 끕니다. 기본 전송은 credentials를 보내지 않습니다.
 
+## 전역 JavaScript 자동 수집 제어
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  captureGlobalErrors: false,
+});
+```
+
+전역 JavaScript 오류 자동 수집의 기본값은 켜짐입니다. 앱에서 이 실패를 별도로 보고한다면 `captureGlobalErrors: false`로 설정할 수 있습니다. 클라이언트마다 초기화 때 설정을 고정하고 리스너 해제에도 같은 값을 사용합니다. 전역 수집을 켠 다른 클라이언트는 같은 브라우저 이벤트를 계속 수집합니다.
+
+수집하지 않은 전역 오류는 수집 콜백·큐 진입 한도·`filtered`·`dropped`를 사용하지 않습니다. `captureException(error, { type: 'javascript' })`로 직접 보고할 수 있습니다. Promise 수집은 `captureUnhandledRejections`, 리소스 요소 오류는 독립적인 `captureResourceErrors`를 따르고 다른 오류도 각자의 설정을 유지합니다. 브라우저의 기본 처리와 앱 리스너도 그대로 동작합니다. 전송 필드와 수집기 요구 사항은 바뀌지 않습니다.
+
 ## Promise 자동 수집 제어
 
 ```ts
@@ -215,7 +229,7 @@ const errorLog = init({
 
 `unhandledrejection` 자동 수집의 기본값은 켜짐입니다. 앱에서 이 실패를 별도로 보고한다면 `captureUnhandledRejections: false`로 설정할 수 있습니다. 클라이언트마다 초기화 시 설정을 고정하므로 나중에 원래 옵션을 바꿔도 수집·해제 동작이 달라지지 않습니다. 자동 수집을 켠 다른 클라이언트는 같은 브라우저 이벤트를 계속 수집합니다.
 
-자동 수집을 끈 클라이언트는 해당 거부 리스너를 등록하지 않아 이 이벤트의 수집 콜백·큐 진입 한도·`filtered`·`dropped`를 사용하지 않습니다. `captureException(error, { type: 'promise' })`로 직접 보고할 수 있으며 전역 JavaScript 오류와 다른 설정된 오류 수집은 계속 동작합니다. 브라우저의 기본 처리와 앱의 리스너도 그대로 실행됩니다. 전송 필드나 수집기 요구 사항은 바뀌지 않습니다.
+자동 수집을 끈 클라이언트는 해당 거부 리스너를 등록하지 않아 이 이벤트의 수집 콜백·큐 진입 한도·`filtered`·`dropped`를 사용하지 않습니다. `captureException(error, { type: 'promise' })`로 직접 보고할 수 있으며 다른 오류 유형은 각자의 수집 옵션을 따릅니다. 브라우저의 기본 처리와 앱의 리스너도 그대로 실행됩니다. 전송 필드나 수집기 요구 사항은 바뀌지 않습니다.
 
 ## 예상된 메시지 제외
 

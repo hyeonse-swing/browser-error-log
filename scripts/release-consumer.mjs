@@ -111,7 +111,7 @@ await consumer('react', [
   import { init, type TransportContext, type BrowserErrorLogClient, type BrowserErrorLogBreadcrumbClient, type BrowserErrorLogDiagnosticsClient, type BrowserErrorLogDiagnostics, type BrowserErrorLogDropReason } from '@ihyeon/browser-error-log';
   import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
   import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';
-  const client = init({ project: 'registry-smoke', enabled: false, captureUnhandledRejections: false, captureNavigation: true, captureNetworkBreadcrumbs: true, captureErrorCause: true, captureResourceErrors: true,
+  const client = init({ project: 'registry-smoke', enabled: false, captureGlobalErrors: false, captureUnhandledRejections: false, captureNavigation: true, captureNetworkBreadcrumbs: true, captureErrorCause: true, captureResourceErrors: true,
     beforeBreadcrumb: breadcrumb => breadcrumb.category === 'http' ? null : breadcrumb, ignoreMessages: ['Expected diagnostic'] as const, dedupeIntervalMs: 5000, pauseWhileOffline: true, maxEventsPerMinute: 60,
     transport: async (batch: EventBatch, context: TransportContext) => { void batch; void context.signal; } });
   client.captureException(new Error(EVENT_LABELS.manual));
