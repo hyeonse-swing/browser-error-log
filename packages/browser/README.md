@@ -331,9 +331,23 @@ The reason counts sum to `dropped`. `filtered` and `deduplicated` are separate a
 
 Each call returns independent copies containing only local counters. It does not send events, invoke capture hooks, or include URLs, error text, or payloads. Counts belong to this client for its lifetime, remain readable after `destroy()` (with `inFlight: 0`), and are not reset by flush or breadcrumb cleanup. Disabled/SSR clients start with zero counts. Excluded collector requests, intentional aborts, unselected HTTP statuses, and ignored breadcrumb input do not increment these counters. These counters cover SDK-observed decisions, not errors before initialization or proof of complete server ingestion. No collector upgrade is needed, and `getStats()` keeps its original three-field shape.
 
+## Set delivery batch size
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  maxBatchSize: 5,
+});
+```
+
+`maxBatchSize` caps the number of events in each delivery batch. The default is `20`; finite numbers are rounded down and clamped to 1–20, while omitted, non-number, or non-finite values use `20`. Each client copies the setting at initialization. A flush drains the queued events in successive batches, so five queued events with a limit of two produce batches of 2, 2, and 1. Native fetch and custom transports follow the same count limit, original event IDs, and FIFO order. Retries reuse their selected batch and IDs.
+
+The existing byte budgets can make a batch smaller. A lifecycle beacon attempts only one chunk of at most `min(maxBatchSize, 10)` events within 24,000 bytes; accepted candidates leave the queue and the rest remain for another eligible attempt. The existing beacon eligibility rules apply. `maxQueueSize` controls buffering and full-queue auto flush, and `flushIntervalMs` controls periodic flushing. Smaller batches can increase transport request counts. Wire format and collector requirements are unchanged.
+
 ## Delivery limits
 
-The default queue holds 50 events and flushes every 10 seconds. Batches contain up to 20 events or 48,000 bytes. Each attempt has a 5-second deadline; retryable failures get up to two retries. `maxQueueSize`, `flushIntervalMs`, and `transportTimeoutMs` are configurable within bounded ranges. These are best-effort limits: offline operation, tab closure, buffer overflow, or exhausted retries can lose events. There is no persistent offline queue or exactly-once guarantee.
+The default queue holds 50 events and flushes every 10 seconds. Batches contain up to 20 events or 48,000 bytes. Each attempt has a 5-second deadline; retryable failures get up to two retries. `maxQueueSize`, `maxBatchSize`, `flushIntervalMs`, and `transportTimeoutMs` are configurable within bounded ranges. These are best-effort limits: offline operation, tab closure, buffer overflow, or exhausted retries can lose events. There is no persistent offline queue or exactly-once guarantee.
 
 The SDK attempts the same bounded beacon on `window.pagehide` as a supplementary path when leaving a document. `visibilitychange` remains the primary trigger. Both paths share the existing same-origin, clean-endpoint, native-transport checks, `pauseWhileOffline` gate, and 10-event/24,000-byte limit. Only accepted candidates leave the queue, so the two events do not resend an already accepted candidate. A rejected beacon keeps its events available for another attempt. `pagehide` does not destroy the client, including when the browser may cache the document for back/forward navigation; `destroy()` removes its listener.
 

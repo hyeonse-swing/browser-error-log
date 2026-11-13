@@ -104,6 +104,50 @@ test('delivers a queued error on native pagehide without the visibility handler'
   expect(stored.map(event => ({ eventId: event.eventId, message: event.message }))).toEqual(pending.captured);
 });
 
+test('flushes queued errors in configured batches without changing their identities', async ({ page }) => {
+  const environment = randomUUID();
+  const bodies = [];
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/events') {
+      bodies.push(request.postDataJSON());
+    }
+  });
+  await page.goto(`${origin}/`);
+  const result = await page.evaluate(async environment => {
+    const { init } = await import('/sdk.js');
+    const original = [];
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureNetwork: false, flushIntervalMs: 60_000, maxQueueSize: 100, maxBatchSize: 2,
+      beforeSend: event => {
+        original.push({ eventId: event.eventId, message: event.message });
+        return event;
+      } });
+    try {
+      for (let index = 0; index < 5; index++) client.captureException(new Error(`batch error ${index}`));
+      const before = client.getStats();
+      await client.flush();
+      return { before, after: client.getStats(), original };
+    } finally {
+      client.destroy();
+    }
+  }, environment);
+
+  expect(result.before).toEqual({ queued: 5, sent: 0, dropped: 0 });
+  expect(result.after).toEqual({ queued: 0, sent: 5, dropped: 0 });
+  expect(result.original).toHaveLength(5);
+  expect(bodies.map(body => body.events.length)).toEqual([2, 2, 1]);
+  expect(bodies.every(body => Object.keys(body).sort().join(',') === 'events,schemaVersion')).toBe(true);
+  const wire = bodies.flatMap(body => body.events.map(event =>
+    ({ eventId: event.eventId, message: event.message })));
+  expect(wire).toEqual(result.original);
+  expect(new Set(wire.map(event => event.eventId)).size).toBe(5);
+  expect(JSON.stringify(bodies)).not.toMatch(/maxBatchSize/);
+  await expect.poll(async () => (await events(environment)).length).toBe(5);
+  const byId = (a, b) => a.eventId.localeCompare(b.eventId);
+  expect((await events(environment)).map(event => ({ eventId: event.eventId,
+    message: event.message })).sort(byId)).toEqual([...result.original].sort(byId));
+});
+
 test('holds queued errors offline and delivers the same events automatically on reconnect', async ({ page, context }) => {
   const environment = randomUUID();
   const collectorBodies = [];

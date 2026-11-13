@@ -46,6 +46,8 @@ export interface BrowserErrorLogOptions {
   shouldCaptureHttp?: (status: number, url: string, method: string) => boolean;
   flushIntervalMs?: number;
   maxQueueSize?: number;
+  /** Maximum events per delivery batch, clamped to 1–20; defaults to 20. */
+  maxBatchSize?: number;
   /** Maximum new events admitted in any rolling 60 seconds; disabled by default. */
   maxEventsPerMinute?: number;
   /** Probability of admitting each captured event, from 0 to 1; defaults to 1. */
@@ -195,6 +197,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   private readonly breadcrumbs: Breadcrumb[] = [];
   private recordingBreadcrumb = false;
   private readonly maxQueueSize: number;
+  private readonly maxBatchSize: number;
   private readonly maxEventsPerMinute?: number;
   private readonly sampleRate: number;
   private readonly dedupeIntervalMs: number;
@@ -235,6 +238,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     this.resourceCaptureEnabled = options.captureResourceErrors === true;
     this.pauseWhileOffline = options.pauseWhileOffline === true;
     this.maxQueueSize = boundedNumber(options.maxQueueSize, 1, 100, 50);
+    this.maxBatchSize = boundedNumber(options.maxBatchSize, 1, MAX_BATCH_EVENTS, MAX_BATCH_EVENTS);
     this.maxEventsPerMinute = typeof options.maxEventsPerMinute === 'number' && Number.isFinite(options.maxEventsPerMinute)
       ? boundedNumber(options.maxEventsPerMinute, 1, 1000, 1) : undefined;
     this.sampleRate = typeof options.sampleRate === 'number' && Number.isFinite(options.sampleRate)
@@ -891,7 +895,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
 
   private async drain(): Promise<void> {
     while (!this.destroyed && this.queue.length && !this.isExplicitlyOffline()) {
-      const batch = this.takeBatch();
+      const batch = this.takeBatch(this.maxBatchSize);
       if (batch.events.length) {
         this.inFlight += batch.events.length;
         try { await this.sendWithRetry(batch); }
@@ -958,7 +962,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
       const url = new URL(this.endpoint);
       if (url.origin !== window.location.origin || url.search || url.hash || url.username || url.password) return;
       if (typeof navigator.sendBeacon !== 'function') return;
-      const candidates = this.queue.slice(0, MAX_BEACON_EVENTS);
+      const candidates = this.queue.slice(0, Math.min(this.maxBatchSize, MAX_BEACON_EVENTS));
       while (candidates.length > 0) {
         const batch: EventBatch = { schemaVersion: 1, events: candidates };
         const body = JSON.stringify(batch);
