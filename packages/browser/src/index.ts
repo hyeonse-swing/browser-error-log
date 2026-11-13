@@ -48,6 +48,8 @@ export interface BrowserErrorLogOptions {
   maxQueueSize?: number;
   /** Maximum new events admitted in any rolling 60 seconds; disabled by default. */
   maxEventsPerMinute?: number;
+  /** Probability of admitting each captured event, from 0 to 1; defaults to 1. */
+  sampleRate?: number;
   /** Suppresses matching sanitized events for this many milliseconds; disabled by default. */
   dedupeIntervalMs?: number;
   /** Per-attempt deadline, clamped to 250–60000 ms; defaults to 5000 ms. */
@@ -194,6 +196,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
   private recordingBreadcrumb = false;
   private readonly maxQueueSize: number;
   private readonly maxEventsPerMinute?: number;
+  private readonly sampleRate: number;
   private readonly dedupeIntervalMs: number;
   private readonly ignoreMessages: readonly string[];
   private readonly dedupeCache = new Map<string, number>();
@@ -234,6 +237,8 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     this.maxQueueSize = boundedNumber(options.maxQueueSize, 1, 100, 50);
     this.maxEventsPerMinute = typeof options.maxEventsPerMinute === 'number' && Number.isFinite(options.maxEventsPerMinute)
       ? boundedNumber(options.maxEventsPerMinute, 1, 1000, 1) : undefined;
+    this.sampleRate = typeof options.sampleRate === 'number' && Number.isFinite(options.sampleRate)
+      ? Math.min(1, Math.max(0, options.sampleRate)) : 1;
     this.dedupeIntervalMs = boundedNumber(options.dedupeIntervalMs, 0, 60_000, 0);
     this.ignoreMessages = Array.isArray(options.ignoreMessages)
       ? options.ignoreMessages.filter((value): value is string => typeof value === 'string' && value.length > 0)
@@ -841,6 +846,10 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     }
     if (this.destroyed) return false;
     if (this.ignoreMessages.some(message => finalEvent.message.includes(message))) { this.filtered++; return false; }
+    if (this.sampleRate === 0 || (this.sampleRate < 1 && Math.random() >= this.sampleRate)) {
+      this.filtered++;
+      return false;
+    }
     // A single event can never make a batch exceed its byte budget.
     if (byteLength(JSON.stringify(finalEvent)) > MAX_BATCH_BYTES) { this.recordDrop('payloadTooLarge'); return false; }
     let fingerprint: string | undefined;

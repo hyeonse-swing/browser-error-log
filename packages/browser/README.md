@@ -245,6 +245,20 @@ const errorLog = init({
 
 A match increments `getDiagnostics().filtered` once, without increasing `dropped` or consuming queue admission or dedupe capacity. As with the existing hook, the early `maxEventsPerMinute` gate takes precedence: a full budget counts a rate-limit drop and skips `beforeSend` and message matching. This filter applies to all event sources using normal queue admission. Queued events retain their original capture decision; retries and beacon delivery do not run matching again. No wire fields or collector upgrade are required.
 
+## Sample error events
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  sampleRate: 0.1,
+});
+```
+
+`sampleRate` selects each new event candidate with the configured probability. The default is `1` (select all); `0` selects none. Finite numeric values are clamped to 0–1 without rounding away the fraction. Omitted, non-number, or non-finite values use `1`. Each client copies the setting at initialization. A fractional rate uses `Math.random() < sampleRate`; rates `0` and `1` skip the sampling draw. This is a per-candidate probability, not an exact event-count quota or a session-wide selection.
+
+Sampling follows `beforeSend`, replacement sanitization, and `ignoreMessages`, so capture/preprocessing hooks still run even at rate `0`. A nonselected candidate increments `getDiagnostics().filtered` once, spends no queue admission or content-dedupe capacity, and is not marked as a seen Error object. The existing full rate-limit gate retains priority and skips the hooks and sampling when full. Queued events keep their capture decision through flush, retries, and beacon delivery. Captured counts describe selected events; no sampling ratio or full occurrence estimate is sent. Wire fields and collector requirements are unchanged.
+
 ## Limit error bursts
 
 ```ts
@@ -257,7 +271,7 @@ const errorLog = init({
 
 `maxEventsPerMinute` optionally caps new events admitted to each client's queue over the preceding 60 seconds. It is disabled by default. Finite values are rounded down and clamped to 1–1,000; omitted or non-finite values disable the limit. All error types share the same budget, including manual and React captures, global errors, promises, console, and selected HTTP/network failures. Excess events are discarded immediately and increase `getStats().dropped`; they are not delayed for later delivery. Capacity returns as each admitted event reaches 60 seconds of age.
 
-Flushing an empty queue does not reset the budget. Retries and beacon delivery reuse admitted events without consuming more capacity; breadcrumbs do not consume it. Duplicate Error objects and events filtered by `beforeSend` or `ignoreMessages` do not consume capacity. Once the budget is full, `beforeSend` is skipped for excess events. Admitted events still consume capacity if they are later evicted from the queue or fail delivery.
+Flushing an empty queue does not reset the budget. Retries and beacon delivery reuse admitted events without consuming more capacity; breadcrumbs do not consume it. Duplicate Error objects and events omitted by `beforeSend`, `ignoreMessages`, or sampling do not consume capacity. Once the budget is full, `beforeSend` is skipped for excess events. Admitted events still consume capacity if they are later evicted from the queue or fail delivery.
 
 The budget belongs to this client in the current document; a new client or full page load starts a new one. It limits queue admission, not HTTP request counts, bytes, server-wide traffic, or the work done to construct an event. Use independent server-side limits for your collector.
 
@@ -302,7 +316,7 @@ console.log(diagnostics.inFlight, diagnostics.filtered, diagnostics.deduplicated
 console.table(diagnostics.droppedByReason);
 ```
 
-`getDiagnostics()` returns the existing `queued`, `sent`, and `dropped` counts, plus `inFlight` (events in a delivery batch, including retry waits), `filtered` (`beforeSend` returned `false` or `null`, or `ignoreMessages` matched), `deduplicated` (same-object suppression and optional interval-based suppression), and these drop reasons:
+`getDiagnostics()` returns the existing `queued`, `sent`, and `dropped` counts, plus `inFlight` (events in a delivery batch, including retry waits), `filtered` (`beforeSend` returned `false` or `null`, `ignoreMessages` matched, or sampling omitted the event), `deduplicated` (same-object suppression and optional interval-based suppression), and these drop reasons:
 
 | `droppedByReason` key | Events counted |
 | --- | --- |

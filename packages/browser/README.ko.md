@@ -245,6 +245,20 @@ const errorLog = init({
 
 일치하면 `getDiagnostics().filtered`에 한 번 반영하고 `dropped`나 큐 진입·내용 중복 한도를 쓰지 않습니다. 기존 콜백과 마찬가지로 사전 `maxEventsPerMinute` 검사가 우선하므로 한도가 가득 차면 분당 한도 초과로 집계하고 `beforeSend`와 문구 비교를 생략합니다. 일반 큐 진입을 사용하는 모든 오류 유형에 적용합니다. 이미 큐에 담긴 이벤트의 수집 판단은 유지하며 재시도·beacon 전송에서는 다시 비교하지 않습니다. 전송 필드 변경이나 수집기 갱신은 필요 없습니다.
 
+## 오류 수집 비율 설정
+
+```ts
+const errorLog = init({
+  project: 'my-web',
+  endpoint: '/api/events',
+  sampleRate: 0.1,
+});
+```
+
+`sampleRate`는 새 이벤트 후보를 설정 확률로 선택합니다. 기본값 `1`은 전체 선택, `0`은 선택하지 않음입니다. 유한한 숫자는 소수 비율을 유지하며 0~1로 조정하고, 생략·숫자가 아닌 값·유한하지 않은 값은 `1`을 사용합니다. 클라이언트마다 초기화 때 값을 고정합니다. 소수 비율은 `Math.random() < sampleRate`로 선택하고 `0`·`1`에서는 샘플링용 난수 추첨을 생략합니다. 이벤트 후보마다 적용하는 확률이므로 정확한 건수 할당이나 세션 단위 선택을 뜻하지 않습니다.
+
+`beforeSend`·반환값 정제·`ignoreMessages` 다음에 선택하므로 비율이 `0`이어도 수집·전처리 콜백은 실행합니다. 선택하지 않은 후보는 `getDiagnostics().filtered`에 한 번 집계하고 큐 진입·내용 중복 한도를 쓰거나 이미 수집한 Error 객체로 표시하지 않습니다. 기존 사전 분당 한도 검사가 우선하므로 한도가 가득 차면 콜백·추첨을 생략합니다. 이미 담긴 이벤트는 flush·재시도·beacon 전송에서 다시 선택하지 않습니다. 수집 건수는 선택된 이벤트의 건수이며 비율이나 전체 발생 건수 추정값을 따로 보내지 않습니다. 전송 필드와 수집기 요구 사항은 유지합니다.
+
 ## 오류 폭주 제한
 
 ```ts
@@ -257,7 +271,7 @@ const errorLog = init({
 
 `maxEventsPerMinute`는 클라이언트별로 직전 60초 동안 큐에 새로 담는 이벤트 수를 제한하는 선택 옵션입니다. 기본값은 제한 없음입니다. 유한한 값은 소수점을 내리고 1~1,000 범위로 조정하며, 생략하거나 유한하지 않은 값을 지정하면 제한을 끕니다. 수동·React 수집, 전역 오류, Promise, console, 선택한 HTTP·네트워크 실패가 같은 한도를 공유합니다. 초과 이벤트는 나중에 보내도록 보관하지 않고 즉시 제외하며 `getStats().dropped`에 반영합니다. 각 이벤트를 큐에 담은 지 60초가 지나면 그만큼 다시 수집할 수 있습니다.
 
-큐를 비우는 flush로 한도가 초기화되지 않습니다. 재시도와 beacon 전송은 이미 담긴 이벤트를 사용하므로 추가 한도를 쓰지 않고, 작업 기록도 한도를 쓰지 않습니다. 같은 Error 객체의 중복 수집과 `beforeSend`·`ignoreMessages`가 제외한 이벤트는 한도를 쓰지 않습니다. 한도가 가득 차면 초과 이벤트의 `beforeSend` 호출을 생략합니다. 큐에 담긴 이벤트가 나중에 큐에서 밀려나거나 전송에 실패해도 사용한 한도는 유지합니다.
+큐를 비우는 flush로 한도가 초기화되지 않습니다. 재시도와 beacon 전송은 이미 담긴 이벤트를 사용하므로 추가 한도를 쓰지 않고, 작업 기록도 한도를 쓰지 않습니다. 같은 Error 객체의 중복 수집과 `beforeSend`·`ignoreMessages`·샘플링으로 제외한 이벤트는 한도를 쓰지 않습니다. 한도가 가득 차면 초과 이벤트의 `beforeSend` 호출을 생략합니다. 큐에 담긴 이벤트가 나중에 큐에서 밀려나거나 전송에 실패해도 사용한 한도는 유지합니다.
 
 한도는 현재 문서의 해당 클라이언트에 속하며 새 클라이언트나 전체 페이지 로드에서는 새로 시작합니다. 큐 진입 건수를 제한하므로 HTTP 요청 수·바이트·서버 전체 트래픽이나 이벤트 생성 작업량의 상한을 뜻하지는 않습니다. 수집기에는 별도의 서버 측 제한을 적용하세요.
 
@@ -302,7 +316,7 @@ console.log(diagnostics.inFlight, diagnostics.filtered, diagnostics.deduplicated
 console.table(diagnostics.droppedByReason);
 ```
 
-`getDiagnostics()`는 기존 `queued`·`sent`·`dropped`에 `inFlight`(재시도 대기를 포함한 전송 배치 내 이벤트 수), `filtered`(`beforeSend`가 `false`·`null`을 반환하거나 `ignoreMessages`에 일치해 제외한 횟수), `deduplicated`(동일 객체 및 선택적인 시간 구간 내 내용 중복 제외 횟수)와 다음 원인별 건수를 더해 반환합니다.
+`getDiagnostics()`는 기존 `queued`·`sent`·`dropped`에 `inFlight`(재시도 대기를 포함한 전송 배치 내 이벤트 수), `filtered`(`beforeSend`·`ignoreMessages`·샘플링으로 제외한 횟수), `deduplicated`(동일 객체 및 선택적인 시간 구간 내 내용 중복 제외 횟수)와 다음 원인별 건수를 더해 반환합니다.
 
 | `droppedByReason` 키 | 집계하는 이벤트 |
 | --- | --- |

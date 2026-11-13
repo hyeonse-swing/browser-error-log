@@ -658,6 +658,50 @@ test('ignores final sanitized messages without spending browser rate capacity', 
   expect((await events(environment)).map(event => event.message)).toEqual(['unexpected error']);
 });
 
+test('samples browser errors before spending rate capacity', async ({ page }) => {
+  const environment = randomUUID();
+  const collectorBodies = [];
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/events') {
+      collectorBodies.push(request.postDataJSON());
+    }
+  });
+  await page.goto(`${origin}/`);
+  const diagnostics = await page.evaluate(async environment => {
+    const { init } = await import('/sdk.js');
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureNetwork: false, flushIntervalMs: 60_000, sampleRate: 0.5,
+      maxEventsPerMinute: 1,
+      beforeSend: event => {
+        Math.random = () => event.message === 'sampled out' ? 0.75 : 0.25;
+        return event;
+      } });
+    try {
+      const originalRandom = Math.random;
+      try {
+        client.captureException(new Error('sampled out'));
+        client.captureException(new Error('sampled in'));
+      } finally {
+        Math.random = originalRandom;
+      }
+      await client.flush();
+      return client.getDiagnostics();
+    } finally {
+      client.destroy();
+    }
+  }, environment);
+
+  expect(diagnostics).toMatchObject({ queued: 0, sent: 1, dropped: 0, filtered: 1,
+    droppedByReason: { rateLimit: 0 } });
+  expect(collectorBodies).toHaveLength(1);
+  expect(collectorBodies[0]).toMatchObject({ schemaVersion: 1, events: [{ message: 'sampled in' }] });
+  expect(collectorBodies[0].events).toHaveLength(1);
+  expect(Object.keys(collectorBodies[0]).sort()).toEqual(['events', 'schemaVersion']);
+  expect(JSON.stringify(collectorBodies[0])).not.toMatch(/sampleRate|sampled out/);
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+  expect((await events(environment)).map(event => event.message)).toEqual(['sampled in']);
+});
+
 test('limits admitted browser events per client across sources and flushes', async ({ page }) => {
   const environment = randomUUID();
   const otherEnvironment = randomUUID();
