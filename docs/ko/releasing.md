@@ -91,6 +91,8 @@ npm run check:micro
 
 SDK 변경을 `main`에 푸시하면 [Prepare npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/prepare.yml)가 시작됩니다. 이전 릴리스 이후 패키지·빌드 관련 변경을 확인하고 공통 patch 버전을 올린 뒤 릴리스 검사를 실행합니다. 루트 README, 가이드, 뷰어만 바뀐 경우에는 SDK를 게시하지 않습니다.
 
+workspace는 8.3.2에 영향을 주는 보안 권고를 해결하기 위해 개발용 빌드 도구 Vite를 8.3.5로 고정합니다. 이 버전을 바꿀 때 루트 package와 lockfile을 맞추고 `npm audit`을 실행하세요. 루트 의존성 변경은 Vite가 SDK 런타임 의존성이 아니어도 준비 워크플로의 릴리스 대상에 포함됩니다.
+
 준비 단계는 패키지 버전, 의존성 고정 버전, lockfile, SDK 버전 값을 함께 커밋하고 해당 커밋에 `vX.Y.Z` 태그를 붙여 푸시합니다. 이어서 그 태그로 [Publish npm release](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/publish.yml)를 실행합니다. 게시 단계는 정확히 그 소스를 다시 빌드·검사하고 프로토콜 → 브라우저 SDK → React 어댑터 순서로 게시한 뒤 레지스트리 파일과 새 설치를 검증합니다. 검증 후 별도 작업이 기존 태그의 [GitHub Release](https://github.com/hyeonse-swing/browser-error-log/releases)를 만들고 커밋 기반 변경 내역, 비교 링크, 세 npm 패키지 링크를 기록합니다. 같은 릴리스를 다시 실행하면 기존 GitHub Release를 재사용합니다. 태그는 릴리스 버전을 예약하며, 게시 워크플로가 성공해야 릴리스 완료입니다.
 
 인증에는 GitHub OIDC 기반의 [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/)을 사용합니다. 각 패키지는 `hyeonse-swing/browser-error-log` 저장소, `publish.yml` 워크플로, `npm` 환경에 직접 게시 권한으로 연결됩니다. GitHub의 해당 환경에는 `v*` 태그만 허용하며, 저장소 ruleset으로 해당 태그의 변경·삭제를 막습니다. npm 토큰 시크릿은 필요하지 않습니다. Trusted Publisher 연결을 변경할 때에는 npm이 유지관리자에게 2단계 인증을 요청할 수 있습니다.
