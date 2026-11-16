@@ -38,22 +38,33 @@ npm run start:micro
 
 [SDK 설치 가이드](personal-sdk.md)에 따라 `endpoint: 'http://127.0.0.1:4319/api/events'`를 설정하세요. Origin은 scheme·host·port를 모두 비교하며 `localhost`와 `127.0.0.1`은 다릅니다. 프로젝트 ID와 Origin은 쉼표로 여러 개 지정할 수 있습니다. 프로젝트 ID는 영문·숫자로 시작하는 1~64자의 ASCII 영문·숫자·`.`·`_`·`-`입니다. Origin과 프로젝트는 인증 수단이 아닙니다.
 
-## JSONL과 오프라인 내보내기
+## SQLite·JSONL 오프라인 내보내기
 
-`npm run build:micro`로 한 번 빌드한 뒤 실행합니다.
+`npm run build:micro`로 한 번 빌드합니다. 일관된 파일 스냅샷을 위해 수집기를 중지한 뒤 내보내세요. 기본 SQLite 저장소는 다음과 같이 내보냅니다.
+
+```sh
+npm run export:logs -- .data/micro-server .data/exported-events.json
+npm run dev
+```
+
+SQLite 내보내기는 기존 `events.sqlite`를 읽기 전용으로 열고 DB를 새로 만들거나 보관 정책에 따라 기록을 삭제하지 않습니다. 발생 시각·이벤트 ID·프로젝트의 내림차순으로 최신 이벤트를 선택하고 목적지 파일을 덮어쓰지 않습니다. 서버의 보관 기간·건수 상한으로 이미 삭제된 기록을 복원할 수 없어 `partial: true`를 표시합니다. DB가 없거나 이벤트가 잘못됐거나 행이 크기 상한을 넘으면 출력 전에 중단합니다.
+
+회전 JSONL 로그를 사용하려면 다음과 같이 실행합니다.
 
 ```sh
 MICRO_STORAGE=jsonl MICRO_DATA_DIR=.data/micro-logs npm run start:micro
 ```
 
-수신 API와 `/install.html`은 계속 사용할 수 있습니다. `/`에는 로그 모드 안내가 보이고 목록·상세 API는 `501`을 반환합니다. 현재 기록은 `events.jsonl`, 이전 기록은 `events.1.jsonl`, `events.2.jsonl`입니다. SQLite의 일 단위 보관 규칙은 적용되지 않습니다. 일관된 파일 스냅샷을 위해 수집기를 중지한 뒤 내보냅니다.
+수신 API와 `/install.html`은 계속 사용할 수 있습니다. `/`에는 로그 모드 안내가 보이고 목록·상세 API는 `501`을 반환합니다. 현재 기록은 `events.jsonl`, 이전 기록은 `events.1.jsonl`, `events.2.jsonl`입니다. SQLite의 일 단위 보관 규칙은 적용되지 않습니다. 수집기를 중지한 뒤 내보냅니다.
 
 ```sh
 npm run export:logs -- .data/micro-logs .data/exported-events.json
 npm run dev
 ```
 
-로컬 뷰어의 JSON 가져오기에서 `.data/exported-events.json`을 엽니다. 내보내기는 최신 10,000건·10 MiB, 입력은 128 MiB로 제한하고 기존 목적지 파일을 덮어쓰지 않습니다. 회전으로 이전 기록이 없어졌을 수 있어 `partial: true`를 표시합니다. 마지막 줄이 잘렸다면 보고 후 건너뛰고 중간 줄이 손상됐다면 오류입니다. JSON 가져오기는 브라우저 안에서만 동작하며 서버 DB를 복원하지 않습니다.
+디렉터리에 한 저장소만 있으면 자동으로 선택합니다. `events.sqlite`와 JSONL 파일이 함께 있으면 목적지 뒤에 `--storage=sqlite` 또는 `--storage=jsonl`을 붙여 명시적으로 선택하세요. JSONL만 있는 디렉터리에서는 기존 두 위치 인자 명령을 그대로 사용할 수 있습니다.
+
+로컬 뷰어의 JSON 가져오기에서 `.data/exported-events.json`을 엽니다. 두 방식 모두 최대 10,000건·JSON 10 MiB, 입력 128 MiB, 이벤트 행당 128 KiB로 제한합니다. SQLite도 `partial: true`를 표시하며, JSONL은 회전으로 이전 기록이 없어졌을 수 있어 같은 표시를 유지합니다. JSONL 마지막 줄이 잘렸다면 보고 후 건너뛰고 중간 줄이 손상됐다면 오류입니다. JSON 가져오기는 브라우저 안에서만 동작하며 서버 DB를 복원하지 않습니다.
 
 ## 외부에 노출하기
 

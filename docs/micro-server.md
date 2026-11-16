@@ -38,22 +38,33 @@ npm run start:micro
 
 Then follow the [SDK installation guide](personal-sdk.md) and set `endpoint: 'http://127.0.0.1:4319/api/events'`. Origin comparison includes scheme, host, and port; `localhost` differs from `127.0.0.1`. Multiple project IDs and origins can be comma-separated. Project IDs use 1 to 64 ASCII letters, digits, `.`, `_`, or `-`, starting with a letter or digit. Origin and project are not authentication credentials.
 
-## JSONL and offline export
+## Offline export from SQLite or JSONL
 
-Build once with `npm run build:micro`, then run:
+Build once with `npm run build:micro`. Stop the collector before exporting to take a consistent file snapshot. For the default SQLite store:
+
+```sh
+npm run export:logs -- .data/micro-server .data/exported-events.json
+npm run dev
+```
+
+The SQLite export opens the existing `events.sqlite` read-only, does not create or prune the database, and selects the newest events by occurrence time, event ID, then project (descending). It never overwrites the destination. `partial: true` reflects the server's retention and event caps; the export cannot recover records already pruned. A missing database, invalid event, or oversized row stops the export before writing output.
+
+For rotating JSONL logs, run:
 
 ```sh
 MICRO_STORAGE=jsonl MICRO_DATA_DIR=.data/micro-logs npm run start:micro
 ```
 
-The ingest endpoint and `/install.html` still work. `/` displays a log-mode notice; list and detail APIs return `501`. Current records are in `events.jsonl`, followed by `events.1.jsonl` and `events.2.jsonl`. SQLite's day-based retention does not apply. Stop the collector to take a consistent file snapshot, then export:
+The ingest endpoint and `/install.html` still work. `/` displays a log-mode notice; list and detail APIs return `501`. Current records are in `events.jsonl`, followed by `events.1.jsonl` and `events.2.jsonl`. SQLite's day-based retention does not apply. Stop the collector, then export:
 
 ```sh
 npm run export:logs -- .data/micro-logs .data/exported-events.json
 npm run dev
 ```
 
-In the local viewer, import `.data/exported-events.json` using its JSON import control. Export is bounded to the newest 10,000 events and 10 MiB; input is capped at 128 MiB. It will not overwrite an existing destination. It marks `partial: true` because older rotated records may already be gone. A truncated final line is reported and skipped; a corrupt line in the middle is an error. JSON import stays in the browser and does not write events back to the server.
+If a directory contains only one store, export detects it automatically. If both `events.sqlite` and JSONL files are present, choose one explicitly with `--storage=sqlite` or `--storage=jsonl` after the destination. The existing two-position JSONL command still works for JSONL-only directories.
+
+In the local viewer, import `.data/exported-events.json` using its JSON import control. Both exports contain at most 10,000 events and 10 MiB of JSON, with input capped at 128 MiB and each event row capped at 128 KiB. SQLite exports also mark `partial: true`; JSONL exports retain that mark because older rotated records may already be gone. A truncated final JSONL line is reported and skipped; a corrupt line in the middle is an error. JSON import stays in the browser and does not write events back to the server.
 
 ## Expose the server
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, copyFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -79,6 +79,18 @@ try {
   assert.deepEqual(await send(), { accepted: 1, stored: 1, duplicates: 0 });
   assert.deepEqual(await send(), { accepted: 1, stored: 0, duplicates: 1 });
   await stop();
+  const sqliteFile = join(scratch, 'sqlite/events.sqlite');
+  const sqliteHash = () => readFile(sqliteFile).then(bytes => createHash('sha256').update(bytes).digest('hex'));
+  const beforeExport = await sqliteHash();
+  const sqliteDestination = join(scratch, 'sqlite-export.json');
+  execFileSync(process.execPath, [resolve('dist/micro-server/export.mjs'), join(scratch, 'sqlite'), sqliteDestination], { stdio: 'pipe' });
+  const sqliteExport = JSON.parse(await readFile(sqliteDestination, 'utf8'));
+  assert.equal(sqliteExport.schemaVersion, 1);
+  assert.equal(sqliteExport.partial, true);
+  assert.equal(sqliteExport.events.length, 1);
+  assert.equal(sqliteExport.events[0].eventId, event.eventId);
+  assert.deepEqual(sqliteExport.events[0].breadcrumbs, event.breadcrumbs);
+  assert.equal(await sqliteHash(), beforeExport, 'Read-only export must not change the source database.');
   await start('sqlite');
   const persisted = await (await fetch(`${address}/api/events?project=my-web`, { headers: auth })).json();
   assert.equal(persisted.events.length, 1);
@@ -111,7 +123,7 @@ try {
   assert.deepEqual(imported.events[0].breadcrumbs, event.breadcrumbs);
   await mkdir('output/micro-server-smoke', { recursive: true });
   await copyFile(destination, 'output/micro-server-smoke/events.json');
-  console.log('Built-server smoke PASS: authenticated viewer, credentialless CORS ingest, SQLite restart/dedupe, JSONL-only storage, viewer-compatible export.');
+  console.log('Built-server smoke PASS: authenticated viewer, credentialless CORS ingest, SQLite read-only export/hash/restart, JSONL-only storage, viewer-compatible export.');
 } finally {
   await stop();
   await rm(scratch, { recursive: true, force: true });

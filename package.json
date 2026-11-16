@@ -14,7 +14,7 @@
     "build:collector": "node scripts/build-collector.mjs",
     "collector": "npm run build:collector && node dist/collector/server.mjs",
     "build:micro": "npm run build && node scripts/build-micro-server.mjs",
-    "check:micro": "npm run build:micro && node scripts/verify-micro-server.mjs",
+    "check:micro": "npm run build:micro && node --test scripts/verify-export-micro-logs.mjs && node scripts/verify-micro-server.mjs",
     "micro": "npm run build:micro && node dist/micro-server/server.mjs",
     "start:micro": "node dist/micro-server/server.mjs",
     "export:logs": "node dist/micro-server/export.mjs",
