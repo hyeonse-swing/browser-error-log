@@ -6,7 +6,7 @@ English | [한국어](README.ko.md)
 
 Capture browser failures on infrastructure you control. This project includes a framework-independent browser SDK, a React Error Boundary, a small self-hosted collector, and a viewer. A Node.js 24 process can persist events in SQLite and serve the viewer. You choose where records live, how long they remain, and who can read them. The public event types and transport hook also support a backend you own.
 
-The MIT-licensed browser SDK, React adapter, and protocol are published separately under the `@ihyeon` scope: [@ihyeon/browser-error-log](https://www.npmjs.com/package/@ihyeon/browser-error-log), [@ihyeon/browser-error-log-react](https://www.npmjs.com/package/@ihyeon/browser-error-log-react), and [@ihyeon/browser-error-log-protocol](https://www.npmjs.com/package/@ihyeon/browser-error-log-protocol). All three `0.1.5` packages have verified registry downloads and fresh-consumer installation checks; the original unscoped packages remain available. See the [release guide](docs/releasing.md) for the migration and publishing workflow. The collector and viewer run on your own infrastructure. The English/Korean language selector belongs to the viewer, demo, and install example built from this repository; installing the SDK alone does not add that UI to an app.
+The MIT-licensed browser SDK, React adapter, and protocol are published separately under the `@ihyeon` scope: [@ihyeon/browser-error-log](https://www.npmjs.com/package/@ihyeon/browser-error-log), [@ihyeon/browser-error-log-react](https://www.npmjs.com/package/@ihyeon/browser-error-log-react), and [@ihyeon/browser-error-log-protocol](https://www.npmjs.com/package/@ihyeon/browser-error-log-protocol). The original unscoped packages remain available; see the [release guide](docs/releasing.md) for the migration, verified releases, and publishing workflow. The collector and viewer run on your own infrastructure. The English/Korean language selector belongs to the viewer, demo, and install example built from this repository; installing the SDK alone does not add that UI to an app.
 
 ## Start with persistent storage
 
@@ -61,7 +61,7 @@ errorLog.captureException(new Error('Connection check'));
 await errorLog.flush();
 ```
 
-The viewer should show that event under `my-web`. The SDK also observes global JavaScript exceptions, unhandled promises, fetch/XHR failures, and HTTP 5xx responses by default. `console.error` capture is opt-in. React render errors can use [`ErrorBoundary`](docs/personal-sdk.md#react-and-ssr). See the [SDK guide](docs/personal-sdk.md) for lifecycle, custom transport, and data controls.
+The viewer should show that event under `my-web`. `captureException()` returns an event ID when the SDK accepts it into the queue; confirm collector receipt separately. The default `standard` mode also observes global JavaScript exceptions, unhandled promises, fetch/XHR failures, and HTTP 5xx responses. Choose `preset: 'minimal'` for manual capture without automatic hooks or stacks, or `preset: 'detailed'` for additional console, resource, navigation, network breadcrumb, and cause details. Individual capture switches override the mode. React render errors can use [`ErrorBoundary`](docs/personal-sdk.md#react-and-ssr). See the [SDK guide](docs/personal-sdk.md#choose-a-capture-mode) for the full matrix, lifecycle, custom transport, and volume controls.
 
 ## Why use it
 

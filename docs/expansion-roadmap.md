@@ -6,9 +6,9 @@ This roadmap describes possible public-project improvements. It does not announc
 
 ## Current baseline
 
-The browser SDK captures global JavaScript exceptions, unhandled promises, fetch/XHR failures, selected HTTP responses, and manual errors. It has bounded buffering, per-attempt timeouts, and limited retries. The optional React adapter catches render errors. The viewer offers filters, timeline/detail, charts over fetched records, and local JSON import/export. A single-process micro server persists SQLite records or rotating JSONL logs. Development demo collectors use memory only.
+The browser SDK captures global JavaScript exceptions, unhandled promises, fetch/XHR failures, selected HTTP responses, and manual errors in its standard mode. Minimal and detailed presets change automatic instrumentation; explicit flags, stack control, sampling, rate limits, and duplicate suppression allow finer choices. A manual capture can return its queued event ID. Buffering, timeouts, and retries are bounded. The optional React adapter catches render errors. The viewer offers filters, timeline/detail, charts over fetched records, and local JSON import/export. A single-process micro server persists SQLite records or rotating JSONL logs. Development demo collectors use memory only.
 
-The browser SDK, protocol, and React adapter are published separately under `@ihyeon`. All three `0.1.5` registry artifacts and fresh installations are verified. The original unscoped packages remain available. See the [release guide](releasing.md) for the migration, verified release history, and publishing workflow. The English/Korean viewer, demo, and install-example UI is built from this repository and is separate from the SDK runtime.
+The browser SDK, protocol, and React adapter are published separately under `@ihyeon`. The original unscoped packages remain available. See the [release guide](releasing.md) for the migration, verified release history, and publishing workflow. The English/Korean viewer, demo, and install-example UI is built from this repository and is separate from the SDK runtime.
 
 The SQLite defaults are seven days from receipt, 10,000 events, and a 64 MiB main database file. JSONL defaults to three 8 MiB files and has no online query API. The viewer limits fetched analysis to 100 pages and 10,000 unique events; capped results are explicitly partial. These limits make the starter deployment understandable, but they are not a guarantee of complete capture or suitability for every workload.
 
@@ -16,7 +16,7 @@ The SQLite defaults are seven days from receipt, 10,000 events, and a 64 MiB mai
 
 | Area | Candidate work | Reason to consider it |
 | --- | --- | --- |
-| SDK reliability | Bound repeated identical errors, distinguish drop causes, test supported browser and WebView versions | Make high-volume failure behavior easier to understand |
+| SDK reliability | Test supported browser and WebView versions under sustained load | Check behavior beyond local fixtures and bounded unit tests |
 | Privacy controls | Document tested application-specific filters and a server-side removal point | Reduce accidental collection of identifiers in paths, messages, stacks, or context |
 | Diagnostics | Add private source-map handling and careful event grouping | Connect deployed stacks to source and group repeat failures without hiding distinct causes |
 | Larger datasets | Define server aggregation with the same filters and access rules as event queries | Show complete counts when viewer fetch limits are reached |

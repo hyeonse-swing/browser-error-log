@@ -6,7 +6,7 @@
 
 브라우저 오류를 직접 관리하는 인프라에 기록합니다. 프레임워크에 종속되지 않는 브라우저 SDK, React Error Boundary, 작은 자체 호스팅 수집기와 뷰어를 제공합니다. Node.js 24 프로세스 하나로 SQLite에 이벤트를 저장하고 뷰어를 제공할 수 있습니다. 데이터 위치, 보관 기간, 조회 권한은 운영자가 결정합니다. 공개 이벤트 타입과 전송 훅을 사용해 자체 백엔드에 연결할 수도 있습니다.
 
-MIT 라이선스 패키지 3개를 `@ihyeon` 스코프로 각각 게시했습니다: [@ihyeon/browser-error-log](https://www.npmjs.com/package/@ihyeon/browser-error-log), [@ihyeon/browser-error-log-react](https://www.npmjs.com/package/@ihyeon/browser-error-log-react), [@ihyeon/browser-error-log-protocol](https://www.npmjs.com/package/@ihyeon/browser-error-log-protocol). 세 패키지의 `0.1.5` 레지스트리 파일과 새 consumer 설치를 검증했으며 기존 이름의 공개 패키지도 유지됩니다. 이름 전환과 게시 워크플로는 [릴리스 가이드](docs/ko/releasing.md)를 참고하세요. 수집기와 뷰어는 각 사용자가 자신의 인프라에서 운영합니다. 영어·한국어 선택기는 이 저장소에서 빌드하는 뷰어·데모·설치 예제의 기능이며 SDK만 설치해도 앱에 해당 UI가 추가되지는 않습니다.
+MIT 라이선스 패키지 3개를 `@ihyeon` 스코프로 각각 게시했습니다: [@ihyeon/browser-error-log](https://www.npmjs.com/package/@ihyeon/browser-error-log), [@ihyeon/browser-error-log-react](https://www.npmjs.com/package/@ihyeon/browser-error-log-react), [@ihyeon/browser-error-log-protocol](https://www.npmjs.com/package/@ihyeon/browser-error-log-protocol). 기존 이름의 공개 패키지도 유지됩니다. 이름 전환, 검증된 릴리스와 게시 워크플로는 [릴리스 가이드](docs/ko/releasing.md)를 참고하세요. 수집기와 뷰어는 각 사용자가 자신의 인프라에서 운영합니다. 영어·한국어 선택기는 이 저장소에서 빌드하는 뷰어·데모·설치 예제의 기능이며 SDK만 설치해도 앱에 해당 UI가 추가되지는 않습니다.
 
 ## 영구 저장으로 시작하기
 
@@ -61,7 +61,7 @@ errorLog.captureException(new Error('Connection check'));
 await errorLog.flush();
 ```
 
-뷰어의 `my-web` 프로젝트에 이벤트가 표시됩니다. SDK는 전역 JavaScript 예외, 처리되지 않은 Promise, fetch/XHR 연결 실패, HTTP 5xx도 기본 수집합니다. `console.error` 수집은 선택 사항입니다. React 렌더링 오류는 [`ErrorBoundary`](docs/ko/personal-sdk.md#react와-ssr)를 사용할 수 있습니다. 클라이언트 수명, 사용자 지정 전송, 데이터 필터는 [SDK 가이드](docs/ko/personal-sdk.md)를 참고하세요.
+뷰어의 `my-web` 프로젝트에 이벤트가 표시됩니다. `captureException()`은 SDK 큐에 수락한 이벤트 ID를 반환하며, 실제 수집기 수신은 별도로 확인합니다. 기본 `standard` 모드는 전역 JavaScript 예외, 처리되지 않은 Promise, fetch/XHR 연결 실패와 HTTP 5xx를 수집합니다. `preset:'minimal'`은 자동 계측과 스택 없이 수동 기록을 사용하고, `preset:'detailed'`은 console·리소스·이동·네트워크 작업 기록·연결 원인을 추가합니다. 개별 수집 옵션으로 모드를 조정할 수 있습니다. React 렌더링 오류는 [`ErrorBoundary`](docs/ko/personal-sdk.md#react와-ssr)를 사용할 수 있습니다. 전체 선택표와 전송·양 조절은 [SDK 가이드](docs/ko/personal-sdk.md#수집-모드-선택)를 참고하세요.
 
 ## 얻을 수 있는 것
 

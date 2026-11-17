@@ -10,6 +10,8 @@ export interface CaptureExtra {
 
 export interface TransportContext { signal: AbortSignal }
 
+export type BrowserErrorLogPreset = 'minimal' | 'standard' | 'detailed';
+
 export interface BrowserErrorLogOptions {
   project: string;
   environment?: string;
@@ -22,20 +24,24 @@ export interface BrowserErrorLogOptions {
   transport?: (batch: EventBatch, context: TransportContext) => void | Promise<void>;
   runtime?: Runtime;
   enabled?: boolean;
+  /** Automatic capture preset; defaults to standard. Explicit capture flags override it. */
+  preset?: BrowserErrorLogPreset;
+  /** Include error and component stacks; defaults to true except in minimal. */
+  captureStack?: boolean;
   captureConsole?: boolean;
-  /** Captures global JavaScript errors automatically; defaults to true. */
+  /** Captures global JavaScript errors automatically; defaults to true in standard. */
   captureGlobalErrors?: boolean;
-  /** Captures unhandled promise rejections automatically; defaults to true. */
+  /** Captures unhandled promise rejections automatically; defaults to true in standard. */
   captureUnhandledRejections?: boolean;
-  /** Includes up to four sanitized Error.cause entries in exception stacks; defaults to false. */
+  /** Includes up to four sanitized Error.cause entries in exception stacks; defaults to false in standard. */
   captureErrorCause?: boolean;
-  /** Captures script, stylesheet link, and image load errors; defaults to false. */
+  /** Captures script, stylesheet link, and image load errors; defaults to false in standard. */
   captureResourceErrors?: boolean;
-  /** Records sanitized History navigation breadcrumbs; defaults to false. */
+  /** Records sanitized History navigation breadcrumbs; defaults to false in standard. */
   captureNavigation?: boolean;
-  /** Defaults to true. With a custom transport, automatic network capture requires endpoint for collector exclusion. */
+  /** Defaults to true in standard. With a custom transport, automatic network capture requires endpoint for collector exclusion. */
   captureNetwork?: boolean;
-  /** Records sanitized fetch/XHR completion breadcrumbs; defaults to false. Custom transports require endpoint. */
+  /** Records sanitized fetch/XHR completion breadcrumbs; defaults to false in standard. Custom transports require endpoint. */
   captureNetworkBreadcrumbs?: boolean;
   /** Filters or replaces each sanitized breadcrumb before it enters the trail. */
   beforeBreadcrumb?: (breadcrumb: Breadcrumb) => BreadcrumbInput | false | null | void;
@@ -142,11 +148,11 @@ function isAbort(error: unknown, signal?: AbortSignal | null): boolean {
   return read(error, 'name') === 'AbortError' || read(error, 'code') === 20;
 }
 
-function errorFields(error: unknown): { message: string; name?: string; stack?: string } {
+function errorFields(error: unknown, includeStack = true): { message: string; name?: string; stack?: string } {
   if (error === null || error === undefined) return { message: 'Unknown error' };
   const message = read(error, 'message');
   const name = read(error, 'name');
-  const stack = read(error, 'stack');
+  const stack = includeStack ? read(error, 'stack') : undefined;
   return {
     message: message == null ? safeString(error) : safeString(message),
     ...(name == null ? {} : { name: safeString(name) }),
@@ -162,6 +168,10 @@ function boundedNumber(value: unknown, minimum: number, maximum: number, fallbac
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(maximum, Math.max(minimum, Math.floor(value)))
     : fallback;
+}
+
+function captureFlag(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
 }
 
 function eventFingerprint(event: ErrorEventRecord): string {
@@ -190,6 +200,8 @@ class Client implements BrowserErrorLogCaptureClient {
   private readonly networkBreadcrumbCaptureEnabled: boolean;
   private readonly navigationCaptureEnabled: boolean;
   private readonly captureErrorCause: boolean;
+  private readonly captureStack: boolean;
+  private readonly consoleCaptureEnabled: boolean;
   private readonly captureGlobalErrors: boolean;
   private readonly captureUnhandledRejections: boolean;
   private readonly resourceCaptureEnabled: boolean;
@@ -233,14 +245,20 @@ class Client implements BrowserErrorLogCaptureClient {
   constructor(options: BrowserErrorLogOptions) {
     this.options = options;
     this.active = options.enabled !== false && typeof window !== 'undefined' && typeof document !== 'undefined';
+    const preset = options.preset ?? 'standard';
+    if (preset !== 'minimal' && preset !== 'standard' && preset !== 'detailed') throw new Error('preset must be minimal, standard, or detailed');
+    const minimal = preset === 'minimal';
+    const detailed = preset === 'detailed';
     const automaticNetworkAllowed = !options.transport || Boolean(options.endpoint);
-    this.networkCaptureEnabled = options.captureNetwork !== false && automaticNetworkAllowed;
-    this.networkBreadcrumbCaptureEnabled = options.captureNetworkBreadcrumbs === true && automaticNetworkAllowed;
-    this.navigationCaptureEnabled = options.captureNavigation === true;
-    this.captureErrorCause = options.captureErrorCause === true;
-    this.captureGlobalErrors = options.captureGlobalErrors !== false;
-    this.captureUnhandledRejections = options.captureUnhandledRejections !== false;
-    this.resourceCaptureEnabled = options.captureResourceErrors === true;
+    this.networkCaptureEnabled = captureFlag(options.captureNetwork, !minimal) && automaticNetworkAllowed;
+    this.networkBreadcrumbCaptureEnabled = captureFlag(options.captureNetworkBreadcrumbs, detailed) && automaticNetworkAllowed;
+    this.navigationCaptureEnabled = captureFlag(options.captureNavigation, detailed);
+    this.captureErrorCause = captureFlag(options.captureErrorCause, detailed);
+    this.captureStack = captureFlag(options.captureStack, !minimal);
+    this.captureGlobalErrors = captureFlag(options.captureGlobalErrors, !minimal);
+    this.captureUnhandledRejections = captureFlag(options.captureUnhandledRejections, !minimal);
+    this.resourceCaptureEnabled = captureFlag(options.captureResourceErrors, detailed);
+    this.consoleCaptureEnabled = captureFlag(options.captureConsole, detailed);
     this.pauseWhileOffline = options.pauseWhileOffline === true;
     this.maxQueueSize = boundedNumber(options.maxQueueSize, 1, 100, 50);
     this.maxBatchSize = boundedNumber(options.maxBatchSize, 1, MAX_BATCH_EVENTS, MAX_BATCH_EVENTS);
@@ -265,7 +283,7 @@ class Client implements BrowserErrorLogCaptureClient {
     window.addEventListener('pagehide', this.onPageHide);
     if (this.pauseWhileOffline) window.addEventListener('online', this.onOnline);
     if (this.networkCaptureEnabled || this.networkBreadcrumbCaptureEnabled) addNetworkClient(this);
-    if (options.captureConsole === true) addConsoleClient(this);
+    if (this.consoleCaptureEnabled) addConsoleClient(this);
     if (this.navigationCaptureEnabled) addNavigationClient(this);
     this.interval = setInterval(() => { void this.flush(); }, boundedNumber(options.flushIntervalMs, 10, 60_000, 10_000));
   }
@@ -281,7 +299,7 @@ class Client implements BrowserErrorLogCaptureClient {
       const event = this.makeEvent(type, fields.message, {
         name: fields.name,
         stack: fields.stack,
-        componentStack: extra.componentStack,
+        componentStack: this.captureStack ? extra.componentStack : undefined,
         context: extra.context,
       });
       if (this.enqueue(event)) {
@@ -330,7 +348,7 @@ class Client implements BrowserErrorLogCaptureClient {
     if (!captureError) return;
     try {
       const network = { method: trim(method || 'GET', 16).toUpperCase(), url, status, durationMs };
-      const fields = failure === undefined ? undefined : errorFields(failure);
+      const fields = failure === undefined ? undefined : errorFields(failure, false);
       const event = this.makeEvent(status === undefined ? 'network' : 'http',
         status === undefined ? (fields?.message || 'Network request failed') : `HTTP ${status}`,
         { name: fields?.name, network });
@@ -433,7 +451,7 @@ class Client implements BrowserErrorLogCaptureClient {
       window.removeEventListener('pagehide', this.onPageHide);
       if (this.pauseWhileOffline) window.removeEventListener('online', this.onOnline);
       if (this.networkCaptureEnabled || this.networkBreadcrumbCaptureEnabled) removeNetworkClient(this);
-      if (this.options.captureConsole === true) removeConsoleClient(this);
+      if (this.consoleCaptureEnabled) removeConsoleClient(this);
       if (this.navigationCaptureEnabled) removeNavigationClient(this);
     }
     this.recordDrop('destroyed', this.queue.length + this.inFlight);
@@ -632,8 +650,8 @@ class Client implements BrowserErrorLogCaptureClient {
   }
 
   private exceptionFields(error: unknown): ReturnType<typeof errorFields> {
-    const fields = errorFields(error);
-    if (!this.captureErrorCause || error === null || (typeof error !== 'object' && typeof error !== 'function')) return fields;
+    const fields = errorFields(error, this.captureStack);
+    if (!this.captureStack || !this.captureErrorCause || error === null || (typeof error !== 'object' && typeof error !== 'function')) return fields;
     const seen = new WeakSet<object>([error]);
     const segments: string[] = [];
     let current: object = error;
@@ -779,8 +797,8 @@ class Client implements BrowserErrorLogCaptureClient {
       type,
       message: this.cleanText(message, 1024),
       ...(extra.name === undefined ? {} : { name: this.cleanText(extra.name, 100) }),
-      ...(extra.stack === undefined ? {} : { stack: this.cleanText(extra.stack, 4096) }),
-      ...(extra.componentStack === undefined ? {} : { componentStack: this.cleanText(extra.componentStack, 2048) }),
+      ...(this.captureStack && extra.stack !== undefined ? { stack: this.cleanText(extra.stack, 4096) } : {}),
+      ...(this.captureStack && extra.componentStack !== undefined ? { componentStack: this.cleanText(extra.componentStack, 2048) } : {}),
       page: this.cleanUrl(window.location.href),
       runtime: RUNTIMES.has(this.options.runtime as Runtime) ? this.options.runtime! : 'browser',
       ...(typeof userAgent === 'string' ? { browser: this.cleanText(userAgent, 300) } : {}),
@@ -796,8 +814,8 @@ class Client implements BrowserErrorLogCaptureClient {
     const type = read(candidate, 'type');
     const runtime = read(candidate, 'runtime');
     const name = read(candidate, 'name');
-    const stack = read(candidate, 'stack');
-    const componentStack = read(candidate, 'componentStack');
+    const stack = this.captureStack ? read(candidate, 'stack') : undefined;
+    const componentStack = this.captureStack ? read(candidate, 'componentStack') : undefined;
     const browser = read(candidate, 'browser');
     const context = this.cleanContext(read(candidate, 'context'));
     const breadcrumbs = this.cleanBreadcrumbTrail(read(candidate, 'breadcrumbs'));
@@ -807,8 +825,8 @@ class Client implements BrowserErrorLogCaptureClient {
       type: EVENT_TYPES.has(type as EventType) ? type as EventType : base.type,
       message: this.cleanText(read(candidate, 'message') ?? base.message, 1024),
       ...(name === undefined ? { name: base.name } : { name: this.cleanText(name, 100) }),
-      ...(stack === undefined ? { stack: undefined } : { stack: this.cleanText(stack, 4096) }),
-      ...(componentStack === undefined ? { componentStack: base.componentStack } : { componentStack: this.cleanText(componentStack, 2048) }),
+      ...(this.captureStack ? (stack === undefined ? { stack: undefined } : { stack: this.cleanText(stack, 4096) }) : {}),
+      ...(this.captureStack ? (componentStack === undefined ? { componentStack: base.componentStack } : { componentStack: this.cleanText(componentStack, 2048) }) : {}),
       page: this.cleanUrl(read(candidate, 'page') ?? base.page),
       runtime: RUNTIMES.has(runtime as Runtime) ? runtime as Runtime : base.runtime,
       ...(browser === undefined ? { browser: base.browser } : { browser: this.cleanText(browser, 300) }),

@@ -4,7 +4,7 @@ English | [한국어](ko/personal-sdk.md)
 
 The SDK accepts an `endpoint` or a custom `transport`. React is optional. For persistent storage, start with the [self-hosting guide](micro-server.md).
 
-The browser SDK, protocol, and React adapter are separate npm packages under `@ihyeon`. All three `0.1.5` packages have verified registry downloads and fresh-consumer installation checks; see the [release guide](releasing.md). Install the browser SDK in the consuming app:
+The browser SDK, protocol, and React adapter are separate npm packages under `@ihyeon`; see the [release guide](releasing.md) for verified release history. Install the browser SDK in the consuming app:
 
 ```sh
 npm install @ihyeon/browser-error-log
@@ -88,6 +88,33 @@ Refresh `http://127.0.0.1:4319/` and select `my-web`. A successful `sent` counte
 
 ## Configuration reference
 
+### Choose a capture mode
+
+`preset` lets you start with one of three capture levels. Omit it for `standard`, which retains the previous defaults. These levels change runtime instrumentation and, in `minimal`, the data included in each event; they use the same SDK package and do **not** produce different download bundles.
+
+| Capture switch | `minimal` | `standard` (default) | `detailed` |
+| --- | --- | --- | --- |
+| Global JavaScript errors / unhandled promises | Off / off | On / on | On / on |
+| fetch/XHR errors (`captureNetwork`) | Off | On | On |
+| `console.error` / resource load errors | Off / off | Off / off | On / on |
+| Navigation / network breadcrumbs | Off / off | Off / off | On / on |
+| Linked `Error.cause` details / stack and component stack | Off / off | Off / on | On / on |
+
+`minimal` still accepts explicit `captureException()` and `addBreadcrumb()` calls. Accepted manual events use the normal flush timer and page lifecycle delivery; you do not have to call `flush()` after every error. `captureStack: false` omits `stack` and `componentStack`, does not read error/cause stack properties, and prevents `beforeSend` from reintroducing those fields. The message, name, required event metadata, explicit context, and manual breadcrumbs remain available. If you need a stack in minimal mode, set `captureStack: true`.
+
+```ts
+const errorLog = init({
+  project: 'my-web', endpoint: '/monitoring/events',
+  preset: 'minimal',
+  captureGlobalErrors: true, // Override only this automatic hook.
+  captureStack: true,        // Keep stack details for accepted errors.
+});
+```
+
+Each explicit capture boolean overrides its mode; `false` wins in `detailed`, while `undefined` inherits the mode. The choice is fixed for that client at `init()`. To change modes, flush if needed, destroy the old client, and initialize a new one. `enabled: false` remains the master off switch. With a custom transport, automatic fetch/XHR capture and breadcrumbs still require `endpoint` so the SDK can exclude collector requests.
+
+`detailed` can observe more browser activity and include extra diagnostic text, which may increase runtime work and expose more app context to review. It retains the existing sanitization and limits; it never collects request/response bodies, input values, cookies, or DOM snapshots. `sampleRate`, `maxEventsPerMinute`, `dedupeIntervalMs`, `ignoreMessages`, `maxQueueSize`, `maxBatchSize`, and `flushIntervalMs` are independent controls and are not changed by a preset. Choose them explicitly for volume and delivery policy. No CPU or memory reduction percentage has been measured.
+
 | Option | Default | Purpose |
 | --- | --- | --- |
 | `project` | Required | Group events under a project; match the collector's allowlist |
@@ -96,8 +123,14 @@ Refresh `http://127.0.0.1:4319/` and select `my-web`. A successful `sent` counte
 | `environment` / `release` | `development` / `unknown` | Label the deployment and build |
 | `runtime` | `browser` | `browser`, `webview-ios`, `webview-android`, or `unknown`; a label, not native instrumentation |
 | `enabled` | `true` | Disable collection with `false` |
+| `preset` | `standard` | Select `minimal`, `standard`, or `detailed` runtime capture defaults |
+| `captureStack` | `true` (`minimal`: `false`) | Include sanitized error and component stacks |
 | `captureNetwork` | `true` | Observe fetch/XHR; a custom transport also needs `endpoint` |
 | `captureConsole` | `false` | Opt in to `console.error` capture |
+| `captureGlobalErrors` / `captureUnhandledRejections` | `true` / `true` | Automatic global JavaScript and promise hooks |
+| `captureResourceErrors` / `captureNavigation` / `captureNetworkBreadcrumbs` / `captureErrorCause` | `false` | Optional resource, navigation, network trail, and linked cause context |
+| `sampleRate` / `maxEventsPerMinute` / `dedupeIntervalMs` / `ignoreMessages` | `1` / no limit / `0` / none | Sampling, rate cap, duplicate suppression, literal message filter |
+| `maxBatchSize` | `20` | Maximum events per delivery batch; clamped to 1–20 |
 | `shouldCaptureHttp` | 5xx responses | Select HTTP statuses to capture |
 | `sanitizeUrl` | Built-in URL cleanup | Remove application-specific path identifiers before the built-in cleanup |
 | `beforeSend` | No custom filter | Edit an event or return `false`/`null` to drop it |

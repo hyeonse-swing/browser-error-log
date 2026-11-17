@@ -9,7 +9,7 @@
 - **이벤트 목적지를 직접 선택:** 내장 호스팅 endpoint나 별도 분석 목적지는 없습니다. `endpoint` 또는 사용자 지정 `transport`를 지정합니다.
 - **작은 브라우저 의존성:** 런타임 프레임워크 의존성이 없고 ESM, CommonJS, TypeScript 선언을 제공합니다. 저장소는 뷰어·선택적 React 어댑터를 제외한 기본 SDK에 gzip 20 KiB 예산을 적용합니다.
 - **전송 전 제어:** `beforeSend`로 이벤트를 수정·제외하고 `sanitizeUrl`로 경로 식별자를 제거하며 `shouldCaptureHttp`로 필요한 HTTP 응답을 선택합니다.
-- **오류 맥락:** JavaScript 예외, 미처리 Promise, fetch/XHR 실패, 수동 오류에 프로젝트·릴리스·페이지·발생 시각을 기록합니다. Console 수집은 선택 사항입니다.
+- **오류 맥락:** 기본 `standard` 모드는 JavaScript 예외, 미처리 Promise, fetch/XHR 실패, 수동 오류에 프로젝트·릴리스·페이지·발생 시각을 기록합니다.
 - **옮길 수 있는 저장 방식:** SQLite 수집기와 실시간 뷰어, JSONL 로그와 로컬 내보내기, 또는 같은 버전 계약을 따르는 자체 백엔드를 선택합니다.
 
 ## 설치
@@ -67,6 +67,21 @@ try {
 `eventId`는 이 이벤트를 수집기와 뷰어에서 찾을 때 쓰는 식별자입니다. SDK가 전송 큐에 수락한 경우에만 반환하며 중복·필터·샘플링·한도·비활성 클라이언트는 `undefined`를 반환합니다. 큐에서 밀리거나 전송 실패·페이지 종료로 저장되지 않을 수 있으므로 실제 수집기 기록을 확인하세요. 기존 `BrowserErrorLogClient`와 `BrowserErrorLogDiagnosticsClient` 인터페이스는 어댑터 호환성을 위해 반환형 `void`를 유지합니다. ID를 읽을 때는 `init()`의 추론 타입 또는 `BrowserErrorLogCaptureClient`를 사용하세요.
 
 선택적인 `@ihyeon/browser-error-log-react` 패키지는 Error Boundary를 제공합니다. 기본 SDK에는 React가 필요하지 않습니다. SSR에서 import·초기화할 수 있지만 서버 오류는 수집하지 않으므로 프레임워크의 브라우저/클라이언트 진입점에서 초기화하세요.
+
+## 수집 비용 선택
+
+`init()`에서 `preset: 'minimal' | 'standard' | 'detailed'`를 지정할 수 있습니다. 생략하면 기존 기본값인 `standard`입니다. `minimal`은 자동 오류 수집·브라우저 계측을 끄지만 `captureException()`과 `addBreadcrumb()`의 수동 기록은 기존 큐와 주기 전송을 사용합니다. 오류·컴포넌트 스택도 생략합니다. `detailed` 모드는 기본 수집에 console 오류, 리소스 오류, 화면 이동·네트워크 작업 기록, 연결된 `Error.cause` 정보를 추가합니다. 세 모드는 동일한 SDK 파일을 사용하며 실행 중 작업량과 이벤트 내용만 다릅니다.
+
+```ts
+const errorLog = init({
+  project: 'my-web', endpoint: '/api/events',
+  preset: 'minimal',
+  captureGlobalErrors: true, // 명시한 옵션이 모드보다 우선합니다.
+  captureStack: true,
+});
+```
+
+명시한 `false`도 `detailed`보다 우선하고 `undefined`는 모드값을 따릅니다. `enabled: false`는 전체 수집을 중지합니다. 설정은 클라이언트별 초기화 때 고정됩니다. 모드를 바꾸려면 필요 시 대기 이벤트를 전송한 후 `destroy()`하고 새 클라이언트를 만드세요. `captureStack: false`는 오류·원인 스택 속성을 읽지 않고 `beforeSend`에서 추가한 스택도 최종 이벤트에서 제거합니다. 모드는 `sampleRate`, `maxEventsPerMinute`, `dedupeIntervalMs`, 큐 한도, 전송 설정을 바꾸지 않습니다. [전체 선택표와 제어 방법](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/ko/personal-sdk.md#수집-모드-선택)을 참고하세요.
 
 ## 연결된 원인 오류 수집
 

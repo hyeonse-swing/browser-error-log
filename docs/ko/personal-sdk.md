@@ -4,7 +4,7 @@
 
 SDK는 `endpoint` 또는 사용자 지정 `transport`로 연결합니다. React는 선택 사항입니다. 영속 저장을 시작하려면 [자체 호스팅 가이드](micro-server.md)를 참고하세요.
 
-브라우저 SDK, 프로토콜, React 어댑터를 `@ihyeon` 스코프의 개별 npm 패키지로 제공합니다. 세 패키지의 `0.1.5` 레지스트리 파일과 새 consumer 설치를 검증했습니다. [릴리스 가이드](releasing.md)에 게시 기록을 정리했습니다. 대상 앱에서 브라우저 SDK를 설치합니다.
+브라우저 SDK, 프로토콜, React 어댑터를 `@ihyeon` 스코프의 개별 npm 패키지로 제공합니다. 검증된 릴리스 기록은 [릴리스 가이드](releasing.md)에 정리했습니다. 대상 앱에서 브라우저 SDK를 설치합니다.
 
 ```sh
 npm install @ihyeon/browser-error-log
@@ -88,6 +88,33 @@ console.log(errorLog.getStats());
 
 ## 설정 참조
 
+### 수집 모드 선택
+
+`preset`으로 세 가지 수집 범위 중 하나를 고를 수 있습니다. 생략하면 기존 기본 동작과 같은 `standard`입니다. 모드는 실행 중 계측 범위와 `minimal`의 이벤트 내용을 바꾸지만, 세 모드가 사용하는 SDK 배포 파일은 **동일**합니다. 모드별 다운로드 용량이 줄어들지는 않습니다.
+
+| 수집 항목 | `minimal` | `standard` (기본) | `detailed` |
+| --- | --- | --- | --- |
+| 전역 JavaScript 오류 / 미처리 Promise | 꺼짐 / 꺼짐 | 켜짐 / 켜짐 | 켜짐 / 켜짐 |
+| fetch/XHR 오류 (`captureNetwork`) | 꺼짐 | 켜짐 | 켜짐 |
+| `console.error` / 리소스 로드 오류 | 꺼짐 / 꺼짐 | 꺼짐 / 꺼짐 | 켜짐 / 켜짐 |
+| 이동 / 네트워크 작업 기록 | 꺼짐 / 꺼짐 | 꺼짐 / 꺼짐 | 켜짐 / 켜짐 |
+| 연결된 `Error.cause` / 오류·컴포넌트 스택 | 꺼짐 / 꺼짐 | 꺼짐 / 켜짐 | 켜짐 / 켜짐 |
+
+`minimal`에서도 `captureException()`과 `addBreadcrumb()`를 직접 호출할 수 있습니다. 수락된 수동 이벤트는 기존 주기와 페이지 수명 주기 전송을 사용하므로 오류마다 `flush()`를 호출할 필요가 없습니다. `captureStack:false`는 `stack`·`componentStack`을 보내지 않고 오류·원인 스택 속성을 읽지 않으며, `beforeSend`에서 추가한 스택도 최종 이벤트에서 제거합니다. 메시지·이름·필수 메타데이터와 명시한 context·수동 작업 기록은 남습니다. 최소 모드에서 스택이 필요하면 `captureStack:true`를 지정하세요.
+
+```ts
+const errorLog = init({
+  project: 'my-web', endpoint: '/monitoring/events',
+  preset: 'minimal',
+  captureGlobalErrors: true, // 이 자동 수집만 켭니다.
+  captureStack: true,        // 수락한 오류에 스택을 포함합니다.
+});
+```
+
+명시한 개별 boolean이 모드보다 우선합니다. `detailed`에서 `false`로 끌 수 있고 `undefined`는 모드값을 따릅니다. 선택은 `init()`에서 해당 클라이언트에 고정됩니다. 변경하려면 필요 시 flush하고 기존 클라이언트를 destroy한 뒤 다시 초기화하세요. `enabled:false`는 전체 중지입니다. 사용자 지정 transport의 fetch/XHR 자동 수집·작업 기록에는 수집기 자기 요청을 제외할 `endpoint`가 여전히 필요합니다.
+
+`detailed`는 브라우저 동작을 더 많이 관측하고 추가 진단 텍스트를 담으므로 실행 비용과 검토할 앱 맥락이 늘 수 있습니다. 기존 정리·한도 규칙을 유지하며 요청/응답 본문, 입력값, 쿠키, DOM 스냅샷은 수집하지 않습니다. `sampleRate`, `maxEventsPerMinute`, `dedupeIntervalMs`, `ignoreMessages`, `maxQueueSize`, `maxBatchSize`, `flushIntervalMs`는 모드와 별도인 양·전송 정책입니다. 모드는 이 값을 자동 변경하지 않습니다. CPU·메모리 절감률은 측정하지 않았습니다.
+
 | 옵션 | 기본값 | 역할 |
 | --- | --- | --- |
 | `project` | 필수 | 프로젝트별 기록 묶음, 수집기 허용 목록과 일치 |
@@ -96,8 +123,14 @@ console.log(errorLog.getStats());
 | `environment` / `release` | `development` / `unknown` | 배포 환경·빌드 표시 |
 | `runtime` | `browser` | `browser`, `webview-ios`, `webview-android`, `unknown`; 네이티브 계측이 아닌 표시값 |
 | `enabled` | `true` | `false`면 수집 중지 |
+| `preset` | `standard` | `minimal`·`standard`·`detailed` 자동 수집 기본값 선택 |
+| `captureStack` | `true` (`minimal`: `false`) | 정리한 오류·컴포넌트 스택 포함 |
 | `captureNetwork` | `true` | fetch/XHR 관찰; 사용자 지정 전송에는 `endpoint`도 필요 |
 | `captureConsole` | `false` | `console.error` 수집 선택 |
+| `captureGlobalErrors` / `captureUnhandledRejections` | `true` / `true` | 전역 JavaScript·Promise 자동 수집 |
+| `captureResourceErrors` / `captureNavigation` / `captureNetworkBreadcrumbs` / `captureErrorCause` | `false` | 리소스·이동·네트워크 작업 기록·연결 원인 정보 |
+| `sampleRate` / `maxEventsPerMinute` / `dedupeIntervalMs` / `ignoreMessages` | `1` / 제한 없음 / `0` / 없음 | 추출 비율·분당 제한·반복 억제·문구 필터 |
+| `maxBatchSize` | `20` | 배치당 최대 이벤트 1~20건 |
 | `shouldCaptureHttp` | 5xx 응답 | 수집할 HTTP 상태 선택 |
 | `sanitizeUrl` | 내장 URL 정리 | 내장 정리 전에 앱별 경로 식별자 제거 |
 | `beforeSend` | 사용자 지정 필터 없음 | 이벤트 수정 또는 `false`/`null`로 삭제 |

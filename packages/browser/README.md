@@ -9,7 +9,7 @@ A small browser error SDK for a collector you control. Use your own backend or t
 - **Choose where events go.** There is no built-in hosted endpoint or separate analytics destination. Configure `endpoint` or supply your own `transport`.
 - **Keep the browser dependency small.** No runtime framework dependency; ESM, CommonJS, and TypeScript declarations are provided. The repository enforces a 20 KiB gzip budget for the browser SDK, excluding the viewer and optional React adapter.
 - **Control events before delivery.** Filter or edit them with `beforeSend`, remove path identifiers with `sanitizeUrl`, and choose which HTTP responses matter with `shouldCaptureHttp`.
-- **Start with useful error context.** Collect JavaScript exceptions, unhandled promises, fetch/XHR failures, and manually reported errors, with project, release, page, and occurrence time. Console capture is opt-in.
+- **Start with useful error context.** The default `standard` mode collects JavaScript exceptions, unhandled promises, fetch/XHR failures, and manually reported errors, with project, release, page, and occurrence time.
 - **Keep storage portable.** The companion collector offers SQLite with a live viewer, or JSONL logs that can be exported and inspected locally. You can implement the same versioned contract in your own backend.
 
 ## Install
@@ -67,6 +67,21 @@ try {
 `eventId` is the same identifier used by the collector and viewer for this event. It is returned only when the SDK accepts the error for its delivery queue; duplicates, filters, sampling, limits, and disabled clients return `undefined`. Queue eviction, delivery failure, and page closure can still prevent storage, so confirm the record in the collector before relying on it. The existing `BrowserErrorLogClient` and `BrowserErrorLogDiagnosticsClient` interfaces keep their `void` return for adapter compatibility; use the inferred `init()` return type or `BrowserErrorLogCaptureClient` when reading the ID.
 
 The optional `@ihyeon/browser-error-log-react` package provides an Error Boundary. The base SDK does not require React. Imports and initialization are safe during SSR but do not collect server-side errors; initialize in your framework's browser/client entry point.
+
+## Choose capture overhead
+
+Set `preset: 'minimal' | 'standard' | 'detailed'` at `init()`; omitting it keeps the previous `standard` defaults. `minimal` disables automatic error hooks and browser instrumentation, while manual `captureException()` and `addBreadcrumb()` still use normal queued delivery. It also omits error and component stacks. `detailed` enables console errors, resource errors, navigation and network breadcrumbs, and linked `Error.cause` details in addition to standard capture. All modes use the same SDK bundle; the choice changes runtime work and event detail, not download size.
+
+```ts
+const errorLog = init({
+  project: 'my-web', endpoint: '/api/events',
+  preset: 'minimal',
+  captureGlobalErrors: true, // Explicit switches override the preset.
+  captureStack: true,
+});
+```
+
+An explicit `false` also wins over `detailed`; `undefined` inherits the preset. `enabled: false` disables the client entirely. Settings are resolved per client at initialization. To change modes, flush queued work if needed, call `destroy()`, then create a new client. `captureStack: false` skips error and cause stack access and removes stacks even if `beforeSend` adds them. Presets do not change `sampleRate`, `maxEventsPerMinute`, `dedupeIntervalMs`, queue limits, or delivery settings. See the [full mode matrix and controls](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md#choose-a-capture-mode).
 
 ## Include linked error causes
 
