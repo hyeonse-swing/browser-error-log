@@ -95,6 +95,11 @@ export interface BrowserErrorLogDiagnosticsClient extends BrowserErrorLogBreadcr
   getDiagnostics(): BrowserErrorLogDiagnostics;
 }
 
+export interface BrowserErrorLogCaptureClient extends BrowserErrorLogDiagnosticsClient {
+  /** Returns the accepted event ID, not a delivery or storage acknowledgement. */
+  captureException(error: unknown, extra?: CaptureExtra): string | undefined;
+}
+
 const MAX_BATCH_EVENTS = 20;
 const MAX_BATCH_BYTES = 48_000;
 const MAX_BEACON_EVENTS = 10;
@@ -177,7 +182,7 @@ class UrlSanitizationError extends Error {}
 
 class ContextResolutionError extends Error {}
 
-class Client implements BrowserErrorLogDiagnosticsClient {
+class Client implements BrowserErrorLogCaptureClient {
   private readonly active: boolean;
   private readonly endpoint?: string;
   private readonly options: BrowserErrorLogOptions;
@@ -265,7 +270,7 @@ class Client implements BrowserErrorLogDiagnosticsClient {
     this.interval = setInterval(() => { void this.flush(); }, boundedNumber(options.flushIntervalMs, 10, 60_000, 10_000));
   }
 
-  captureException(error: unknown, extra: CaptureExtra = {}): void {
+  captureException(error: unknown, extra: CaptureExtra = {}): string | undefined {
     if (!this.active || this.destroyed || isAbort(error)) return;
     try {
       if (error !== null && (typeof error === 'object' || typeof error === 'function')) {
@@ -279,8 +284,9 @@ class Client implements BrowserErrorLogDiagnosticsClient {
         componentStack: extra.componentStack,
         context: extra.context,
       });
-      if (this.enqueue(event) && error !== null && (typeof error === 'object' || typeof error === 'function')) {
-        this.seenErrors.add(error);
+      if (this.enqueue(event)) {
+        if (error !== null && (typeof error === 'object' || typeof error === 'function')) this.seenErrors.add(error);
+        return event.eventId;
       }
     } catch (error) {
       if (error instanceof UrlSanitizationError || error instanceof ContextResolutionError) this.recordDrop('processingError');
@@ -1276,6 +1282,6 @@ function installConsole(): Instrumentation {
   return { clients, cleanup() { if (console.error === wrapped) console.error = original; } };
 }
 
-export function init(options: BrowserErrorLogOptions): BrowserErrorLogDiagnosticsClient {
+export function init(options: BrowserErrorLogOptions): BrowserErrorLogCaptureClient {
   return new Client(options);
 }

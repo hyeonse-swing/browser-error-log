@@ -105,7 +105,7 @@ console.log(errorLog.getStats());
 | `maxQueueSize` | `50` | 버퍼 이벤트 수, 1–100으로 제한 |
 | `transportTimeoutMs` | `5000` | 시도별 ms 제한, 250–60,000으로 제한 |
 
-클라이언트는 `captureException(error, extra?)`, `flush()`, `getStats()`, `destroy()`를 제공합니다. `extra`에는 `context`, `componentStack`, 이벤트 `type`을 넣을 수 있습니다. `getStats()`는 `queued`, `sent`, `dropped`를 반환합니다. 탭이 숨겨질 때 브라우저의 `sendBeacon` 큐가 수락한 이벤트도 `sent`에 포함하며, 수집기 저장을 확인한 것은 아닙니다. `flush()` 완료는 실패를 포함해 전송 시도가 끝났다는 뜻이며 성공 확인이 아닙니다. `destroy()`는 SDK 작업을 취소하고 대기 이벤트를 버리므로 초기화 직후 바로 호출하지 마세요.
+클라이언트는 `captureException(error, extra?)`, `flush()`, `getStats()`, `destroy()`를 제공합니다. `extra`에는 `context`, `componentStack`, 이벤트 `type`을 넣을 수 있습니다. `init()` 반환 타입(`BrowserErrorLogCaptureClient`)의 `captureException`은 `string | undefined`를 반환합니다. 큐에 들어간 이벤트는 ID를 반환하고 재시도에도 유지하지만, 필터·중복·한도·비활성·처리 실패 시 `undefined`입니다. 기존 어댑터 호환성을 위해 `BrowserErrorLogClient`와 `BrowserErrorLogDiagnosticsClient` 인터페이스의 반환형은 `void`로 유지합니다. ID는 수집기 저장 증거가 아닙니다. 대기 이벤트가 큐에서 밀리거나 전송 실패·페이지 종료로 사라질 수 있습니다. `getStats()`는 `queued`, `sent`, `dropped`를 반환합니다. 탭이 숨겨질 때 브라우저의 `sendBeacon` 큐가 수락한 이벤트도 `sent`에 포함하며, 수집기 저장을 확인한 것은 아닙니다. `flush()` 완료는 실패를 포함해 전송 시도가 끝났다는 뜻이며 성공 확인이 아닙니다. `destroy()`는 SDK 작업을 취소하고 대기 이벤트를 버리므로 초기화 직후 바로 호출하지 마세요.
 
 ## React와 SSR
 
