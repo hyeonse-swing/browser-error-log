@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { verifyAiBundle } from './verify-ai-bundle.mjs';
 
 // Install the actual package tarballs in an isolated consumer, without tsconfig aliases.
 // Everything stays local; this script never publishes a package.
@@ -65,6 +66,7 @@ execFileSync(process.execPath, ['--input-type=module', '-e', `
 const peers = pack(['react', '@types/react', 'csstype'].map(p => join(root, 'node_modules', p)), scratch);
 const consumer = createConsumer('react-smoke');
 npm(['install', ...tarballs, ...peers], consumer);
+for (const pkg of packages) verifyAiBundle(join(consumer, 'node_modules', pkg));
 writeFileSync(join(consumer, 'consumer.tsx'), `import { init, type TransportContext, type BrowserErrorLogClient, type BrowserErrorLogBreadcrumbClient, type BrowserErrorLogDiagnosticsClient, type BrowserErrorLogDiagnostics, type BrowserErrorLogDropReason } from '@ihyeon/browser-error-log';
 import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
 import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';

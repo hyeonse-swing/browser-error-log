@@ -46,3 +46,7 @@
 검증: minimal에서 fetch/XHR·console·History 래핑과 전역 오류 리스너가 설치되지 않아도 수동 캡처가 기존 전송으로 전달되는지 확인한다. 수동 이벤트의 메시지·이름은 유지하되 stack·componentStack·cause getter를 건드리지 않고, `beforeSend`로 스택을 주입해도 최종 전송에 포함하지 않는지 확인한다. 기본 standard, detailed, 명시 false/true 및 undefined 우선순위, 두 클라이언트 격리, `enabled:false`, 생성 뒤 원본 옵션 변경에도 초기값 유지, 빌드/패키지/브라우저 검사를 확인한다.
 
 구현 후 확인: `npm run check`에서 타입 검사·단위 테스트 381건·빌드가 통과했다. `npm run check:package`의 오프라인 tarball 설치, ESM/CJS·선언·SSR 검사가 통과했고, `npm run check:browser`의 Chromium/WebKit 54건이 통과했다. 프리셋 전용 단위 검사는 자동 계측 설치 여부, 수동 전송, 기존 기본 동작, 상세 모드, 명시 boolean·`undefined` 우선순위, 잘못된 JavaScript 값의 기본값 유지, 클라이언트별 초기값 고정, `enabled:false`, 종료 후 재초기화, 스택·원인 getter 및 `beforeSend` 주입 차단을 확인했다. SDK ESM gzip은 같은 `npm run build:sdk` 조건에서 **9,080 bytes**로 기준 8,935 bytes보다 145 bytes 증가했으며 20,480 bytes 예산 안이다. 이 수치는 패키지 크기만 나타낸다. 실제 브라우저 CPU·메모리와 수집기 저장률은 측정하지 않았다.
+
+## 후속 실측 — 2026-11-17 16:40 KST
+
+위 출시 검증 이후 사용자 요청으로 공개 npm 0.2.13을 같은 합성 작업에서 비교했다. 세 작업·SDK 없는 기준선 포함 4조건·12회씩 144회에서 예상 이벤트 수와 무유실 전송을 검증했다. [실측 보고서](preset-performance-2026-11-17.ko.md)에 조건·CPU/JS 힙/RSS/본문 전송량·편차·원시값과 재실행 방법을 기록했다. 수동 오류 1,000건 조건에서 minimal의 standard 대비 CPU 작업 시간 51.8%·전송 본문 50.9%, 별도 40건 큐 대기의 추가 JS 힙 67.7% 감소를 관측했다. 오류 없는 활동의 minimal/standard CPU 차이는 불확실성 구간에 0이 포함돼 우위를 확정하지 않았다. 운영 저장률·실제 서비스 성능·실기기 메모리는 검증하지 않았다.

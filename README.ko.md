@@ -63,6 +63,12 @@ await errorLog.flush();
 
 뷰어의 `my-web` 프로젝트에 이벤트가 표시됩니다. `captureException()`은 SDK 큐에 수락한 이벤트 ID를 반환하며, 실제 수집기 수신은 별도로 확인합니다. 기본 `standard` 모드는 전역 JavaScript 예외, 처리되지 않은 Promise, fetch/XHR 연결 실패와 HTTP 5xx를 수집합니다. `preset:'minimal'`은 자동 계측과 스택 없이 수동 기록을 사용하고, `preset:'detailed'`은 console·리소스·이동·네트워크 작업 기록·연결 원인을 추가합니다. 개별 수집 옵션으로 모드를 조정할 수 있습니다. React 렌더링 오류는 [`ErrorBoundary`](docs/ko/personal-sdk.md#react와-ssr)를 사용할 수 있습니다. 전체 선택표와 전송·양 조절은 [SDK 가이드](docs/ko/personal-sdk.md#수집-모드-선택)를 참고하세요.
 
+모드별 CPU·메모리·전송량은 [12회 반복 실측 보고서](docs/preset-performance-2026-11-17.ko.md)에 정리했습니다. 같은 수동 오류를 기록한 비교와 자동 수집 범위가 다른 비교를 나누고 원시 측정값·재실행 방법을 함께 제공합니다.
+
+## AI와 함께 적용하기
+
+[통합 스킬](skills/browser-error-log/SKILL.md)을 기존 코딩 에이전트에서 사용할 수 있습니다. 세 npm 패키지의 `ai/`에 스킬·독립 참조·0.2.13 실측 보고서·원시 결과·재실행 스크립트를 함께 제공합니다. [AI 가이드](docs/ai.md)에서 프로젝트 내 복사 방법과 버전 확인 절차를 확인하세요.
+
 ## 얻을 수 있는 것
 
 - **데이터 경로 소유:** SQLite 수집기, 회전 JSONL 로그, 자체 백엔드 중 선택하고 보관·접근·백업·삭제 정책을 직접 정합니다.

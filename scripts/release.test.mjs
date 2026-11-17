@@ -106,7 +106,10 @@ test('docs-only changes skip; packed package docs and release inputs trigger', (
     assert.equal(isReleaseRelevantPath(path), false, path);
   }
   for (const path of ['packages/browser/src/index.ts', 'packages/react/README.ko.md',
-    'scripts/build-sdk.mjs', 'scripts/release-publish.mjs', '.github/workflows/publish.yml']) {
+    'scripts/build-sdk.mjs', 'scripts/release-publish.mjs', '.github/workflows/publish.yml',
+    'scripts/build-ai-docs.mjs', 'scripts/verify-ai-bundle.mjs', 'docs/ai.md', 'llms.txt',
+    'skills/browser-error-log/references/integration.md',
+    'docs/benchmarks/2026-11-17-presets/raw.json']) {
     assert.equal(isReleaseRelevantPath(path), true, path);
   }
   assert.equal(decideRelease({ tagExists: false, published: true, paths: ['README.md'] }), 'skip');

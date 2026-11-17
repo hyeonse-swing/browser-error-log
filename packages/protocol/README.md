@@ -46,3 +46,9 @@ The [integration contract](https://github.com/hyeonse-swing/browser-error-log/bl
 ## Hosting and costs
 
 Infrastructure is not included. Hosting, servers, databases, storage, bandwidth, domains, backups, and third-party services are selected and paid for by each operator. Any charges are billed independently by their providers, not by this project or its maintainers.
+
+## AI-assisted integration
+
+This package includes `ai/skills/browser-error-log/` with a portable `SKILL.md` and references. Copy the whole folder into your project’s `.agents/skills/` (or your agent’s project skill directory), preserving any existing customization. Read `ai/docs/ai.md` before integrating. The installed declarations remain the API authority.
+
+The `ai/docs/preset-performance-2026-11-17.ko.md` report and `ai/docs/benchmarks/` raw data describe the browser SDK **0.2.13** experiment. A later package version does not turn those measurements into results for that newer version. These files add no agent runtime or model calls.

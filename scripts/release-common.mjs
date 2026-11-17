@@ -29,7 +29,12 @@ export function isReleaseRelevantPath(path) {
   return PACKAGES.some(pkg => path.startsWith(`${pkg.path}/`))
     || ['package.json', 'package-lock.json', 'tsconfig.json', 'tsconfig.build.json',
       'scripts/build-sdk.mjs', 'scripts/verify-package.mjs',
+      'scripts/build-ai-docs.mjs', 'scripts/verify-ai-bundle.mjs',
+      'scripts/benchmark-sdk-presets.mjs', 'scripts/fixtures/sdk-preset-benchmark.js',
+      'docs/ai.md', 'docs/preset-performance-2026-11-17.ko.md', 'llms.txt',
       '.github/workflows/prepare.yml', '.github/workflows/publish.yml'].includes(path)
+    || path.startsWith('skills/browser-error-log/')
+    || path.startsWith('docs/benchmarks/2026-11-17-presets/')
     || /^scripts\/release[^/]*\.mjs$/.test(path);
 }
 

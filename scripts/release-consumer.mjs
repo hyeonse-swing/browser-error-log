@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { REGISTRY, PACKAGES } from './release-common.mjs';
 import { retryRegistryInstall } from './release-install.mjs';
+import { verifyAiBundle } from './verify-ai-bundle.mjs';
 
 const version = process.argv[2];
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Pass the published version to verify');
@@ -37,6 +38,7 @@ async function consumer(name, dependencies, expectedPackages, esm, cjs, typescri
   for (const pkg of PACKAGES.filter(pkg => expectedPackages.includes(pkg.name))) {
     const installed = JSON.parse(readFileSync(join(dir, 'node_modules', pkg.name, 'package.json'), 'utf8'));
     if (installed.version !== version) throw new Error(`${name} installed ${pkg.name}@${installed.version}`);
+    verifyAiBundle(join(dir, 'node_modules', pkg.name));
   }
   execFileSync(process.execPath, ['--input-type=module', '-e', esm], { cwd: dir, stdio: 'inherit' });
   execFileSync(process.execPath, ['-e', cjs], { cwd: dir, stdio: 'inherit' });

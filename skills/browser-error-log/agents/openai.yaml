@@ -1,0 +1,4 @@
+interface:
+  display_name: "Browser Error Log"
+  short_description: "Integrate and verify browser error collection"
+  default_prompt: "Use $browser-error-log to integrate the installed SDK into this app and verify a synthetic error with my collector."

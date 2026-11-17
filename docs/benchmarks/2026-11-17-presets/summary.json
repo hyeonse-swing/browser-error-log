@@ -1,0 +1,1594 @@
+{
+  "metadata": {
+    "startedAt": "2026-11-17T07:39:26.691Z",
+    "sdk": {
+      "name": "@ihyeon/browser-error-log",
+      "version": "0.2.13",
+      "esmSha256": "aa2e9cbbbcf2273eb5582633cf4fda4e6e25de400505972ed72b9f0d2e8e6498",
+      "esmBytes": 28682,
+      "esmGzipBytes": 9080
+    },
+    "harnessSha256": "f3365fb8b2df02b8a08e672a6b74c9d7b8dc3f43633acc0df18489c4e32d20f1",
+    "fixtureSha256": "02ba5b9e685e08459dbd3a18d039e95b07355ce3c926ae871661cc7785524e03",
+    "machine": {
+      "platform": "darwin",
+      "release": "25.6.0",
+      "cpu": "Apple M1 Pro",
+      "logicalCpus": 8,
+      "memoryBytes": 34359738368,
+      "node": "v24.22.1"
+    },
+    "repetitions": 12,
+    "scenarios": {
+      "manual": {
+        "batches": 25,
+        "unitsPerBatch": 40,
+        "warmupBatches": 5,
+        "memoryUnits": 40
+      },
+      "healthy": {
+        "batches": 20,
+        "unitsPerBatch": 10,
+        "warmupBatches": 4,
+        "memoryUnits": 10
+      },
+      "mixed": {
+        "batches": 20,
+        "unitsPerBatch": 10,
+        "warmupBatches": 4,
+        "memoryUnits": 10
+      }
+    },
+    "modes": [
+      "none",
+      "minimal",
+      "standard",
+      "detailed"
+    ],
+    "browser": {
+      "headless": true,
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "version": "156.0.8078.4"
+    },
+    "measurements": {
+      "cpu": "CDP Performance timeDomain=threadTicks; TaskDuration, ScriptDuration, ThreadTime deltas. Workload includes explicit flush and HTTP completion; forced GC excluded.",
+      "memory": "Separate post-warmup phase: no active client -> initialized -> one unflushed batch -> flushed. Full GC before each JS usedSize reading; RSS is summed renderer process RSS from ps, not SDK-owned memory or peak.",
+      "traffic": "Actual uncompressed collector HTTP request-body bytes only; excludes headers/TCP/TLS, SDK download and fixture /ok,/fail requests.",
+      "order": "Four-mode balanced Latin-square rotation by repetition, scenario order rotated by repetition. Fresh browser process for every cell. One 20%-sized warmup in the same page, discarded.",
+      "options": {
+        "flushIntervalMs": 60000,
+        "otherOptions": "Defaults; capture flags, sampling, dedupe and limits not overridden."
+      },
+      "limitations": [
+        "Synthetic local workload, not a production CPU percentage or a device-wide measurement.",
+        "No CPU/network throttling; host is shared with other apps.",
+        "Forced-GC retained heap is not allocation rate or peak memory.",
+        "Console strings and browser networking have their own costs, included in the SDK-absent control."
+      ]
+    },
+    "finishedAt": "2026-11-17T07:40:30.363Z"
+  },
+  "summary": {
+    "manual": {
+      "modes": {
+        "none": {
+          "taskMs": {
+            "n": 12,
+            "median": 4.293,
+            "q1": 4.143999999999999,
+            "q3": 4.40975,
+            "min": 4.085,
+            "max": 4.670999999999999
+          },
+          "scriptMs": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "threadMs": {
+            "n": 12,
+            "median": 4.304,
+            "q1": 4.15175,
+            "q3": 4.426,
+            "min": 4.095000000000001,
+            "max": 4.688000000000001
+          },
+          "rendererCpuMs": {
+            "n": 12,
+            "median": 4.480999999999999,
+            "q1": 4.308999999999997,
+            "q3": 4.620750000000003,
+            "min": 4.23599999999999,
+            "max": 5.181999999999992
+          },
+          "wallMs": {
+            "n": 12,
+            "median": 4.653291999999965,
+            "q1": 4.484468249999736,
+            "q3": 4.950958250003168,
+            "min": 4.339625000000524,
+            "max": 5.544750000000022
+          },
+          "bodyBytes": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "requests": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "events": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "clientHeapDeltaBytes": {
+            "n": 12,
+            "median": 56,
+            "q1": 56,
+            "q3": 56,
+            "min": 56,
+            "max": 56
+          },
+          "queueHeapDeltaBytes": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "initializedHeapBytes": {
+            "n": 12,
+            "median": 1130152,
+            "q1": 1130152,
+            "q3": 1130152,
+            "min": 1130152,
+            "max": 1130152
+          },
+          "queuedHeapBytes": {
+            "n": 12,
+            "median": 1130152,
+            "q1": 1130152,
+            "q3": 1130152,
+            "min": 1130152,
+            "max": 1130152
+          },
+          "postFlushHeapDeltaBytes": {
+            "n": 12,
+            "median": 268,
+            "q1": 268,
+            "q3": 268,
+            "min": 268,
+            "max": 268
+          },
+          "queuedRssBytes": {
+            "n": 12,
+            "median": 98598912,
+            "q1": 98549760,
+            "q3": 98635776,
+            "min": 98484224,
+            "max": 98697216
+          }
+        },
+        "minimal": {
+          "taskMs": {
+            "n": 12,
+            "median": 35.1665,
+            "q1": 34.34125,
+            "q3": 35.93075,
+            "min": 33.202000000000005,
+            "max": 36.442
+          },
+          "scriptMs": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "threadMs": {
+            "n": 12,
+            "median": 41.770999999999994,
+            "q1": 40.802,
+            "q3": 42.61175,
+            "min": 39.65,
+            "max": 43.195
+          },
+          "rendererCpuMs": {
+            "n": 12,
+            "median": 50.860000000000014,
+            "q1": 49.68525,
+            "q3": 51.86325000000001,
+            "min": 48.337999999999994,
+            "max": 52.62099999999999
+          },
+          "wallMs": {
+            "n": 12,
+            "median": 57.86908299999959,
+            "q1": 57.00292675000128,
+            "q3": 59.09257274999999,
+            "min": 53.940583000003244,
+            "max": 59.99391699999978
+          },
+          "bodyBytes": {
+            "n": 12,
+            "median": 602313,
+            "q1": 602306,
+            "q3": 602313,
+            "min": 602301,
+            "max": 602313
+          },
+          "requests": {
+            "n": 12,
+            "median": 50,
+            "q1": 50,
+            "q3": 50,
+            "min": 50,
+            "max": 50
+          },
+          "events": {
+            "n": 12,
+            "median": 1000,
+            "q1": 1000,
+            "q3": 1000,
+            "min": 1000,
+            "max": 1000
+          },
+          "clientHeapDeltaBytes": {
+            "n": 12,
+            "median": 4164,
+            "q1": 4164,
+            "q3": 4164,
+            "min": 4152,
+            "max": 4164
+          },
+          "queueHeapDeltaBytes": {
+            "n": 12,
+            "median": 17068,
+            "q1": 17068,
+            "q3": 17068,
+            "min": 10860,
+            "max": 17068
+          },
+          "initializedHeapBytes": {
+            "n": 12,
+            "median": 1291688,
+            "q1": 1291688,
+            "q3": 1291688,
+            "min": 1291676,
+            "max": 1291784
+          },
+          "queuedHeapBytes": {
+            "n": 12,
+            "median": 1308756,
+            "q1": 1308756,
+            "q3": 1308756,
+            "min": 1302644,
+            "max": 1308756
+          },
+          "postFlushHeapDeltaBytes": {
+            "n": 12,
+            "median": 13212,
+            "q1": 13212,
+            "q3": 13212,
+            "min": 7004,
+            "max": 13212
+          },
+          "queuedRssBytes": {
+            "n": 12,
+            "median": 110288896,
+            "q1": 110198784,
+            "q3": 110370816,
+            "min": 110116864,
+            "max": 110460928
+          }
+        },
+        "standard": {
+          "taskMs": {
+            "n": 12,
+            "median": 72.9735,
+            "q1": 71.94650000000001,
+            "q3": 74.29725,
+            "min": 70.719,
+            "max": 75.80499999999999
+          },
+          "scriptMs": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "threadMs": {
+            "n": 12,
+            "median": 83.89099999999999,
+            "q1": 82.81525,
+            "q3": 85.262,
+            "min": 81.56500000000001,
+            "max": 86.879
+          },
+          "rendererCpuMs": {
+            "n": 12,
+            "median": 95.4605,
+            "q1": 94.13149999999999,
+            "q3": 97.16924999999999,
+            "min": 93.06299999999999,
+            "max": 99.24900000000001
+          },
+          "wallMs": {
+            "n": 12,
+            "median": 101.8037289999993,
+            "q1": 100.59217675000127,
+            "q3": 104.74089599999843,
+            "min": 97.06254099999933,
+            "max": 108.37816599999496
+          },
+          "bodyBytes": {
+            "n": 12,
+            "median": 1225473,
+            "q1": 1225454.25,
+            "q3": 1225510.25,
+            "min": 1225424,
+            "max": 1225541
+          },
+          "requests": {
+            "n": 12,
+            "median": 50,
+            "q1": 50,
+            "q3": 50,
+            "min": 50,
+            "max": 50
+          },
+          "events": {
+            "n": 12,
+            "median": 1000,
+            "q1": 1000,
+            "q3": 1000,
+            "min": 1000,
+            "max": 1000
+          },
+          "clientHeapDeltaBytes": {
+            "n": 12,
+            "median": 4720,
+            "q1": 4720,
+            "q3": 4720,
+            "min": 4708,
+            "max": 4720
+          },
+          "queueHeapDeltaBytes": {
+            "n": 12,
+            "median": 52880,
+            "q1": 50105,
+            "q3": 52880,
+            "min": 35568,
+            "max": 52880
+          },
+          "initializedHeapBytes": {
+            "n": 12,
+            "median": 1324844,
+            "q1": 1324844,
+            "q3": 1324844,
+            "min": 1324832,
+            "max": 1324856
+          },
+          "queuedHeapBytes": {
+            "n": 12,
+            "median": 1377724,
+            "q1": 1374940,
+            "q3": 1377724,
+            "min": 1360424,
+            "max": 1377724
+          },
+          "postFlushHeapDeltaBytes": {
+            "n": 12,
+            "median": 26736,
+            "q1": 23961,
+            "q3": 26736,
+            "min": 9424,
+            "max": 26736
+          },
+          "queuedRssBytes": {
+            "n": 12,
+            "median": 119144448,
+            "q1": 119095296,
+            "q3": 119214080,
+            "min": 119029760,
+            "max": 119341056
+          }
+        },
+        "detailed": {
+          "taskMs": {
+            "n": 12,
+            "median": 161.09449999999998,
+            "q1": 160.6935,
+            "q3": 163.08575,
+            "min": 159.73199999999997,
+            "max": 168.40099999999998
+          },
+          "scriptMs": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "threadMs": {
+            "n": 12,
+            "median": 176.11849999999998,
+            "q1": 175.582,
+            "q3": 178.07375,
+            "min": 174.564,
+            "max": 183.66199999999998
+          },
+          "rendererCpuMs": {
+            "n": 12,
+            "median": 190.208,
+            "q1": 189.49375,
+            "q3": 192.883,
+            "min": 188.217,
+            "max": 198.72799999999998
+          },
+          "wallMs": {
+            "n": 12,
+            "median": 188.19762450000053,
+            "q1": 186.28788525000164,
+            "q3": 190.73325999999815,
+            "min": 184.41620800000237,
+            "max": 199.21745800000008
+          },
+          "bodyBytes": {
+            "n": 12,
+            "median": 1715933,
+            "q1": 1715925.75,
+            "q3": 1715955.25,
+            "min": 1715916,
+            "max": 1715983
+          },
+          "requests": {
+            "n": 12,
+            "median": 50,
+            "q1": 50,
+            "q3": 50,
+            "min": 50,
+            "max": 50
+          },
+          "events": {
+            "n": 12,
+            "median": 1000,
+            "q1": 1000,
+            "q3": 1000,
+            "min": 1000,
+            "max": 1000
+          },
+          "clientHeapDeltaBytes": {
+            "n": 12,
+            "median": 5244,
+            "q1": 5244,
+            "q3": 5244,
+            "min": 5232,
+            "max": 5244
+          },
+          "queueHeapDeltaBytes": {
+            "n": 12,
+            "median": 72736,
+            "q1": 72736,
+            "q3": 72736,
+            "min": 72736,
+            "max": 72736
+          },
+          "initializedHeapBytes": {
+            "n": 12,
+            "median": 1332688,
+            "q1": 1332672,
+            "q3": 1332688,
+            "min": 1332660,
+            "max": 1332688
+          },
+          "queuedHeapBytes": {
+            "n": 12,
+            "median": 1405424,
+            "q1": 1405408,
+            "q3": 1405424,
+            "min": 1405396,
+            "max": 1405424
+          },
+          "postFlushHeapDeltaBytes": {
+            "n": 12,
+            "median": 28056,
+            "q1": 28056,
+            "q3": 28056,
+            "min": 28056,
+            "max": 28056
+          },
+          "queuedRssBytes": {
+            "n": 12,
+            "median": 125771776,
+            "q1": 125726720,
+            "q3": 125841408,
+            "min": 125583360,
+            "max": 125960192
+          }
+        }
+      },
+      "minimalReduction": {
+        "standard": {
+          "taskMs": {
+            "estimatePercent": 51.809218414904045,
+            "pairedBootstrap95": [
+              50.58047172425525,
+              53.00563897003874
+            ]
+          },
+          "bodyBytes": {
+            "estimatePercent": 50.85056953519172,
+            "pairedBootstrap95": [
+              50.8498877152668,
+              50.85213459491941
+            ]
+          },
+          "queueHeapDeltaBytes": {
+            "estimatePercent": 67.72314674735249,
+            "pairedBootstrap95": [
+              63.93830551447285,
+              67.72314674735249
+            ]
+          }
+        },
+        "detailed": {
+          "taskMs": {
+            "estimatePercent": 78.17026652058263,
+            "pairedBootstrap95": [
+              77.62524480972348,
+              78.83799284238543
+            ]
+          },
+          "bodyBytes": {
+            "estimatePercent": 64.89880432394504,
+            "pairedBootstrap95": [
+              64.8986611310744,
+              64.89937197856702
+            ]
+          },
+          "queueHeapDeltaBytes": {
+            "estimatePercent": 76.53431588209415,
+            "pairedBootstrap95": [
+              76.53431588209415,
+              76.53431588209415
+            ]
+          }
+        }
+      }
+    },
+    "healthy": {
+      "modes": {
+        "none": {
+          "taskMs": {
+            "n": 12,
+            "median": 32.289,
+            "q1": 31.92575,
+            "q3": 33.82,
+            "min": 31.306999999999995,
+            "max": 34.724
+          },
+          "scriptMs": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "threadMs": {
+            "n": 12,
+            "median": 39.791000000000004,
+            "q1": 39.198499999999996,
+            "q3": 41.28325,
+            "min": 38.627,
+            "max": 42.439
+          },
+          "rendererCpuMs": {
+            "n": 12,
+            "median": 87.1455,
+            "q1": 85.00699999999999,
+            "q3": 88.46099999999998,
+            "min": 84.186,
+            "max": 90.853
+          },
+          "wallMs": {
+            "n": 12,
+            "median": 121.01135400000021,
+            "q1": 118.23321850000139,
+            "q3": 124.76440625000032,
+            "min": 115.51966699999684,
+            "max": 130.21704200000022
+          },
+          "bodyBytes": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "requests": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "events": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "clientHeapDeltaBytes": {
+            "n": 12,
+            "median": 56,
+            "q1": 56,
+            "q3": 56,
+            "min": 56,
+            "max": 56
+          },
+          "queueHeapDeltaBytes": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "initializedHeapBytes": {
+            "n": 12,
+            "median": 1134540,
+            "q1": 1134540,
+            "q3": 1134540,
+            "min": 1134540,
+            "max": 1134540
+          },
+          "queuedHeapBytes": {
+            "n": 12,
+            "median": 1134540,
+            "q1": 1134540,
+            "q3": 1134540,
+            "min": 1134540,
+            "max": 1134540
+          },
+          "postFlushHeapDeltaBytes": {
+            "n": 12,
+            "median": 268,
+            "q1": 268,
+            "q3": 268,
+            "min": 268,
+            "max": 268
+          },
+          "queuedRssBytes": {
+            "n": 12,
+            "median": 101638144,
+            "q1": 101625856,
+            "q3": 101711872,
+            "min": 101531648,
+            "max": 101728256
+          }
+        },
+        "minimal": {
+          "taskMs": {
+            "n": 12,
+            "median": 32.5535,
+            "q1": 32.06125,
+            "q3": 35.175999999999995,
+            "min": 31.571,
+            "max": 36.369
+          },
+          "scriptMs": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "threadMs": {
+            "n": 12,
+            "median": 39.9315,
+            "q1": 39.298249999999996,
+            "q3": 42.8275,
+            "min": 38.739,
+            "max": 44.191
+          },
+          "rendererCpuMs": {
+            "n": 12,
+            "median": 86.27000000000001,
+            "q1": 85.30550000000001,
+            "q3": 91.339,
+            "min": 84.047,
+            "max": 94.19
+          },
+          "wallMs": {
+            "n": 12,
+            "median": 121.5612910000018,
+            "q1": 118.43416675000208,
+            "q3": 127.37638550000338,
+            "min": 115.37454199999775,
+            "max": 135.47720800000025
+          },
+          "bodyBytes": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "requests": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "events": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "clientHeapDeltaBytes": {
+            "n": 12,
+            "median": 4164,
+            "q1": 4164,
+            "q3": 4164,
+            "min": 4152,
+            "max": 4164
+          },
+          "queueHeapDeltaBytes": {
+            "n": 12,
+            "median": 116,
+            "q1": 116,
+            "q3": 116,
+            "min": 116,
+            "max": 116
+          },
+          "initializedHeapBytes": {
+            "n": 12,
+            "median": 1177912,
+            "q1": 1177912,
+            "q3": 1177912,
+            "min": 1177900,
+            "max": 1177912
+          },
+          "queuedHeapBytes": {
+            "n": 12,
+            "median": 1178028,
+            "q1": 1178028,
+            "q3": 1178028,
+            "min": 1178016,
+            "max": 1178028
+          },
+          "postFlushHeapDeltaBytes": {
+            "n": 12,
+            "median": 384,
+            "q1": 384,
+            "q3": 384,
+            "min": 384,
+            "max": 384
+          },
+          "queuedRssBytes": {
+            "n": 12,
+            "median": 102105088,
+            "q1": 102064128,
+            "q3": 102125568,
+            "min": 102006784,
+            "max": 102236160
+          }
+        },
+        "standard": {
+          "taskMs": {
+            "n": 12,
+            "median": 34.234500000000004,
+            "q1": 33.8825,
+            "q3": 35.248,
+            "min": 33.362,
+            "max": 37.419000000000004
+          },
+          "scriptMs": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "threadMs": {
+            "n": 12,
+            "median": 41.453,
+            "q1": 41.10125,
+            "q3": 42.63775,
+            "min": 40.631,
+            "max": 45.077
+          },
+          "rendererCpuMs": {
+            "n": 12,
+            "median": 87.57500000000002,
+            "q1": 87.13550000000001,
+            "q3": 89.88575,
+            "min": 86.62100000000001,
+            "max": 93.974
+          },
+          "wallMs": {
+            "n": 12,
+            "median": 120.52472949999901,
+            "q1": 119.26894774999892,
+            "q3": 123.52821899999913,
+            "min": 117.79408400000102,
+            "max": 130.67512499999975
+          },
+          "bodyBytes": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "requests": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "events": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "clientHeapDeltaBytes": {
+            "n": 12,
+            "median": 4720,
+            "q1": 4720,
+            "q3": 4720,
+            "min": 4708,
+            "max": 4720
+          },
+          "queueHeapDeltaBytes": {
+            "n": 12,
+            "median": 116,
+            "q1": 116,
+            "q3": 116,
+            "min": 116,
+            "max": 116
+          },
+          "initializedHeapBytes": {
+            "n": 12,
+            "median": 1212308,
+            "q1": 1212308,
+            "q3": 1212308,
+            "min": 1212296,
+            "max": 1212308
+          },
+          "queuedHeapBytes": {
+            "n": 12,
+            "median": 1212424,
+            "q1": 1212424,
+            "q3": 1212424,
+            "min": 1212412,
+            "max": 1212424
+          },
+          "postFlushHeapDeltaBytes": {
+            "n": 12,
+            "median": 384,
+            "q1": 384,
+            "q3": 384,
+            "min": 384,
+            "max": 384
+          },
+          "queuedRssBytes": {
+            "n": 12,
+            "median": 103120896,
+            "q1": 103079936,
+            "q3": 103141376,
+            "min": 102793216,
+            "max": 103219200
+          }
+        },
+        "detailed": {
+          "taskMs": {
+            "n": 12,
+            "median": 42.9565,
+            "q1": 40.726,
+            "q3": 44.50675,
+            "min": 39.466,
+            "max": 50.559
+          },
+          "scriptMs": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "threadMs": {
+            "n": 12,
+            "median": 50.441500000000005,
+            "q1": 48.06325,
+            "q3": 52.0945,
+            "min": 46.701,
+            "max": 59.004
+          },
+          "rendererCpuMs": {
+            "n": 12,
+            "median": 99.0865,
+            "q1": 95.86524999999999,
+            "q3": 102.07525000000001,
+            "min": 95.032,
+            "max": 111.846
+          },
+          "wallMs": {
+            "n": 12,
+            "median": 132.92516649999743,
+            "q1": 130.18309375000172,
+            "q3": 137.17701025000133,
+            "min": 126.07929200000035,
+            "max": 156.3148339999998
+          },
+          "bodyBytes": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "requests": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "events": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "clientHeapDeltaBytes": {
+            "n": 12,
+            "median": 5244,
+            "q1": 5244,
+            "q3": 5244,
+            "min": 5232,
+            "max": 5244
+          },
+          "queueHeapDeltaBytes": {
+            "n": 12,
+            "median": 1344,
+            "q1": 1344,
+            "q3": 1344,
+            "min": 1344,
+            "max": 1344
+          },
+          "initializedHeapBytes": {
+            "n": 12,
+            "median": 1246908,
+            "q1": 1246908,
+            "q3": 1246908,
+            "min": 1246784,
+            "max": 1246908
+          },
+          "queuedHeapBytes": {
+            "n": 12,
+            "median": 1248252,
+            "q1": 1248252,
+            "q3": 1248252,
+            "min": 1248128,
+            "max": 1248252
+          },
+          "postFlushHeapDeltaBytes": {
+            "n": 12,
+            "median": 1612,
+            "q1": 1612,
+            "q3": 1612,
+            "min": 1612,
+            "max": 1612
+          },
+          "queuedRssBytes": {
+            "n": 12,
+            "median": 106258432,
+            "q1": 106196992,
+            "q3": 106283008,
+            "min": 106086400,
+            "max": 106348544
+          }
+        }
+      },
+      "minimalReduction": {
+        "standard": {
+          "taskMs": {
+            "estimatePercent": 4.910251354627659,
+            "pairedBootstrap95": [
+              -3.0590453186444044,
+              9.482795962422935
+            ]
+          },
+          "bodyBytes": {
+            "estimatePercent": null,
+            "pairedBootstrap95": null
+          },
+          "queueHeapDeltaBytes": {
+            "estimatePercent": 0,
+            "pairedBootstrap95": [
+              0,
+              0
+            ]
+          }
+        },
+        "detailed": {
+          "taskMs": {
+            "estimatePercent": 24.217522377288645,
+            "pairedBootstrap95": [
+              17.67252918650264,
+              26.621458004112455
+            ]
+          },
+          "bodyBytes": {
+            "estimatePercent": null,
+            "pairedBootstrap95": null
+          },
+          "queueHeapDeltaBytes": {
+            "estimatePercent": 91.36904761904762,
+            "pairedBootstrap95": [
+              91.36904761904762,
+              91.36904761904762
+            ]
+          }
+        }
+      }
+    },
+    "mixed": {
+      "modes": {
+        "none": {
+          "taskMs": {
+            "n": 12,
+            "median": 69.756,
+            "q1": 67.82975,
+            "q3": 74.00300000000001,
+            "min": 65.756,
+            "max": 76.456
+          },
+          "scriptMs": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "threadMs": {
+            "n": 12,
+            "median": 82.708,
+            "q1": 80.34025,
+            "q3": 87.26075,
+            "min": 78.164,
+            "max": 90.122
+          },
+          "rendererCpuMs": {
+            "n": 12,
+            "median": 179.0595,
+            "q1": 174.42875000000004,
+            "q3": 186.32874999999999,
+            "min": 171.328,
+            "max": 191.309
+          },
+          "wallMs": {
+            "n": 12,
+            "median": 237.28381249999802,
+            "q1": 230.3915829999969,
+            "q3": 249.72622899999897,
+            "min": 227.17299999999886,
+            "max": 262.7336660000001
+          },
+          "bodyBytes": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "requests": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "events": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "clientHeapDeltaBytes": {
+            "n": 12,
+            "median": 56,
+            "q1": 56,
+            "q3": 56,
+            "min": 56,
+            "max": 56
+          },
+          "queueHeapDeltaBytes": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "initializedHeapBytes": {
+            "n": 12,
+            "median": 1144536,
+            "q1": 1144536,
+            "q3": 1144536,
+            "min": 1144536,
+            "max": 1144536
+          },
+          "queuedHeapBytes": {
+            "n": 12,
+            "median": 1144536,
+            "q1": 1144536,
+            "q3": 1144536,
+            "min": 1144536,
+            "max": 1144536
+          },
+          "postFlushHeapDeltaBytes": {
+            "n": 12,
+            "median": 268,
+            "q1": 268,
+            "q3": 268,
+            "min": 268,
+            "max": 268
+          },
+          "queuedRssBytes": {
+            "n": 12,
+            "median": 107479040,
+            "q1": 107417600,
+            "q3": 107528192,
+            "min": 107347968,
+            "max": 107610112
+          }
+        },
+        "minimal": {
+          "taskMs": {
+            "n": 12,
+            "median": 83.92,
+            "q1": 81.908,
+            "q3": 90.54975,
+            "min": 80.915,
+            "max": 98.95
+          },
+          "scriptMs": {
+            "n": 12,
+            "median": 0,
+            "q1": 0,
+            "q3": 0,
+            "min": 0,
+            "max": 0
+          },
+          "threadMs": {
+            "n": 12,
+            "median": 98.3195,
+            "q1": 96.03399999999999,
+            "q3": 105.22174999999999,
+            "min": 94.93799999999999,
+            "max": 114.233
+          },
+          "rendererCpuMs": {
+            "n": 12,
+            "median": 197.2235,
+            "q1": 193.07,
+            "q3": 207.31374999999997,
+            "min": 192.00699999999998,
+            "max": 220.40599999999998
+          },
+          "wallMs": {
+            "n": 12,
+            "median": 264.71360450000066,
+            "q1": 254.98939549999704,
+            "q3": 279.0545102499955,
+            "min": 252.94016700000066,
+            "max": 299.31795800000054
+          },
+          "bodyBytes": {
+            "n": 12,
+            "median": 120816,
+            "q1": 120813.75,
+            "q3": 120820,
+            "min": 120813,
+            "max": 120826
+          },
+          "requests": {
+            "n": 12,
+            "median": 20,
+            "q1": 20,
+            "q3": 20,
+            "min": 20,
+            "max": 20
+          },
+          "events": {
+            "n": 12,
+            "median": 200,
+            "q1": 200,
+            "q3": 200,
+            "min": 200,
+            "max": 200
+          },
+          "clientHeapDeltaBytes": {
+            "n": 12,
+            "median": 4164,
+            "q1": 4164,
+            "q3": 4164,
+            "min": 4152,
+            "max": 4164
+          },
+          "queueHeapDeltaBytes": {
+            "n": 12,
+            "median": 4440,
+            "q1": 4440,
+            "q3": 4440,
+            "min": 4440,
+            "max": 4472
+          },
+          "initializedHeapBytes": {
+            "n": 12,
+            "median": 1295196,
+            "q1": 1295196,
+            "q3": 1295196,
+            "min": 1294856,
+            "max": 1295196
+          },
+          "queuedHeapBytes": {
+            "n": 12,
+            "median": 1299636,
+            "q1": 1299636,
+            "q3": 1299636,
+            "min": 1299328,
+            "max": 1299636
+          },
+          "postFlushHeapDeltaBytes": {
+            "n": 12,
+            "median": 1924,
+            "q1": 1924,
+            "q3": 1924,
+            "min": 1924,
+            "max": 1956
+          },
+          "queuedRssBytes": {
+            "n": 12,
+            "median": 112566272,
+            "q1": 112484352,
+            "q3": 112627712,
+            "min": 112377856,
+            "max": 112672768
+          }
+        },
+        "standard": {
+          "taskMs": {
+            "n": 12,
+            "median": 119.285,
+            "q1": 118.893,
+            "q3": 121.98425,
+            "min": 118.61600000000001,
+            "max": 135.435
+          },
+          "scriptMs": {
+            "n": 12,
+            "median": 11.381,
+            "q1": 11.33075,
+            "q3": 11.478,
+            "min": 11.28,
+            "max": 11.721
+          },
+          "threadMs": {
+            "n": 12,
+            "median": 137.8125,
+            "q1": 137.36775,
+            "q3": 140.84724999999997,
+            "min": 136.813,
+            "max": 155.144
+          },
+          "rendererCpuMs": {
+            "n": 12,
+            "median": 242.175,
+            "q1": 240.74025,
+            "q3": 246.44924999999998,
+            "min": 239.18700000000004,
+            "max": 267.82800000000003
+          },
+          "wallMs": {
+            "n": 12,
+            "median": 312.601478999999,
+            "q1": 308.9741457500004,
+            "q3": 318.3128122500002,
+            "min": 307.1884590000045,
+            "max": 357.2645000000002
+          },
+          "bodyBytes": {
+            "n": 12,
+            "median": 593904,
+            "q1": 593900.5,
+            "q3": 593907,
+            "min": 593893,
+            "max": 593928
+          },
+          "requests": {
+            "n": 12,
+            "median": 40,
+            "q1": 40,
+            "q3": 40,
+            "min": 40,
+            "max": 40
+          },
+          "events": {
+            "n": 12,
+            "median": 600,
+            "q1": 600,
+            "q3": 600,
+            "min": 600,
+            "max": 600
+          },
+          "clientHeapDeltaBytes": {
+            "n": 12,
+            "median": 4728,
+            "q1": 4725,
+            "q3": 4728,
+            "min": 4716,
+            "max": 4728
+          },
+          "queueHeapDeltaBytes": {
+            "n": 12,
+            "median": 22184,
+            "q1": 22184,
+            "q3": 22184,
+            "min": 22184,
+            "max": 22220
+          },
+          "initializedHeapBytes": {
+            "n": 12,
+            "median": 1336964,
+            "q1": 1336952,
+            "q3": 1336964,
+            "min": 1336580,
+            "max": 1336964
+          },
+          "queuedHeapBytes": {
+            "n": 12,
+            "median": 1359148,
+            "q1": 1359136,
+            "q3": 1359148,
+            "min": 1358800,
+            "max": 1359148
+          },
+          "postFlushHeapDeltaBytes": {
+            "n": 12,
+            "median": 10268,
+            "q1": 10268,
+            "q3": 10268,
+            "min": 10268,
+            "max": 16568
+          },
+          "queuedRssBytes": {
+            "n": 12,
+            "median": 119463936,
+            "q1": 119275520,
+            "q3": 119570432,
+            "min": 119095296,
+            "max": 119685120
+          }
+        },
+        "detailed": {
+          "taskMs": {
+            "n": 12,
+            "median": 205.34749999999997,
+            "q1": 202.06125,
+            "q3": 217.46275,
+            "min": 200.408,
+            "max": 230.45499999999998
+          },
+          "scriptMs": {
+            "n": 12,
+            "median": 30.933999999999997,
+            "q1": 30.582,
+            "q3": 31.29075,
+            "min": 30.409,
+            "max": 31.98
+          },
+          "threadMs": {
+            "n": 12,
+            "median": 248.4025,
+            "q1": 244.6655,
+            "q3": 261.53499999999997,
+            "min": 242.971,
+            "max": 276.04900000000004
+          },
+          "rendererCpuMs": {
+            "n": 12,
+            "median": 361.82050000000004,
+            "q1": 357.1547499999999,
+            "q3": 380.664,
+            "min": 353.406,
+            "max": 406.121
+          },
+          "wallMs": {
+            "n": 12,
+            "median": 430.75818699999945,
+            "q1": 427.2916355000002,
+            "q3": 461.3293960000001,
+            "min": 421.87266699999964,
+            "max": 492.9732920000024
+          },
+          "bodyBytes": {
+            "n": 12,
+            "median": 3611981.5,
+            "q1": 3611976.75,
+            "q3": 3611987.5,
+            "min": 3611963,
+            "max": 3611999
+          },
+          "requests": {
+            "n": 12,
+            "median": 79,
+            "q1": 79,
+            "q3": 79,
+            "min": 79,
+            "max": 79
+          },
+          "events": {
+            "n": 12,
+            "median": 800,
+            "q1": 800,
+            "q3": 800,
+            "min": 800,
+            "max": 800
+          },
+          "clientHeapDeltaBytes": {
+            "n": 12,
+            "median": 5252,
+            "q1": 5252,
+            "q3": 5252,
+            "min": 5252,
+            "max": 5252
+          },
+          "queueHeapDeltaBytes": {
+            "n": 12,
+            "median": 84056,
+            "q1": 84056,
+            "q3": 84056,
+            "min": 68656,
+            "max": 84056
+          },
+          "initializedHeapBytes": {
+            "n": 12,
+            "median": 1375844,
+            "q1": 1375844,
+            "q3": 1375844,
+            "min": 1375800,
+            "max": 1375844
+          },
+          "queuedHeapBytes": {
+            "n": 12,
+            "median": 1459900,
+            "q1": 1459900,
+            "q3": 1459900,
+            "min": 1444456,
+            "max": 1459900
+          },
+          "postFlushHeapDeltaBytes": {
+            "n": 12,
+            "median": 27268,
+            "q1": 27268,
+            "q3": 27268,
+            "min": 11796,
+            "max": 27268
+          },
+          "queuedRssBytes": {
+            "n": 12,
+            "median": 148824064,
+            "q1": 148754432,
+            "q3": 148901888,
+            "min": 148586496,
+            "max": 149045248
+          }
+        }
+      },
+      "minimalReduction": {
+        "standard": {
+          "taskMs": {
+            "estimatePercent": 29.647482919059385,
+            "pairedBootstrap95": [
+              24.541997056369258,
+              31.838247473910876
+            ]
+          },
+          "bodyBytes": {
+            "estimatePercent": 79.65731835448153,
+            "pairedBootstrap95": [
+              79.65664484495811,
+              79.65780780123454
+            ]
+          },
+          "queueHeapDeltaBytes": {
+            "estimatePercent": 79.98557518932564,
+            "pairedBootstrap95": [
+              79.98557518932564,
+              79.98557518932564
+            ]
+          }
+        },
+        "detailed": {
+          "taskMs": {
+            "estimatePercent": 59.13268970890806,
+            "pairedBootstrap95": [
+              55.91651939568396,
+              61.450204898209634
+            ]
+          },
+          "bodyBytes": {
+            "estimatePercent": 96.65513236986402,
+            "pairedBootstrap95": [
+              96.65502394252023,
+              96.65520112093613
+            ]
+          },
+          "queueHeapDeltaBytes": {
+            "estimatePercent": 94.71780717616826,
+            "pairedBootstrap95": [
+              94.71780717616826,
+              94.71780717616826
+            ]
+          }
+        }
+      }
+    }
+  }
+}

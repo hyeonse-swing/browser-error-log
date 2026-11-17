@@ -1,0 +1,9 @@
+# Browser Error Log
+
+Self-hostable browser error collection. Read the installed package version and declarations before integration.
+
+- [AI integration guide](docs/ai.md): local skill setup and evidence locations.
+- [Portable integration skill](skills/browser-error-log/SKILL.md): browser, React and collector workflows.
+- [Browser integration reference](skills/browser-error-log/references/integration.md): presets, lifecycle and verification.
+- [Collector contract](skills/browser-error-log/references/collector.md): batch acknowledgement and protocol boundaries.
+- [Preset performance report](docs/preset-performance-2026-11-17.ko.md): synthetic 0.2.13 CPU, heap, RSS and payload measurements.

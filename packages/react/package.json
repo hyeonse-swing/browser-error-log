@@ -31,7 +31,8 @@
     "dist",
     "README.md",
     "README.ko.md",
-    "LICENSE"
+    "LICENSE",
+    "ai"
   ],
   "repository": {
     "type": "git",

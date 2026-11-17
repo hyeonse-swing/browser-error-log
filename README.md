@@ -63,6 +63,12 @@ await errorLog.flush();
 
 The viewer should show that event under `my-web`. `captureException()` returns an event ID when the SDK accepts it into the queue; confirm collector receipt separately. The default `standard` mode also observes global JavaScript exceptions, unhandled promises, fetch/XHR failures, and HTTP 5xx responses. Choose `preset: 'minimal'` for manual capture without automatic hooks or stacks, or `preset: 'detailed'` for additional console, resource, navigation, network breadcrumb, and cause details. Individual capture switches override the mode. React render errors can use [`ErrorBoundary`](docs/personal-sdk.md#react-and-ssr). See the [SDK guide](docs/personal-sdk.md#choose-a-capture-mode) for the full matrix, lifecycle, custom transport, and volume controls.
 
+See the [repeatable CPU, memory, and payload benchmark (Korean)](docs/preset-performance-2026-11-17.ko.md) for 12 trials per condition, raw measurements, and reproduction steps. It separates equal-count manual logging from workloads where presets collect different events.
+
+## AI-assisted integration
+
+Use the [portable integration skill](skills/browser-error-log/SKILL.md) with an existing coding agent. All three npm packages include `ai/` with the skill, its self-contained references, the measured 0.2.13 performance report, raw results and reproduction scripts. See the [AI guide](docs/ai.md) for local copy instructions and version checks.
+
 ## Why use it
 
 - **Own the data path:** run the collector with SQLite, keep rotating JSONL logs, or implement the v1 schema in your own backend. You set retention, access, backup, and deletion policies.

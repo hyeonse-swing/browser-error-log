@@ -113,7 +113,7 @@ const errorLog = init({
 
 명시한 개별 boolean이 모드보다 우선합니다. `detailed`에서 `false`로 끌 수 있고 `undefined`는 모드값을 따릅니다. 선택은 `init()`에서 해당 클라이언트에 고정됩니다. 변경하려면 필요 시 flush하고 기존 클라이언트를 destroy한 뒤 다시 초기화하세요. `enabled:false`는 전체 중지입니다. 사용자 지정 transport의 fetch/XHR 자동 수집·작업 기록에는 수집기 자기 요청을 제외할 `endpoint`가 여전히 필요합니다.
 
-`detailed`는 브라우저 동작을 더 많이 관측하고 추가 진단 텍스트를 담으므로 실행 비용과 검토할 앱 맥락이 늘 수 있습니다. 기존 정리·한도 규칙을 유지하며 요청/응답 본문, 입력값, 쿠키, DOM 스냅샷은 수집하지 않습니다. `sampleRate`, `maxEventsPerMinute`, `dedupeIntervalMs`, `ignoreMessages`, `maxQueueSize`, `maxBatchSize`, `flushIntervalMs`는 모드와 별도인 양·전송 정책입니다. 모드는 이 값을 자동 변경하지 않습니다. CPU·메모리 절감률은 측정하지 않았습니다.
+`detailed`는 브라우저 동작을 더 많이 관측하고 추가 진단 텍스트를 담으므로 실행 비용과 검토할 앱 맥락이 늘 수 있습니다. 기존 정리·한도 규칙을 유지하며 요청/응답 본문, 입력값, 쿠키, DOM 스냅샷은 수집하지 않습니다. `sampleRate`, `maxEventsPerMinute`, `dedupeIntervalMs`, `ignoreMessages`, `maxQueueSize`, `maxBatchSize`, `flushIntervalMs`는 모드와 별도인 양·전송 정책입니다. 모드는 이 값을 자동 변경하지 않습니다. [모드별 실측 보고서](../preset-performance-2026-11-17.ko.md)에 공개 0.2.13의 로컬 CPU·JS 힙·렌더러 RSS·수집 요청 본문 비교를 기록했습니다. 작업과 기기에 따른 수치이며 앱 전체 절감률로 일반화하지 않습니다.
 
 | 옵션 | 기본값 | 역할 |
 | --- | --- | --- |

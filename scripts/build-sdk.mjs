@@ -18,3 +18,4 @@ for (const [pkg, source] of [['protocol', 'index.ts'], ['browser', 'index.ts'], 
 }
 execFileSync('node', ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.build.json'], { stdio: 'inherit' });
 for (const pkg of ['protocol', 'browser', 'react']) await cp(`dist/types/${pkg}/src`, `packages/${pkg}/dist`, { recursive: true });
+await import('./build-ai-docs.mjs');
