@@ -111,20 +111,22 @@ describe('maxBatchSize', () => {
     expect(instance.getStats()).toEqual({ queued: 0, sent: 5, dropped: 0 });
   });
 
-  it('beacons only one configured chunk, while the default still caps at ten', () => {
-    const sendBeacon = vi.fn(() => true);
+  it('beacons successive configured chunks, each capped at ten by default', async () => {
+    const sendBeacon = vi.fn((_url: string, _body: Blob) => true);
     vi.stubGlobal('navigator', { sendBeacon });
     const configured = client({ transport: undefined, endpoint: '/collect', maxBatchSize: 2 }).instance;
     capture(configured, 5);
     window.dispatchEvent(new Event('pagehide'));
-    expect(sendBeacon).toHaveBeenCalledTimes(1);
-    expect(configured.getStats()).toEqual({ queued: 3, sent: 2, dropped: 0 });
+    expect(sendBeacon).toHaveBeenCalledTimes(3);
+    expect(configured.getStats()).toEqual({ queued: 0, sent: 5, dropped: 0 });
     configured.destroy();
 
     const standard = client({ transport: undefined, endpoint: '/collect' }).instance;
     capture(standard, 11);
     window.dispatchEvent(new Event('pagehide'));
-    expect(standard.getStats()).toEqual({ queued: 1, sent: 10, dropped: 0 });
+    expect(standard.getStats()).toEqual({ queued: 0, sent: 11, dropped: 0 });
+    expect(sendBeacon).toHaveBeenCalledTimes(5);
+    expect(sendBeacon.mock.calls.every(([, body]) => body.size <= 24_000)).toBe(true);
   });
 
   it('preserves queued events when a configured beacon returns false or throws', async () => {

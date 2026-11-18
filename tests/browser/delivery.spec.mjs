@@ -104,6 +104,32 @@ test('delivers a queued error on native pagehide without the visibility handler'
   expect(stored.map(event => ({ eventId: event.eventId, message: event.message }))).toEqual(pending.captured);
 });
 
+test('delivers every accepted beacon batch on native pagehide', async ({ page }, testInfo) => {
+  const environment = randomUUID();
+  await page.goto(`${origin}/`);
+  const pending = await page.evaluate(async environment => {
+    const { init } = await import('/sdk.js');
+    document.addEventListener('visibilitychange', event => event.stopImmediatePropagation(), true);
+    const captured = [];
+    window.testClient = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureNetwork: false, flushIntervalMs: 60_000,
+      beforeSend: event => { captured.push(event.eventId); return event; } });
+    for (let index = 0; index < 12; index++) window.testClient.captureException(`pagehide batch ${index}`);
+    return { captured, stats: window.testClient.getStats() };
+  }, environment);
+  expect(pending.stats).toEqual({ queued: 12, sent: 0, dropped: 0 });
+  expect(await events(environment)).toHaveLength(0);
+
+  await page.goto(`${origin}/?after-many-pagehide=1`);
+  await expect.poll(async () => (await events(environment)).length).toBe(12);
+  const stored = await events(environment);
+  expect(new Set(stored.map(event => event.eventId))).toEqual(new Set(pending.captured));
+  await testInfo.attach('pagehide-collector-receipt', { contentType: 'application/json',
+    body: JSON.stringify({ browser: testInfo.project.name, environment, beforePagehide: pending.stats,
+      capturedIds: pending.captured, collectorIds: stored.map(event => event.eventId),
+      collectorMessages: stored.map(event => event.message) }, null, 2) });
+});
+
 test('flushes queued errors in configured batches without changing their identities', async ({ page }) => {
   const environment = randomUUID();
   const bodies = [];
@@ -148,7 +174,7 @@ test('flushes queued errors in configured batches without changing their identit
     message: event.message })).sort(byId)).toEqual([...result.original].sort(byId));
 });
 
-test('holds queued errors offline and delivers the same events automatically on reconnect', async ({ page, context }) => {
+test('holds queued errors offline and delivers the same events automatically on reconnect', async ({ page, context }, testInfo) => {
   const environment = randomUUID();
   const collectorBodies = [];
   page.on('request', request => {
@@ -209,6 +235,13 @@ test('holds queued errors offline and delivers the same events automatically on 
       .toEqual(offline.pending.map(event => event.eventId));
     expect(Object.keys(collectorBodies[0]).sort()).toEqual(['events', 'schemaVersion']);
     expect(JSON.stringify(collectorBodies)).not.toMatch(/pauseWhileOffline|hide-me/);
+    await testInfo.attach('reconnect-collector-receipt', { contentType: 'application/json',
+      body: JSON.stringify({ browser: testInfo.project.name, environment,
+        offlineStats: offline.afterFlush, capturedIds: offline.pending.map(event => event.eventId),
+        collectorIds: stored.map(event => event.eventId),
+        collectorPostIds: collectorBodies[0].events.map(event => event.eventId),
+        onlineTransitions: await page.evaluate(() => window.onlineTransitions),
+        afterReconnect: await page.evaluate(() => window.testClient.getStats()) }, null, 2) });
   } finally {
     await context.setOffline(false);
     await page.evaluate(() => window.testClient?.destroy());

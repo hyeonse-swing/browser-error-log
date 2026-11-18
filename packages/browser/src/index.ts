@@ -1064,23 +1064,28 @@ class Client implements BrowserErrorLogDeliveryClient {
       const url = new URL(this.endpoint);
       if (url.origin !== window.location.origin || url.search || url.hash || url.username || url.password) return;
       if (typeof navigator.sendBeacon !== 'function') return;
-      const candidates = this.queue.slice(0, Math.min(this.maxBatchSize, MAX_BEACON_EVENTS));
-      while (candidates.length > 0) {
-        const batch: EventBatch = { schemaVersion: 1, events: candidates };
-        const body = JSON.stringify(batch);
-        if (byteLength(body) <= MAX_BEACON_BYTES) {
-          const accepted = navigator.sendBeacon(this.endpoint, new Blob([body], { type: 'application/json' }));
-          if (this.destroyed) return;
-          if (accepted) {
+      // Only drain the events present at lifecycle entry. A failed or oversized
+      // batch stays queued, and newly captured events cannot extend this work.
+      let remaining = this.queue.length;
+      while (remaining > 0 && this.queue.length) {
+        const candidates = this.queue.slice(0, Math.min(remaining, this.maxBatchSize, MAX_BEACON_EVENTS));
+        while (candidates.length > 0) {
+          const batch: EventBatch = { schemaVersion: 1, events: candidates };
+          const body = JSON.stringify(batch);
+          if (byteLength(body) <= MAX_BEACON_BYTES) {
+            const accepted = navigator.sendBeacon(this.endpoint, new Blob([body], { type: 'application/json' }));
+            if (this.destroyed || !accepted) return;
             this.queue.splice(0, candidates.length);
             this.sent += candidates.length;
+            remaining -= candidates.length;
             if (this.deliveryStatuses) {
               this.setDeliveryStatus(candidates.map(event => event.eventId), { state: 'beacon-queued' });
             }
+            break;
           }
-          return;
+          candidates.pop();
         }
-        candidates.pop();
+        if (!candidates.length) return;
       }
     } catch { /* best effort only */ }
   }

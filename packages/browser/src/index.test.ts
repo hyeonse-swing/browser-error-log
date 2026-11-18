@@ -797,7 +797,7 @@ describe('browser error client', () => {
     expect(instance.getStats()).toMatchObject({ queued: 0, sent: 1, dropped: 0 });
   });
 
-  it('counts only beacon candidates accepted on hidden visibility changes', () => {
+  it('queues all accepted beacon batches on one hidden visibility change', () => {
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     const sendBeacon = vi.fn(() => true);
     vi.stubGlobal('navigator', { sendBeacon });
@@ -805,15 +805,35 @@ describe('browser error client', () => {
     for (let index = 0; index < 12; index++) instance.captureException(`failure ${index}`);
 
     document.dispatchEvent(new Event('visibilitychange'));
-    expect(sendBeacon).toHaveBeenCalledTimes(1);
-    expect(instance.getStats()).toEqual({ queued: 2, sent: 10, dropped: 0 });
-
-    document.dispatchEvent(new Event('visibilitychange'));
     expect(sendBeacon).toHaveBeenCalledTimes(2);
     expect(instance.getStats()).toEqual({ queued: 0, sent: 12, dropped: 0 });
 
     document.dispatchEvent(new Event('visibilitychange'));
     expect(sendBeacon).toHaveBeenCalledTimes(2);
+    expect(instance.getStats()).toEqual({ queued: 0, sent: 12, dropped: 0 });
+  });
+
+  it('retains a rejected later beacon batch for a normal flush', async () => {
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    const sendBeacon = vi.fn().mockReturnValueOnce(true).mockReturnValueOnce(false);
+    vi.stubGlobal('navigator', { sendBeacon });
+    const fetch = vi.fn((_url: string, _options?: RequestInit) => Promise.resolve(new Response(null, { status: 204 })));
+    vi.stubGlobal('fetch', fetch);
+    const instance = client({ transport: undefined, endpoint: '/collect', maxQueueSize: 20,
+      deliveryStatusLimit: 20 });
+    const ids = Array.from({ length: 12 }, (_, index) => instance.captureException(`failure ${index}`)!);
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(sendBeacon).toHaveBeenCalledTimes(2);
+    expect(instance.getStats()).toEqual({ queued: 2, sent: 10, dropped: 0 });
+    expect(ids.slice(0, 10).map(id => instance.getDeliveryStatus(id).state))
+      .toEqual(Array(10).fill('beacon-queued'));
+    expect(ids.slice(10).map(id => instance.getDeliveryStatus(id).state)).toEqual(['queued', 'queued']);
+
+    await instance.flush();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body)).events.map((event: { eventId: string }) => event.eventId))
+      .toEqual(ids.slice(10));
     expect(instance.getStats()).toEqual({ queued: 0, sent: 12, dropped: 0 });
   });
 
