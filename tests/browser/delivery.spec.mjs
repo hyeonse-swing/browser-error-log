@@ -104,6 +104,38 @@ test('delivers a queued error on native pagehide without the visibility handler'
   expect(stored.map(event => ({ eventId: event.eventId, message: event.message }))).toEqual(pending.captured);
 });
 
+
+test('keeps an in-flight collector request alive across page navigation', async ({ page }) => {
+  const environment = randomUUID();
+  await page.goto(`${origin}/`);
+  let releaseRequest;
+  let observeRequest;
+  const requestHeld = new Promise(resolve => { observeRequest = resolve; });
+  const gate = new Promise(resolve => { releaseRequest = resolve; });
+  await page.route('**/api/events', async route => {
+    observeRequest(route.request().postDataJSON());
+    await gate;
+    await route.continue().catch(() => {});
+  });
+  const id = await page.evaluate(async environment => {
+    const { init } = await import('/sdk.js');
+    const client = init({ project: 'browser-test', environment, endpoint: '/api/events',
+      captureNetwork: false, flushIntervalMs: 60_000 });
+    const eventId = client.captureException('in-flight navigation');
+    void client.flush();
+    return eventId;
+  }, environment);
+  const held = await requestHeld;
+  expect(held.events.map(event => event.eventId)).toEqual([id]);
+  try {
+    await page.goto(`${origin}/?after-in-flight-navigation=1`);
+  } finally {
+    releaseRequest();
+  }
+  await expect.poll(async () => (await events(environment)).length).toBe(1);
+  expect((await events(environment))[0].eventId).toBe(id);
+});
+
 test('delivers every accepted beacon batch on native pagehide', async ({ page }, testInfo) => {
   const environment = randomUUID();
   await page.goto(`${origin}/`);

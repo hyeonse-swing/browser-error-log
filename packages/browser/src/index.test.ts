@@ -793,8 +793,33 @@ describe('browser error client', () => {
     await pending;
     expect(native).toHaveBeenCalledTimes(2);
     expect(bodies.map(batch => batch.events.length)).toEqual([1, 1]);
+    expect(native.mock.calls.every(([, options]) => options?.keepalive === true)).toBe(true);
     expect(bodies[0].events[0].eventId).toBe(bodies[1].events[0].eventId);
     expect(instance.getStats()).toMatchObject({ queued: 0, sent: 1, dropped: 0 });
+  });
+
+
+  it('falls back to regular fetch after keepalive quota rejection while retaining the event ID', async () => {
+    vi.useFakeTimers();
+    const attempts: { keepalive?: boolean; ids: string[] }[] = [];
+    const native = vi.fn((_url: string, options?: RequestInit) => {
+      const batch = JSON.parse(String(options?.body)) as EventBatch;
+      attempts.push({ keepalive: options?.keepalive, ids: batch.events.map(event => event.eventId) });
+      return options?.keepalive
+        ? Promise.reject(new TypeError('keepalive request exceeds browser quota'))
+        : Promise.resolve(new Response(null, { status: 204 }));
+    });
+    vi.stubGlobal('fetch', native);
+    const instance = client({ transport: undefined, endpoint: '/collect', captureNetwork: true });
+    const id = instance.captureException('quota overlap');
+    const pending = instance.flush();
+    await vi.advanceTimersByTimeAsync(250);
+    await pending;
+    expect(attempts).toEqual([
+      { keepalive: true, ids: [id] },
+      { keepalive: false, ids: [id] },
+    ]);
+    expect(instance.getStats()).toEqual({ queued: 0, sent: 1, dropped: 0 });
   });
 
   it('queues all accepted beacon batches on one hidden visibility change', () => {
@@ -856,6 +881,64 @@ describe('browser error client', () => {
     await instance.flush();
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(instance.getStats()).toEqual({ queued: 0, sent: 1, dropped: 0 });
+  });
+
+
+  it('backs up an in-flight fetch on pagehide without double-counting an eventual success', async () => {
+    const sendBeacon = vi.fn((_url: string, _body: Blob) => true);
+    vi.stubGlobal('navigator', { sendBeacon });
+    let finishFetch!: (response: Response) => void;
+    const fetch = vi.fn(() => new Promise<Response>(resolve => { finishFetch = resolve; }));
+    vi.stubGlobal('fetch', fetch);
+    const instance = client({ transport: undefined, endpoint: '/collect', maxQueueSize: 20,
+      deliveryStatusLimit: 20 });
+    const ids = Array.from({ length: 12 }, (_, index) => instance.captureException(`in flight ${index}`)!);
+    const pending = instance.flush();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(instance.getStats()).toEqual({ queued: 0, sent: 0, dropped: 0 });
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(sendBeacon).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event('pagehide'));
+    expect(sendBeacon).toHaveBeenCalledTimes(2);
+    const delivered = await Promise.all(sendBeacon.mock.calls.map(async ([, body]) => {
+      const payload = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(body);
+      });
+      return JSON.parse(payload) as EventBatch;
+    }));
+    expect(delivered.map(batch => batch.events.length)).toEqual([10, 2]);
+    expect(delivered.flatMap(batch => batch.events.map(event => event.eventId))).toEqual(ids);
+    expect(instance.getStats()).toEqual({ queued: 0, sent: 12, dropped: 0 });
+    expect(ids.map(id => instance.getDeliveryStatus(id).state)).toEqual(Array(12).fill('beacon-queued'));
+    window.dispatchEvent(new Event('pagehide'));
+    expect(sendBeacon).toHaveBeenCalledTimes(2);
+    finishFetch(new Response(null, { status: 204 }));
+    await pending;
+    expect(instance.getStats()).toEqual({ queued: 0, sent: 12, dropped: 0 });
+    expect(ids.map(id => instance.getDeliveryStatus(id).state)).toEqual(Array(12).fill('transport-accepted'));
+  });
+
+  it('retains accepted in-flight beacon IDs when the fetch fails and counts only missing IDs as dropped', async () => {
+    const sendBeacon = vi.fn().mockReturnValueOnce(true).mockReturnValueOnce(false);
+    vi.stubGlobal('navigator', { sendBeacon });
+    let finishFetch!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { finishFetch = resolve; })));
+    const instance = client({ transport: undefined, endpoint: '/collect', maxQueueSize: 20,
+      deliveryStatusLimit: 20 });
+    const ids = Array.from({ length: 12 }, (_, index) => instance.captureException(`partially rescued ${index}`)!);
+    const pending = instance.flush();
+    window.dispatchEvent(new Event('pagehide'));
+    expect(instance.getStats()).toEqual({ queued: 0, sent: 10, dropped: 0 });
+    finishFetch(new Response(null, { status: 400 }));
+    await pending;
+    expect(instance.getStats()).toEqual({ queued: 0, sent: 10, dropped: 2 });
+    expect(ids.slice(0, 10).map(id => instance.getDeliveryStatus(id).state))
+      .toEqual(Array(10).fill('beacon-queued'));
+    expect(ids.slice(10).map(id => instance.getDeliveryStatus(id)))
+      .toEqual([{ state: 'dropped', reason: 'deliveryError' }, { state: 'dropped', reason: 'deliveryError' }]);
   });
 
   it('does not instrument a custom transport without an exclusion endpoint', async () => {
