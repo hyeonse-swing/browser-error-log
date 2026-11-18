@@ -237,8 +237,6 @@ class Client implements BrowserErrorLogDeliveryClient {
   private readonly admittedAt: number[] = [];
   private readonly cancelWaits = new Set<() => void>();
   private readonly controllers = new Set<AbortController>();
-  private readonly destroySignal: Promise<symbol>;
-  private resolveDestroy!: (value: symbol) => void;
   private interval?: ReturnType<typeof setInterval>;
   private flushing?: Promise<void>;
   private onlineFlushRequested = false;
@@ -286,7 +284,6 @@ class Client implements BrowserErrorLogDeliveryClient {
     this.transportTimeoutMs = boundedNumber(options.transportTimeoutMs, 250, 60_000, 5_000);
     this.deliveryStatusLimit = boundedNumber(options.deliveryStatusLimit, 0, 100, 0);
     if (this.deliveryStatusLimit > 0) this.deliveryStatuses = new Map();
-    this.destroySignal = new Promise(resolve => { this.resolveDestroy = resolve; });
     if (!this.active) return;
     if (!options.project || typeof options.project !== 'string') throw new Error('project is required');
     if (!options.transport && !options.endpoint) throw new Error('endpoint or transport is required');
@@ -485,7 +482,6 @@ class Client implements BrowserErrorLogDeliveryClient {
     this.lastDedupeClock = undefined;
     for (const cancel of this.cancelWaits) cancel();
     for (const controller of this.controllers) controller.abort();
-    this.resolveDestroy(DESTROYED);
   }
 
   getStats(): { queued: number; sent: number; dropped: number } {
@@ -988,19 +984,37 @@ class Client implements BrowserErrorLogDeliveryClient {
   }
 
   private async sendWithRetry(batch: EventBatch, count: number, eventIds?: readonly string[]): Promise<void> {
+    // Snapshot custom transport data once so a failed or timed-out callback cannot
+    // change what the next attempt sends. Native fetch serializes its own request.
+    const originalPayload = this.options.transport ? JSON.stringify(batch) : undefined;
+    let needsPristineCopy = false;
     for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length && !this.destroyed; attempt++) {
+      if (attempt > 0 && originalPayload && !needsPristineCopy) {
+        try { needsPristineCopy = JSON.stringify(batch) !== originalPayload; }
+        catch { needsPristineCopy = true; }
+      }
+      const attemptBatch = needsPristineCopy && originalPayload
+        ? JSON.parse(originalPayload) as EventBatch : batch;
       const controller = new AbortController();
       this.controllers.add(controller);
+      let cancelForDestroy!: () => void;
+      // Remove this waiter after each attempt; a client-lifetime pending promise
+      // would retain one Promise.race reaction for every completed delivery.
+      const destroyAttempt = new Promise<symbol>(resolve => {
+        cancelForDestroy = () => resolve(DESTROYED);
+        this.cancelWaits.add(cancelForDestroy);
+      });
       let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<never>((_resolve, reject) => {
         timeoutHandle = setTimeout(() => {
+          if (originalPayload) needsPristineCopy = true;
           controller.abort();
           reject(new Error('Collector transport timed out'));
         }, this.transportTimeoutMs);
       });
       let retryDelay: number | undefined;
       try {
-        const result = await Promise.race([this.send(batch, controller.signal), timeout, this.destroySignal]);
+        const result = await Promise.race([this.send(attemptBatch, controller.signal), timeout, destroyAttempt]);
         if (result === DESTROYED || this.destroyed) return;
         this.sent += count;
         if (eventIds) this.setDeliveryStatus(eventIds, { state: 'transport-accepted' });
@@ -1013,6 +1027,7 @@ class Client implements BrowserErrorLogDeliveryClient {
         retryDelay = RETRY_DELAYS_MS[attempt];
       } finally {
         if (timeoutHandle) clearTimeout(timeoutHandle);
+        this.cancelWaits.delete(cancelForDestroy);
         this.controllers.delete(controller);
       }
       if (retryDelay !== undefined) await this.wait(retryDelay);
