@@ -17,6 +17,7 @@ const errors = init({
   environment: 'development',
   release: 'local-smoke',
   preset: 'minimal',
+  deliveryStatusLimit: 20,
 });
 
 errors.addBreadcrumb({ category: 'action', message: 'Synthetic save click' });
@@ -25,12 +26,15 @@ const eventId = errors.captureException(new Error('Synthetic integration check')
 });
 await errors.flush();
 const diagnostics = errors.getDiagnostics();
+const delivery = eventId ? errors.getDeliveryStatus(eventId) : { state: 'unknown' };
 // Check the authorized collector for (project, eventId), not just diagnostics.sent.
 // At app/HMR teardown, after any intended flush:
 errors.destroy();
 ```
 
-`init()` infers `BrowserErrorLogCaptureClient`. Older interfaces intentionally retain `void` return compatibility; use the inferred or capture-client type when a caller needs the returned ID. A filtered, duplicated, or rejected event may return `undefined`.
+`init()` infers `BrowserErrorLogDeliveryClient`. Older interfaces intentionally retain their shapes; use the inferred return type or `BrowserErrorLogCaptureClient` when a caller needs the returned ID. A filtered, duplicated, or rejected event may return `undefined`.
+
+The optional `deliveryStatusLimit` retains at most 100 recently admitted IDs in this client's memory; it defaults to zero. `getDeliveryStatus(id)` is available on the inferred `BrowserErrorLogDeliveryClient` return type. `queued` and `in-flight` describe SDK work, `transport-accepted` means HTTP 2xx or a resolved custom transport, `beacon-queued` means `sendBeacon()` accepted browser queue work, and `dropped` includes the SDK drop reason. `unknown` includes disabled tracking, unknown IDs, and entries evicted from this bounded history. Neither accepted state proves durable storage. Keep the actual collector lookup in the verification step.
 
 ## Collection choices
 
@@ -65,7 +69,7 @@ const protectedView = (
 
 ## Verification and interpretation
 
-- Match an admitted ID with an actual collector record and compare `queued`, `inFlight`, `sent`, `dropped`, `filtered`, and `deduplicated` around the synthetic run.
+- Match an admitted ID with an actual collector record and compare its optional delivery status plus `queued`, `inFlight`, `sent`, `dropped`, `filtered`, and `deduplicated` around the synthetic run.
 - Default HTTP transport omits credentials. Do not assume an existing cookie-authenticated endpoint will accept it. Use the product's intended ingest design.
 - Do not reuse the same Error object for repeated smoke events: object identity is deduplicated.
 - `captureStack: false` omits stack/componentStack even if a pre-send hook tries to restore them. It does not scrub arbitrary text from custom context or manual breadcrumb messages.

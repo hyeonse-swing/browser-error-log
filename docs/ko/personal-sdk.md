@@ -136,9 +136,12 @@ const errorLog = init({
 | `beforeSend` | 사용자 지정 필터 없음 | 이벤트 수정 또는 `false`/`null`로 삭제 |
 | `flushIntervalMs` | `10000` | ms 단위 flush 주기, 10–60,000으로 제한 |
 | `maxQueueSize` | `50` | 버퍼 이벤트 수, 1–100으로 제한 |
+| `deliveryStatusLimit` | `0` | 이벤트별 SDK 상태 조회용 최근 ID 수, 0–100으로 제한 |
 | `transportTimeoutMs` | `5000` | 시도별 ms 제한, 250–60,000으로 제한 |
 
-클라이언트는 `captureException(error, extra?)`, `flush()`, `getStats()`, `destroy()`를 제공합니다. `extra`에는 `context`, `componentStack`, 이벤트 `type`을 넣을 수 있습니다. `init()` 반환 타입(`BrowserErrorLogCaptureClient`)의 `captureException`은 `string | undefined`를 반환합니다. 큐에 들어간 이벤트는 ID를 반환하고 재시도에도 유지하지만, 필터·중복·한도·비활성·처리 실패 시 `undefined`입니다. 기존 어댑터 호환성을 위해 `BrowserErrorLogClient`와 `BrowserErrorLogDiagnosticsClient` 인터페이스의 반환형은 `void`로 유지합니다. ID는 수집기 저장 증거가 아닙니다. 대기 이벤트가 큐에서 밀리거나 전송 실패·페이지 종료로 사라질 수 있습니다. `getStats()`는 `queued`, `sent`, `dropped`를 반환합니다. 탭이 숨겨질 때 브라우저의 `sendBeacon` 큐가 수락한 이벤트도 `sent`에 포함하며, 수집기 저장을 확인한 것은 아닙니다. `flush()` 완료는 실패를 포함해 전송 시도가 끝났다는 뜻이며 성공 확인이 아닙니다. `destroy()`는 SDK 작업을 취소하고 대기 이벤트를 버리므로 초기화 직후 바로 호출하지 마세요.
+클라이언트는 `captureException(error, extra?)`, `flush()`, `getStats()`, `destroy()`를 제공합니다. `extra`에는 `context`, `componentStack`, 이벤트 `type`을 넣을 수 있습니다. `init()` 반환 타입(`BrowserErrorLogDeliveryClient`)의 `captureException`은 `string | undefined`를 반환합니다. 큐에 들어간 이벤트는 ID를 반환하고 재시도에도 유지하지만, 필터·중복·한도·비활성·처리 실패 시 `undefined`입니다. 기존 어댑터 호환성을 위해 `BrowserErrorLogClient`와 `BrowserErrorLogDiagnosticsClient` 인터페이스의 반환형은 `void`로 유지합니다. ID는 수집기 저장 증거가 아닙니다. 대기 이벤트가 큐에서 밀리거나 전송 실패·페이지 종료로 사라질 수 있습니다. `getStats()`는 `queued`, `sent`, `dropped`를 반환합니다. 탭이 숨겨질 때 브라우저의 `sendBeacon` 큐가 수락한 이벤트도 `sent`에 포함하며, 수집기 저장을 확인한 것은 아닙니다. `flush()` 완료는 실패를 포함해 전송 시도가 끝났다는 뜻이며 성공 확인이 아닙니다. `destroy()`는 SDK 작업을 취소하고 대기 이벤트를 버리므로 초기화 직후 바로 호출하지 마세요.
+
+현재 `init()` 반환 타입은 기존 수집 클라이언트 인터페이스를 확장한 `BrowserErrorLogDeliveryClient`입니다. `deliveryStatusLimit`를 양수로 설정하면 클라이언트별 최근 ID를 최대 100개 보관하며 기본값은 0입니다. `getDeliveryStatus(eventId)`는 `queued`, `in-flight`, `transport-accepted`, `beacon-queued`, 폐기 이유가 있는 `dropped`, `unknown`을 구분합니다. 사용자 전송 함수 완료나 HTTP 2xx는 전송 수락 상태이며 서버 저장 증거가 아닙니다. `sendBeacon()` 성공도 브라우저 전송 대기열 수락만 뜻합니다. 기록 비활성화·다른 클라이언트 ID·한도에서 밀려난 오래된 항목도 `unknown`입니다. 메모리에는 ID와 상태만 남기며 오래된 수락 순으로 제거합니다. 저장 확인이 필요하면 수집기에서 같은 프로젝트·ID를 조회하세요.
 
 ## React와 SSR
 

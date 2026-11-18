@@ -55,7 +55,8 @@ execFileSync(process.execPath, ['--input-type=module', '-e', `
   const require = createRequire(import.meta.url);
   try { require.resolve('react'); throw new Error('Browser package unexpectedly requires React'); }
   catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
-  const client = init({ project: 'ssr' }); client.addBreadcrumb({ message: 'SSR no-op' }); client.clearBreadcrumbs(); await client.flush(); client.destroy();
+  const client = init({ project: 'ssr', deliveryStatusLimit: 2 }); client.addBreadcrumb({ message: 'SSR no-op' }); client.clearBreadcrumbs(); await client.flush(); client.destroy();
+  if (client.getDeliveryStatus('unknown').state !== 'unknown') throw Error('SSR delivery status invalid');
   const diagnostics = client.getDiagnostics();
   if (diagnostics.dropped !== 0 || diagnostics.inFlight !== 0 || diagnostics.filtered !== 0 || diagnostics.deduplicated !== 0
     || Object.values(diagnostics.droppedByReason).some(count => count !== 0)) throw Error('SSR diagnostics invalid');
@@ -67,10 +68,11 @@ const peers = pack(['react', '@types/react', 'csstype'].map(p => join(root, 'nod
 const consumer = createConsumer('react-smoke');
 npm(['install', ...tarballs, ...peers], consumer);
 for (const pkg of packages) verifyAiBundle(join(consumer, 'node_modules', pkg));
-writeFileSync(join(consumer, 'consumer.tsx'), `import { init, type TransportContext, type BrowserErrorLogClient, type BrowserErrorLogBreadcrumbClient, type BrowserErrorLogDiagnosticsClient, type BrowserErrorLogDiagnostics, type BrowserErrorLogDropReason } from '@ihyeon/browser-error-log';
+writeFileSync(join(consumer, 'consumer.tsx'), `import { init, type TransportContext, type BrowserErrorLogClient, type BrowserErrorLogBreadcrumbClient, type BrowserErrorLogDiagnosticsClient, type BrowserErrorLogDeliveryClient, type BrowserErrorLogDeliveryStatus, type BrowserErrorLogDiagnostics, type BrowserErrorLogDropReason } from '@ihyeon/browser-error-log';
 import { ErrorBoundary } from '@ihyeon/browser-error-log-react';
 import { EVENT_LABELS, type EventBatch } from '@ihyeon/browser-error-log-protocol';
-const client = init({project:'consumer',enabled:false,context:{buildChannel:'stable'},getContext:()=>({appSection:'checkout'}),captureGlobalErrors:false,captureUnhandledRejections:false,captureNavigation:true,captureNetworkBreadcrumbs:true,captureErrorCause:true,captureResourceErrors:true,beforeBreadcrumb:breadcrumb=>breadcrumb.category==='http'?null:breadcrumb,ignoreMessages:['Expected diagnostic'] as const,dedupeIntervalMs:5000,pauseWhileOffline:true,maxBatchSize:5,sampleRate:0.1,maxEventsPerMinute:60,transport:async(batch:EventBatch,context:TransportContext)=>{void batch;void context.signal;}});
+const client: BrowserErrorLogDeliveryClient = init({project:'consumer',enabled:false,deliveryStatusLimit:5,context:{buildChannel:'stable'},getContext:()=>({appSection:'checkout'}),captureGlobalErrors:false,captureUnhandledRejections:false,captureNavigation:true,captureNetworkBreadcrumbs:true,captureErrorCause:true,captureResourceErrors:true,beforeBreadcrumb:breadcrumb=>breadcrumb.category==='http'?null:breadcrumb,ignoreMessages:['Expected diagnostic'] as const,dedupeIntervalMs:5000,pauseWhileOffline:true,maxBatchSize:5,sampleRate:0.1,maxEventsPerMinute:60,transport:async(batch:EventBatch,context:TransportContext)=>{void batch;void context.signal;}});
+const delivery: BrowserErrorLogDeliveryStatus = client.getDeliveryStatus('unknown'); void delivery.state;
 const extended: BrowserErrorLogBreadcrumbClient = client;
 extended.addBreadcrumb({message:'Checkout',data:{attempt:1}}); extended.clearBreadcrumbs();
 const oldClient: BrowserErrorLogClient = {captureException(){},flush:async()=>{},destroy(){},getStats:()=>({queued:0,sent:0,dropped:0})};

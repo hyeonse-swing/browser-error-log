@@ -64,6 +64,8 @@ export interface BrowserErrorLogOptions {
   transportTimeoutMs?: number;
   /** Holds queued delivery and beacons while navigator.onLine is exactly false; defaults to false. */
   pauseWhileOffline?: boolean;
+  /** Recent event IDs to retain for delivery status lookup, clamped to 0–100; defaults to 0. */
+  deliveryStatusLimit?: number;
 }
 
 export interface BrowserErrorLogClient {
@@ -104,6 +106,15 @@ export interface BrowserErrorLogDiagnosticsClient extends BrowserErrorLogBreadcr
 export interface BrowserErrorLogCaptureClient extends BrowserErrorLogDiagnosticsClient {
   /** Returns the accepted event ID, not a delivery or storage acknowledgement. */
   captureException(error: unknown, extra?: CaptureExtra): string | undefined;
+}
+
+export type BrowserErrorLogDeliveryStatus =
+  | { state: 'unknown' | 'queued' | 'in-flight' | 'transport-accepted' | 'beacon-queued' }
+  | { state: 'dropped'; reason: BrowserErrorLogDropReason };
+
+export interface BrowserErrorLogDeliveryClient extends BrowserErrorLogCaptureClient {
+  /** Reports only this client's recent SDK delivery state, never collector persistence. */
+  getDeliveryStatus(eventId: string): BrowserErrorLogDeliveryStatus;
 }
 
 const MAX_BATCH_EVENTS = 20;
@@ -192,7 +203,7 @@ class UrlSanitizationError extends Error {}
 
 class ContextResolutionError extends Error {}
 
-class Client implements BrowserErrorLogCaptureClient {
+class Client implements BrowserErrorLogDeliveryClient {
   private readonly active: boolean;
   private readonly endpoint?: string;
   private readonly options: BrowserErrorLogOptions;
@@ -207,6 +218,8 @@ class Client implements BrowserErrorLogCaptureClient {
   private readonly resourceCaptureEnabled: boolean;
   private readonly pauseWhileOffline: boolean;
   private readonly transportTimeoutMs: number;
+  private readonly deliveryStatusLimit: number;
+  private readonly deliveryStatuses?: Map<string, BrowserErrorLogDeliveryStatus>;
   private readonly startedAt = now();
   private readonly viewId = newId();
   private readonly seenErrors = new WeakSet<object>();
@@ -271,6 +284,8 @@ class Client implements BrowserErrorLogCaptureClient {
       ? options.ignoreMessages.filter((value): value is string => typeof value === 'string' && value.length > 0)
       : [];
     this.transportTimeoutMs = boundedNumber(options.transportTimeoutMs, 250, 60_000, 5_000);
+    this.deliveryStatusLimit = boundedNumber(options.deliveryStatusLimit, 0, 100, 0);
+    if (this.deliveryStatusLimit > 0) this.deliveryStatuses = new Map();
     this.destroySignal = new Promise(resolve => { this.resolveDestroy = resolve; });
     if (!this.active) return;
     if (!options.project || typeof options.project !== 'string') throw new Error('project is required');
@@ -455,6 +470,13 @@ class Client implements BrowserErrorLogCaptureClient {
       if (this.navigationCaptureEnabled) removeNavigationClient(this);
     }
     this.recordDrop('destroyed', this.queue.length + this.inFlight);
+    if (this.deliveryStatuses) {
+      for (const [eventId, status] of this.deliveryStatuses) {
+        if (status.state === 'queued' || status.state === 'in-flight') {
+          this.deliveryStatuses.set(eventId, { state: 'dropped', reason: 'destroyed' });
+        }
+      }
+    }
     this.queue.length = 0;
     this.breadcrumbs.length = 0;
     this.admittedAt.length = 0;
@@ -474,6 +496,26 @@ class Client implements BrowserErrorLogCaptureClient {
     return { ...this.getStats(), inFlight: this.destroyed ? 0 : this.inFlight,
       filtered: this.filtered, deduplicated: this.deduplicated,
       droppedByReason: { ...this.droppedByReason } };
+  }
+
+  getDeliveryStatus(eventId: string): BrowserErrorLogDeliveryStatus {
+    return { ...(this.deliveryStatuses?.get(eventId) ?? { state: 'unknown' }) };
+  }
+
+  private admitDeliveryStatus(eventId: string): void {
+    const statuses = this.deliveryStatuses;
+    if (!statuses) return;
+    if (statuses.size >= this.deliveryStatusLimit) {
+      statuses.delete(statuses.keys().next().value!);
+    }
+    statuses.set(eventId, { state: 'queued' });
+  }
+
+  private setDeliveryStatus(eventIds: readonly string[], status: BrowserErrorLogDeliveryStatus): void {
+    if (!this.deliveryStatuses) return;
+    for (const eventId of eventIds) {
+      if (this.deliveryStatuses.has(eventId)) this.deliveryStatuses.set(eventId, status);
+    }
   }
 
   private recordDrop(reason: BrowserErrorLogDropReason, count = 1): void {
@@ -892,8 +934,15 @@ class Client implements BrowserErrorLogCaptureClient {
     }
     const admittedAt = this.maxEventsPerMinute === undefined ? undefined : this.admissionTime();
     if (this.maxEventsPerMinute !== undefined && admittedAt === undefined) { this.recordDrop('rateLimit'); return false; }
-    if (this.queue.length >= this.maxQueueSize) { this.queue.shift(); this.recordDrop('queueOverflow'); }
+    if (this.queue.length >= this.maxQueueSize) {
+      const evicted = this.queue.shift()!;
+      this.recordDrop('queueOverflow');
+      if (this.deliveryStatuses) {
+        this.setDeliveryStatus([evicted.eventId], { state: 'dropped', reason: 'queueOverflow' });
+      }
+    }
     this.queue.push(finalEvent);
+    this.admitDeliveryStatus(finalEvent.eventId);
     if (admittedAt !== undefined) this.admittedAt.push(admittedAt);
     if (fingerprint !== undefined && dedupeAt !== undefined) {
       this.dedupeCache.set(fingerprint, dedupeAt);
@@ -910,7 +959,14 @@ class Client implements BrowserErrorLogCaptureClient {
       const next = this.queue[0];
       const size = byteLength(JSON.stringify(next)) + (events.length ? 1 : 0);
       if (events.length && bytes + size > maxBytes) break;
-      if (!events.length && bytes + size > maxBytes) { this.queue.shift(); this.recordDrop('payloadTooLarge'); continue; }
+      if (!events.length && bytes + size > maxBytes) {
+        const oversized = this.queue.shift()!;
+        this.recordDrop('payloadTooLarge');
+        if (this.deliveryStatuses) {
+          this.setDeliveryStatus([oversized.eventId], { state: 'dropped', reason: 'payloadTooLarge' });
+        }
+        continue;
+      }
       events.push(this.queue.shift()!);
       bytes += size;
     }
@@ -921,14 +977,17 @@ class Client implements BrowserErrorLogCaptureClient {
     while (!this.destroyed && this.queue.length && !this.isExplicitlyOffline()) {
       const batch = this.takeBatch(this.maxBatchSize);
       if (batch.events.length) {
-        this.inFlight += batch.events.length;
-        try { await this.sendWithRetry(batch); }
-        finally { this.inFlight -= batch.events.length; }
+        const count = batch.events.length;
+        const eventIds = this.deliveryStatuses ? batch.events.map(event => event.eventId) : undefined;
+        this.inFlight += count;
+        if (eventIds) this.setDeliveryStatus(eventIds, { state: 'in-flight' });
+        try { await this.sendWithRetry(batch, count, eventIds); }
+        finally { this.inFlight -= count; }
       }
     }
   }
 
-  private async sendWithRetry(batch: EventBatch): Promise<void> {
+  private async sendWithRetry(batch: EventBatch, count: number, eventIds?: readonly string[]): Promise<void> {
     for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length && !this.destroyed; attempt++) {
       const controller = new AbortController();
       this.controllers.add(controller);
@@ -943,7 +1002,8 @@ class Client implements BrowserErrorLogCaptureClient {
       try {
         const result = await Promise.race([this.send(batch, controller.signal), timeout, this.destroySignal]);
         if (result === DESTROYED || this.destroyed) return;
-        this.sent += batch.events.length;
+        this.sent += count;
+        if (eventIds) this.setDeliveryStatus(eventIds, { state: 'transport-accepted' });
         return;
       } catch (error) {
         if (this.destroyed) return;
@@ -957,7 +1017,10 @@ class Client implements BrowserErrorLogCaptureClient {
       }
       if (retryDelay !== undefined) await this.wait(retryDelay);
     }
-    if (!this.destroyed) this.recordDrop('deliveryError', batch.events.length);
+    if (!this.destroyed) {
+      this.recordDrop('deliveryError', count);
+      if (eventIds) this.setDeliveryStatus(eventIds, { state: 'dropped', reason: 'deliveryError' });
+    }
   }
 
   private async send(batch: EventBatch, signal: AbortSignal): Promise<void> {
@@ -991,9 +1054,14 @@ class Client implements BrowserErrorLogCaptureClient {
         const batch: EventBatch = { schemaVersion: 1, events: candidates };
         const body = JSON.stringify(batch);
         if (byteLength(body) <= MAX_BEACON_BYTES) {
-          if (navigator.sendBeacon(this.endpoint, new Blob([body], { type: 'application/json' }))) {
+          const accepted = navigator.sendBeacon(this.endpoint, new Blob([body], { type: 'application/json' }));
+          if (this.destroyed) return;
+          if (accepted) {
             this.queue.splice(0, candidates.length);
             this.sent += candidates.length;
+            if (this.deliveryStatuses) {
+              this.setDeliveryStatus(candidates.map(event => event.eventId), { state: 'beacon-queued' });
+            }
           }
           return;
         }
@@ -1300,6 +1368,6 @@ function installConsole(): Instrumentation {
   return { clients, cleanup() { if (console.error === wrapped) console.error = original; } };
 }
 
-export function init(options: BrowserErrorLogOptions): BrowserErrorLogCaptureClient {
+export function init(options: BrowserErrorLogOptions): BrowserErrorLogDeliveryClient {
   return new Client(options);
 }

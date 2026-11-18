@@ -20,6 +20,8 @@ Example request:
 
 > Use the browser-error-log skill. Add manual error collection to this app with the collector URL I supplied. Keep automatic monitoring off, retain a synthetic event ID, and verify the receiving record. Tell me what you could actually verify.
 
+For a recent-ID delivery diagnostic, ask the agent to enable `deliveryStatusLimit`, capture an ID, and read `getDeliveryStatus(id)` before checking the collector. The status reports SDK work or transport acceptance. Collector lookup is still needed for storage confirmation. The installed `.d.ts` determines whether that API is available in the version used by the app.
+
 ## Find the right evidence
 
 - Browser/React integration and preset selection: the skill's `references/integration.md`.

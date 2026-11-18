@@ -91,7 +91,7 @@ describe('dedupeIntervalMs', () => {
 
   it('distinguishes page and network method, URL and status while ignoring duration', () => {
     const { instance } = client({ dedupeIntervalMs: 1000, captureNetwork: true, endpoint: '/collector' });
-    const network = instance as BrowserErrorLogDiagnosticsClient & {
+    const network = instance as unknown as BrowserErrorLogDiagnosticsClient & {
       reportNetwork(method: string, url: string, status: number, durationMs: number): void;
     };
     network.reportNetwork('GET', '/one', 503, 10);

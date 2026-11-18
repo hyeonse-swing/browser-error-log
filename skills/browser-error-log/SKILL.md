@@ -21,6 +21,8 @@ Before describing performance, read the measurement conditions in the installed 
 
 Use synthetic records and a collector the user authorized. Capture one fresh Error, retain the returned ID, await `flush()`, inspect `getDiagnostics()`, and check the collector for that same `(project, eventId)`. An ID proves queue admission; `sent` or a resolved flush does not prove durable server storage. A server/SSR no-op test is not browser proof.
 
+When diagnosing one event's delivery, check the installed declaration for `deliveryStatusLimit` and `getDeliveryStatus()`. If available, opt into a small ID history and inspect its state after capture and flush. See [browser integration](references/integration.md) for the meanings of `transport-accepted`, `beacon-queued`, `dropped`, and `unknown`. Confirm storage at the collector separately.
+
 Check the selected mode's behavior: for minimal, a synthetic automatic error should not be collected while manual capture still works. Check an explicit override if the app uses one. If no collector or browser is available, complete the local/type checks and state exactly what could not be verified.
 
 Keep SDK initialization and cleanup owned by the app's lifecycle. Flush while the client is active when needed, then destroy it; destroy clears pending in-memory work. Configuration is fixed at initialization. Do not create a client on each render or promise unload-time delivery.
