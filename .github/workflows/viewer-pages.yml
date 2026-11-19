@@ -36,6 +36,7 @@ jobs:
           package-manager-cache: false
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run typecheck && npm test
+      - run: npm run build:sdk
       - run: npx --no-install vite build --mode archive --base /browser-error-log/
       - name: Include synthetic two-release example
         run: |
