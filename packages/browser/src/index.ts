@@ -242,7 +242,7 @@ class Client implements BrowserErrorLogDeliveryClient {
   private onlineFlushRequested = false;
   private sequence = 0;
   private inFlight = 0;
-  private activeBatch?: { batch: EventBatch; beaconedIds: Set<string> };
+  private activeBatch?: { batch: EventBatch; eventIds: string[]; beaconedIds: Set<string>; acceptedIds: Set<string>; failedIds: Set<string> };
   private sent = 0;
   private dropped = 0;
   private filtered = 0;
@@ -467,7 +467,11 @@ class Client implements BrowserErrorLogDeliveryClient {
       if (this.consoleCaptureEnabled) removeConsoleClient(this);
       if (this.navigationCaptureEnabled) removeNavigationClient(this);
     }
-    this.recordDrop('destroyed', this.queue.length + this.inFlight - (this.activeBatch?.beaconedIds.size ?? 0));
+    const active = this.activeBatch;
+    const pending = active
+      ? active.eventIds.filter(id => !active.beaconedIds.has(id) && !active.acceptedIds.has(id) && !active.failedIds.has(id)).length
+      : this.inFlight;
+    this.recordDrop('destroyed', this.queue.length + pending);
     if (this.deliveryStatuses) {
       for (const [eventId, status] of this.deliveryStatuses) {
         if (status.state === 'queued' || status.state === 'in-flight') {
@@ -974,23 +978,32 @@ class Client implements BrowserErrorLogDeliveryClient {
     while (!this.destroyed && this.queue.length && !this.isExplicitlyOffline()) {
       const batch = this.takeBatch(this.maxBatchSize);
       if (batch.events.length) {
-        const count = batch.events.length;
-        const eventIds = this.deliveryStatuses ? batch.events.map(event => event.eventId) : undefined;
+        const eventIds = batch.events.map(event => event.eventId);
+        const count = eventIds.length;
         this.inFlight += count;
-        this.activeBatch = { batch, beaconedIds: new Set() };
-        if (eventIds) this.setDeliveryStatus(eventIds, { state: 'in-flight' });
-        try { await this.sendWithRetry(batch, count, eventIds); }
+        this.activeBatch = { batch, eventIds, beaconedIds: new Set(), acceptedIds: new Set(), failedIds: new Set() };
+        this.setDeliveryStatus(eventIds, { state: 'in-flight' });
+        try { await this.sendWithRetry(batch, eventIds); }
         finally { this.activeBatch = undefined; this.inFlight -= count; }
       }
     }
   }
 
-  private async sendWithRetry(batch: EventBatch, count: number, eventIds?: readonly string[]): Promise<void> {
+  private async sendWithRetry(batch: EventBatch, eventIds: readonly string[]): Promise<void> {
+    // A pagehide beacon may have queued part of the original in-flight batch
+    // before a split child starts. Do not resend those IDs in a fresh request.
+    const pending = batch.events.filter(event => !this.activeBatch?.beaconedIds.has(event.eventId));
+    if (!pending.length) return;
+    if (pending.length !== batch.events.length) {
+      batch = { schemaVersion: 1, events: pending };
+      eventIds = pending.map(event => event.eventId);
+    }
     // Snapshot custom transport data once so a failed or timed-out callback cannot
     // change what the next attempt sends. Native fetch serializes its own request.
     const originalPayload = this.options.transport ? JSON.stringify(batch) : undefined;
     let needsPristineCopy = false;
     let keepalive = true;
+    let splitOnTooLarge = false;
     for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length && !this.destroyed; attempt++) {
       if (attempt > 0 && originalPayload && !needsPristineCopy) {
         try { needsPristineCopy = JSON.stringify(batch) !== originalPayload; }
@@ -1019,13 +1032,18 @@ class Client implements BrowserErrorLogDeliveryClient {
       try {
         const result = await Promise.race([this.send(attemptBatch, controller.signal, keepalive), timeout, destroyAttempt]);
         if (result === DESTROYED || this.destroyed) return;
-        this.sent += count - (this.activeBatch?.beaconedIds.size ?? 0);
-        if (eventIds) this.setDeliveryStatus(eventIds, { state: 'transport-accepted' });
+        const active = this.activeBatch;
+        for (const id of eventIds) {
+          if (!active?.beaconedIds.has(id) && !active?.acceptedIds.has(id)) this.sent++;
+          active?.acceptedIds.add(id);
+        }
+        this.setDeliveryStatus(eventIds, { state: 'transport-accepted' });
         return;
       } catch (error) {
         if (this.destroyed) return;
-        if (this.activeBatch?.beaconedIds.size === count) return;
+        if (eventIds.every(id => this.activeBatch?.beaconedIds.has(id))) return;
         const status = read(error, 'status');
+        if (status === 413 && eventIds.length > 1) { splitOnTooLarge = true; break; }
         // A browser can reject keepalive before sending when another request
         // already occupies its quota. Use a regular fetch on the next attempt.
         if (!this.options.transport && typeof status !== 'number') keepalive = false;
@@ -1039,11 +1057,33 @@ class Client implements BrowserErrorLogDeliveryClient {
       }
       if (retryDelay !== undefined) await this.wait(retryDelay);
     }
+    if (splitOnTooLarge && !this.destroyed) {
+      // A collector or proxy may accept smaller requests even when every event
+      // in the rejected batch is valid. At most 20 events bound this split tree.
+      const pristine = originalPayload ? JSON.parse(originalPayload) as EventBatch : batch;
+      const remaining = pristine.events.filter(event => !this.activeBatch?.beaconedIds.has(event.eventId));
+      if (!remaining.length) return;
+      // Even one survivor needs a fresh request; a second 413 then follows the
+      // ordinary single-event failure path instead of splitting recursively.
+      if (remaining.length === 1) {
+        await this.sendWithRetry({ schemaVersion: 1, events: remaining }, [remaining[0]!.eventId]);
+        return;
+      }
+      const middle = Math.floor(remaining.length / 2);
+      const first = remaining.slice(0, middle);
+      const second = remaining.slice(middle);
+      await this.sendWithRetry({ schemaVersion: 1, events: first }, first.map(event => event.eventId));
+      await this.sendWithRetry({ schemaVersion: 1, events: second }, second.map(event => event.eventId));
+      return;
+    }
     if (!this.destroyed) {
       const beaconedIds = this.activeBatch?.beaconedIds;
-      const missing = batch.events.filter(event => !beaconedIds?.has(event.eventId));
+      const missing = eventIds.filter(id => !beaconedIds?.has(id));
       if (missing.length) this.recordDrop('deliveryError', missing.length);
-      if (eventIds && missing.length) this.setDeliveryStatus(missing.map(event => event.eventId), { state: 'dropped', reason: 'deliveryError' });
+      if (missing.length) {
+        for (const id of missing) this.activeBatch?.failedIds.add(id);
+        this.setDeliveryStatus(missing, { state: 'dropped', reason: 'deliveryError' });
+      }
     }
   }
 
@@ -1096,7 +1136,8 @@ class Client implements BrowserErrorLogDeliveryClient {
       // The normal fetch has removed its batch from the queue. Back it up
       // before queued events because navigation can cancel an in-flight fetch.
       const active = backupInFlight ? this.activeBatch : undefined;
-      if (active && !sendSnapshot(active.batch.events.filter(event => !active.beaconedIds.has(event.eventId)), events => {
+      if (active && !sendSnapshot(active.batch.events.filter(event =>
+        !active.beaconedIds.has(event.eventId) && !active.acceptedIds.has(event.eventId) && !active.failedIds.has(event.eventId)), events => {
         for (const event of events) active.beaconedIds.add(event.eventId);
         this.sent += events.length;
         if (this.deliveryStatuses) this.setDeliveryStatus(events.map(event => event.eventId), { state: 'beacon-queued' });
