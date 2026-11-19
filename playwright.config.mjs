@@ -8,6 +8,7 @@ export default defineConfig({
   outputDir: 'output/playwright/browser',
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], trace: 'retain-on-failure', screenshot: 'only-on-failure' } },
+    { name: 'firefox', testMatch: '**/source-maps.spec.mjs', use: { ...devices['Desktop Firefox'], trace: 'retain-on-failure', screenshot: 'only-on-failure' } },
     { name: 'webkit', use: { ...devices['Desktop Safari'], trace: 'retain-on-failure', screenshot: 'only-on-failure' } },
   ],
 });

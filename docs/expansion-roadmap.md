@@ -18,7 +18,7 @@ The SQLite defaults are seven days from receipt, 10,000 events, and a 64 MiB mai
 | --- | --- | --- |
 | SDK reliability | Test supported browser and WebView versions under sustained load | Check behavior beyond local fixtures and bounded unit tests |
 | Privacy controls | Document tested application-specific filters and a server-side removal point | Reduce accidental collection of identifiers in paths, messages, stacks, or context |
-| Diagnostics | Add private source-map handling and careful event grouping | Connect deployed stacks to source and group repeat failures without hiding distinct causes |
+| Diagnostics | Extend the local release-map workflow with CI registration and improve event grouping | Connect deployed stacks to source and group repeat failures without hiding distinct causes |
 | Larger datasets | Define server aggregation with the same filters and access rules as event queries | Show complete counts when viewer fetch limits are reached |
 | Operations | Restore exercises, backups, access review, optional alerts and issue workflow | Support operators who need longer retention or response processes |
 

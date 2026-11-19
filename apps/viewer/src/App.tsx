@@ -6,7 +6,10 @@ import { LanguageSwitcher, useLocale } from '../../i18n/react';
 import { eventLabel, localizeError, numberText, t } from './i18n';
 import type { Locale } from '../../i18n/locale';
 import { BreadcrumbTrail } from './BreadcrumbTrail';
+import { OriginalLocations, SourceMapPanel, type RegisterOutcome, type SourceMapActions } from './SourceMapControls';
+import { emptySourceMaps, prepareSourceMap, registerSourceMap, removeSourceMap } from './source-maps';
 
+const archiveMode = import.meta.env.MODE === 'archive';
 type TimeRange = '24h' | '7d' | 'all';
 const eventTypes = Object.keys(EVENT_LABELS) as EventType[];
 const timeRanges: { value: TimeRange; label: string }[] = [
@@ -93,6 +96,9 @@ export function App() {
   const [copyState, setCopyState] = useState('');
   const [knownProjects, setKnownProjects] = useState<string[]>([]);
   const [knownEnvironments, setKnownEnvironments] = useState<string[]>([]);
+  const [sourceMaps, setSourceMaps] = useState(emptySourceMaps);
+  const sourceMapsRef = useRef(sourceMaps);
+  const removalRevision = useRef(0);
   const loadMoreController = useRef<AbortController | null>(null);
   const previousCriteria = useRef<string | undefined>(undefined);
 
@@ -213,20 +219,43 @@ export function App() {
     setProject(''); setEnvironment(''); setType(''); setTimeRange('24h'); setSearch(''); setQuery('');
   };
 
+  async function registerMap(manifest: File, map: File): Promise<RegisterOutcome> {
+    const revisionAtStart = removalRevision.current;
+    const prepared = await prepareSourceMap(manifest, map);
+    if (revisionAtStart !== removalRevision.current) throw new Error('Registration canceled after a map was removed. Choose both files again.');
+    const before = sourceMapsRef.current;
+    const duplicate = before.entries.has(prepared.key) && !before.conflicts.has(prepared.key);
+    const next = registerSourceMap(before, prepared);
+    sourceMapsRef.current = next;
+    setSourceMaps(next);
+    if (next.conflicts.has(prepared.key)) return 'conflict';
+    return duplicate ? 'already-registered' : 'registered';
+  }
+
+  function removeMap(key: string): void {
+    removalRevision.current++;
+    const next = removeSourceMap(sourceMapsRef.current, key);
+    sourceMapsRef.current = next;
+    setSourceMaps(next);
+  }
+
+  const sourceMapActions: SourceMapActions = { sourceMaps, onRegisterMap: registerMap, onRemoveMap: removeMap };
+
   const title = viewerConfig.title || t(locale, 'Browser Error Log');
   const localMode = viewerConfig.mode !== 'live';
   return <div className="shell">
     <aside className="sidebar">
       <div className="brand"><span className="brand-mark" aria-hidden="true"><i/><i/><i/></span><div><div className="brand-overline">{t(locale, 'BROWSER / LOG')}</div><div className="brand-title">{title}</div></div></div>
       <div className="side-section-label">{t(locale, 'WORKSPACE')} <span>01</span></div>
-      <nav className="side-navigation" aria-label={t(locale, 'Monitoring navigation')}>{([{ value: 'dashboard', label: 'Error Dashboard' }, { value: 'events', label: 'Event Timeline' }] as const).map(view => <button key={view.value} type="button" className={activeView === view.value ? 'side-active' : 'side-inactive'} aria-current={activeView === view.value ? 'page' : undefined} onClick={() => setActiveView(view.value)}><span className="side-active-dot"/>{t(locale, view.label)}</button>)}</nav>
-      <div className="side-bottom"><div className="side-rule"/><div className="side-bottom-heading">{t(locale, 'Test Tools')}</div><a href="/demo.html" className="demo-link">{t(locale, 'Trigger Errors')} <Icon name="external" size={15}/></a><p>{t(locale, 'Trigger errors in the browser and inspect the capture flow.')}</p><div className="side-version">{t(locale, 'ERROR LOG')} <span>v0.1</span></div></div>
+      <nav className="side-navigation" aria-label={t(locale, 'Monitoring navigation')}>{(archiveMode ? [{ value: 'dashboard', label: 'Error Dashboard' }] as const : [{ value: 'dashboard', label: 'Error Dashboard' }, { value: 'events', label: 'Event Timeline' }] as const).map(view => <button key={view.value} type="button" className={activeView === view.value ? 'side-active' : 'side-inactive'} aria-current={activeView === view.value ? 'page' : undefined} onClick={() => setActiveView(view.value)}><span className="side-active-dot"/>{t(locale, view.label)}</button>)}</nav>
+      {!archiveMode && <div className="side-bottom"><div className="side-rule"/><div className="side-bottom-heading">{t(locale, 'Test Tools')}</div><a href="/demo.html" className="demo-link">{t(locale, 'Trigger Errors')} <Icon name="external" size={15}/></a><p>{t(locale, 'Trigger errors in the browser and inspect the capture flow.')}</p><div className="side-version">{t(locale, 'ERROR LOG')} <span>v0.1</span></div></div>}
     </aside>
 
     <main className="workspace">
-      <header className="topbar"><div className="breadcrumb">{t(locale, 'MONITORING')} <span>/</span> {t(locale, activeView === 'dashboard' ? 'OVERVIEW' : 'EVENTS')}</div><div className="topbar-right"><LanguageSwitcher/><span className={`source-dot ${localMode ? 'is-local' : ''}`}/><span>{t(locale, localMode ? 'Local Test' : 'Connected Data Source')}</span></div></header>
-      <nav className="view-tabs" aria-label={t(locale, 'Select view')}><button type="button" aria-current={activeView === 'dashboard' ? 'page' : undefined} onClick={() => setActiveView('dashboard')}>{t(locale, 'Dashboard')}</button><button type="button" aria-current={activeView === 'events' ? 'page' : undefined} onClick={() => setActiveView('events')}>{t(locale, 'Event Timeline')}</button></nav>
-      <div hidden={activeView !== 'dashboard'}><Dashboard/></div>
+      <header className="topbar"><div className="breadcrumb">{t(locale, 'MONITORING')} <span>/</span> {t(locale, activeView === 'dashboard' ? 'OVERVIEW' : 'EVENTS')}</div><div className="topbar-right"><LanguageSwitcher/><span className={`source-dot ${localMode ? 'is-local' : ''}`}/><span>{t(locale, archiveMode ? 'Local files' : localMode ? 'Local Test' : 'Connected Data Source')}</span></div></header>
+      {!archiveMode && <nav className="view-tabs" aria-label={t(locale, 'Select view')}><button type="button" aria-current={activeView === 'dashboard' ? 'page' : undefined} onClick={() => setActiveView('dashboard')}>{t(locale, 'Dashboard')}</button><button type="button" aria-current={activeView === 'events' ? 'page' : undefined} onClick={() => setActiveView('events')}>{t(locale, 'Event Timeline')}</button></nav>}
+      <SourceMapPanel {...sourceMapActions}/>
+      <div hidden={activeView !== 'dashboard'}><Dashboard {...sourceMapActions}/></div>
       {activeView === 'events' && <>
       <section className="page-head"><div><div className="eyebrow">{t(locale, 'EVENT STREAM')} <span>—</span> 001</div><h1>{title}</h1><p>{t(locale, 'Explore captured browser errors in chronological order.')}</p></div><div className="head-actions"><label className="auto-toggle"><input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)}/><span className="toggle-track"/>{t(locale, 'Auto-refresh')} <span className="auto-interval">{locale === 'ko' ? '30초' : '30s'}</span></label><button className="refresh-button" onClick={() => setRefreshToken((current) => current + 1)} type="button"><Icon name="refresh" size={16}/> {t(locale, 'Refresh')}</button></div></section>
       {localMode && <div className="local-notice"><span className="notice-icon">i</span><span><strong>{t(locale, 'Local Test')}</strong> · {t(locale, 'Stored in memory; cleared on restart')}</span></div>}
@@ -260,6 +289,7 @@ export function App() {
           <div className="detail-block"><div className="block-title">{t(locale, 'Location and identifiers')} <span>02</span></div><dl className="info-grid"><div className="wide"><dt>{t(locale, 'Page')}</dt><dd className="breakable">{selected.page}</dd></div><div className="wide"><dt>{t(locale, 'Event ID')}</dt><dd className="mono breakable">{selected.eventId}</dd></div><div><dt>{t(locale, 'View ID')}</dt><dd className="mono breakable">{selected.viewId}</dd></div><div><dt>{t(locale, 'Elapsed time')}</dt><dd className="mono">{numberText(locale, selected.elapsedMs)} ms</dd></div></dl></div>
           {selected.network && <div className="detail-block"><div className="block-title">{t(locale, 'Network')} <span>03</span></div><div className="network-summary"><span className="method-tag">{selected.network.method}</span><span className="network-url">{selected.network.url}</span></div><dl className="info-grid compact"><div><dt>{t(locale, 'HTTP status')}</dt><dd className="mono">{selected.network.status ?? t(locale, 'No response')}</dd></div><div><dt>{t(locale, 'Duration')}</dt><dd className="mono">{numberText(locale, selected.network.durationMs)} ms</dd></div></dl></div>}
           {selected.stack && <div className="detail-block"><div className="block-title">{t(locale, 'Stack trace')}</div><pre className="code-block">{selected.stack}</pre></div>}
+          <div className="detail-block"><OriginalLocations event={selected} sourceMaps={sourceMaps}/></div>
           {selected.componentStack && <div className="detail-block"><div className="block-title">{t(locale, 'Component stack')}</div><pre className="code-block">{selected.componentStack}</pre></div>}
           <BreadcrumbTrail breadcrumbs={selected.breadcrumbs}/>
           {selected.context && Object.keys(selected.context).length > 0 && <div className="detail-block"><div className="block-title">{t(locale, 'Additional context')}</div><dl className="info-grid context-grid">{Object.entries(selected.context).map(([key, value]) => <div key={key}><dt>{key}</dt><dd className="breakable">{value === null ? 'null' : String(value)}</dd></div>)}</dl></div>}

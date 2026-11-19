@@ -9,6 +9,7 @@
   ],
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "source-map:prepare": "node scripts/prepare-source-map.mjs",
     "build": "npm run build:sdk && vite build",
     "build:sdk": "node scripts/build-sdk.mjs",
     "build:collector": "node scripts/build-collector.mjs",

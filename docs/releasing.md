@@ -125,7 +125,7 @@ Each manual minor/major request starts a new preparation run with the commands a
 
 [Verify changes](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/ci.yml) runs on pull requests to `main` and can also be dispatched manually. It checks release logic, TypeScript, application tests, builds, packaged consumers, the micro server, and real Chromium/WebKit delivery. The job has read-only repository permissions and does not publish packages. Failed browser runs retain their evidence as workflow artifacts for seven days.
 
-Run the browser checks locally with `npx playwright install --with-deps chromium webkit`, then `npm run check:browser`. The suite builds the SDK and collector, uses temporary local data, and verifies runtime errors, unhandled promise rejections, and HTTP failures arrive at the collector. These browser-engine checks do not establish real-device or WebView compatibility.
+Run the browser checks locally with `npx playwright install --with-deps chromium firefox webkit`, then `npm run check:browser`. The suite builds the SDK and collector, uses temporary local data, and verifies runtime errors, unhandled promise rejections, and HTTP failures arrive at the collector. These browser-engine checks do not establish real-device or WebView compatibility.
 
 ## Manual release checklist
 

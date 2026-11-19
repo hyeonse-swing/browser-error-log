@@ -9,10 +9,12 @@ import type { Locale } from '../../i18n/locale';
 import { countText, eventLabel, localizeError, numberText, t } from './i18n';
 import './dashboard.css';
 import { BreadcrumbTrail } from './BreadcrumbTrail';
+import { OriginalLocations, SourceMapPanel, type SourceMapActions } from './SourceMapControls';
 
 type Period = '24h' | '7d' | '30d' | 'all' | 'custom';
 type Controls = { project: string; environment: string; type: EventType | ''; query: string; period: Period; from: string; to: string };
 type Source = { kind: 'api' } | { kind: 'file'; name: string; events: ErrorEventRecord[]; duplicates: number; truncated: boolean };
+const archiveMode = import.meta.env.MODE === 'archive';
 type Loaded = HistoryResult & { filter: EventFilter; sourceLabel: string; sourceKind: Source['kind']; loadedAt: string };
 
 function localInput(date: Date) {
@@ -44,7 +46,7 @@ function toFilter(controls: Controls, source: Source): EventFilter {
 const dateLabel = (value: string | number, locale: Locale) => new Date(value).toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US', { hour12: false });
 const messageOf = (error: unknown) => error instanceof Error ? error.message : 'Could not load data.';
 
-function EventDialog({ event, onClose }: { event: ErrorEventRecord; onClose: () => void }) {
+function EventDialog({ event, onClose, sourceMapActions }: { event: ErrorEventRecord; onClose: () => void; sourceMapActions?: SourceMapActions }) {
   const locale = useLocale();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -63,6 +65,7 @@ function EventDialog({ event, onClose }: { event: ErrorEventRecord; onClose: () 
       </dl>
       {event.network && <section><h4>{t(locale, 'Network')}</h4><p>{event.network.method} {event.network.url}</p><p>{t(locale, 'Response')} {event.network.status || t(locale, 'None')} · {numberText(locale, event.network.durationMs)} ms</p></section>}
       {event.stack && <section><h4>{t(locale, 'Stack trace')}</h4><pre className="code-block">{event.stack}</pre></section>}
+      {sourceMapActions && <><OriginalLocations event={event} sourceMaps={sourceMapActions.sourceMaps}/><SourceMapPanel {...sourceMapActions} compact/></>}
       {event.componentStack && <section><h4>{t(locale, 'Component stack')}</h4><pre className="code-block">{event.componentStack}</pre></section>}
       <BreadcrumbTrail breadcrumbs={event.breadcrumbs}/>
       {event.context && <section><h4>{t(locale, 'Additional context')}</h4><pre className="code-block">{JSON.stringify(event.context, null, 2)}</pre></section>}
@@ -70,10 +73,13 @@ function EventDialog({ event, onClose }: { event: ErrorEventRecord; onClose: () 
   </dialog>;
 }
 
-export function Dashboard() {
+export function Dashboard({ sourceMaps, onRegisterMap, onRemoveMap }: Partial<SourceMapActions>) {
   const locale = useLocale();
+  const sourceMapActions = sourceMaps && onRegisterMap && onRemoveMap ? { sourceMaps, onRegisterMap, onRemoveMap } : undefined;
   const [controls, setControls] = useState<Controls>(initialControls);
-  const [source, setSource] = useState<Source>({ kind: 'api' });
+  const [source, setSource] = useState<Source>(archiveMode
+    ? { kind: 'file', name: '', events: [], duplicates: 0, truncated: false }
+    : { kind: 'api' });
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -123,7 +129,7 @@ export function Dashboard() {
   }
 
   useEffect(() => {
-    void runQuery(controls, source);
+    if (!archiveMode) void runQuery(controls, source);
     return () => { generation.current++; controller.current?.abort(); };
   }, []);
 
@@ -167,15 +173,20 @@ export function Dashboard() {
     } catch (error) { setError(messageOf(error)); }
   }
 
-  function submit(event: FormEvent) { event.preventDefault(); void runQuery(controls, source); }
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (archiveMode && source.kind === 'file' && !source.name) return;
+    void runQuery(controls, source);
+  }
   const analytics = useMemo(() => loaded ? buildAnalytics(loaded.events, loaded.filter) : null, [loaded]);
   return <div className="dashboard">
     <section className="dash-heading"><div><span className="eyebrow">{t(locale, 'ERROR MONITORING / OVERVIEW')}</span><h1>{t(locale, 'Error Dashboard')}</h1><p>{t(locale, 'See when, where, and which errors increased.')}</p></div><div className="dash-file-actions">
       <input ref={fileInput} type="file" accept=".json,application/json" className="dash-file-input" aria-label={t(locale, 'Historical data JSON file')} onChange={event => { const file = event.target.files?.[0]; if (file) void importFile(file); event.target.value = ''; }}/>
       <button className="dash-button" type="button" onClick={() => fileInput.current?.click()}>{t(locale, 'Import JSON')}</button><button className="dash-button" type="button" disabled={!loaded?.events.length || loading} onClick={exportJson}>{t(locale, 'Save query data ↓')}</button>
+      {archiveMode && <a className="dash-button" href={`${import.meta.env.BASE_URL}source-map-example.zip`} download>{t(locale, 'Download source map example ↓')}</a>}
     </div></section>
 
-    <div className="dash-source"><span className={`dash-source-badge ${source.kind === 'file' ? 'file' : ''}`}>{t(locale, source.kind === 'file' ? 'JSON FILE' : 'API SOURCE')}</span><span>{source.kind === 'file' ? source.name : t(locale, localMode ? 'Local test data · cleared on restart' : 'Connected service data')}</span>{source.kind === 'file' && <button type="button" onClick={switchToApi}>{t(locale, 'Return to API')}</button>}</div>
+    <div className="dash-source"><span className={`dash-source-badge ${source.kind === 'file' ? 'file' : ''}`}>{t(locale, source.kind === 'file' ? 'JSON FILE' : 'API SOURCE')}</span><span>{source.kind === 'file' ? source.name || t(locale, 'Import a JSON file to begin.') : t(locale, localMode ? 'Local test data · cleared on restart' : 'Connected service data')}</span>{source.kind === 'file' && !archiveMode && <button type="button" onClick={switchToApi}>{t(locale, 'Return to API')}</button>}</div>
     <form className="dash-filters" onSubmit={submit}>
       <div className="dash-filter-row">
         <label>{t(locale, 'Project')}<input list="dash-projects" placeholder={t(locale, 'All projects')} value={controls.project} onChange={event => update('project', event.target.value)}/><datalist id="dash-projects">{knownProjects.map(value => <option key={value} value={value}/>)}</datalist></label>
@@ -185,7 +196,7 @@ export function Dashboard() {
         <label className="dash-search">{t(locale, 'Search')}<input type="search" placeholder={t(locale, 'Message, page, release')} value={controls.query} onChange={event => update('query', event.target.value)}/></label>
       </div>
       {controls.period === 'custom' && <div className="dash-date-row"><label>{t(locale, 'Start time')}<input type="datetime-local" required value={controls.from} onChange={event => update('from', event.target.value)}/></label><span>—</span><label>{t(locale, 'End time')}<input type="datetime-local" required value={controls.to} onChange={event => update('to', event.target.value)}/></label><small>{timezone}</small></div>}
-      <div className="dash-query-row"><span>{t(locale, dirty ? 'Filters changed. Run the query to apply them.' : source.kind === 'file' ? 'This file is analyzed in your browser and is not sent to the server.' : 'Load stored events for the selected period.')}</span><button className="dash-button primary" type="submit">{t(locale, loading ? 'Run again' : 'Query')} ↗</button></div>
+      <div className="dash-query-row"><span>{t(locale, archiveMode && source.kind === 'file' && !source.name ? 'Import a JSON file to begin.' : dirty ? 'Filters changed. Run the query to apply them.' : source.kind === 'file' ? 'This file is analyzed in your browser and is not sent to the server.' : 'Load stored events for the selected period.')}</span><button className="dash-button primary" type="submit" disabled={archiveMode && source.kind === 'file' && !source.name}>{t(locale, loading ? 'Run again' : 'Query')} ↗</button></div>
     </form>
 
     {error && <div className="dash-error" role="alert"><strong>{t(locale, 'Query status')}</strong><span>{localizeError(locale, error)}</span><button className="dash-button" type="button" onClick={() => void runQuery(controls, source)}>{t(locale, 'Retry')}</button></div>}
@@ -198,7 +209,7 @@ export function Dashboard() {
       <AnalyticsCharts data={analytics} onSelectError={setSelected}/>
       <p className="dash-footnote">{t(locale, 'These counts exclude duplicate errors. Total requests and visitors are not collected, so they do not represent error rates or affected users.')}</p>
     </>}
-    <details className="dash-help"><summary>{t(locale, 'How to load historical data')}</summary><p>{t(locale, 'The API queries by occurrence time. A connected server must provide persistent storage and history. The development demo keeps up to 2,000 events in memory and clears them on restart.')}</p><p>{t(locale, 'Import a file saved from this page, a v1 event array, or a JSON object in the')} <code>{'{ "schemaVersion": 1, "events": [...] }'}</code> {t(locale, 'format. The limit is 10 MiB and 10,000 events. Refreshing clears file analysis; import the file again to restore it.')}</p><a href="/history-example.json" download>{t(locale, 'Download sample history JSON ↓')}</a></details>
-    {selected && <EventDialog event={selected} onClose={() => setSelected(null)}/>}
+    <details className="dash-help"><summary>{t(locale, 'How to load historical data')}</summary>{!archiveMode && <p>{t(locale, 'The API queries by occurrence time. A connected server must provide persistent storage and history. The development demo keeps up to 2,000 events in memory and clears them on restart.')}</p>}{archiveMode && <p>{t(locale, 'Extract the source map example, import events.json, then register each release manifest with its matching .map file.')}</p>}<p>{t(locale, 'Import a file saved from this page, a v1 event array, or a JSON object in the')} <code>{'{ "schemaVersion": 1, "events": [...] }'}</code> {t(locale, 'format. The limit is 10 MiB and 10,000 events. Refreshing clears file analysis; import the file again to restore it.')}</p><a href={`${import.meta.env.BASE_URL}history-example.json`} download>{t(locale, 'Download sample history JSON ↓')}</a></details>
+    {selected && <EventDialog event={selected} onClose={() => setSelected(null)} sourceMapActions={sourceMapActions}/>}
   </div>;
 }

@@ -65,6 +65,33 @@ The viewer should show that event under `my-web`. `captureException()` returns a
 
 See the [repeatable CPU, memory, and payload benchmark (Korean)](docs/preset-performance-2026-11-17.ko.md) for 12 trials per condition, raw measurements, and reproduction steps. It separates equal-count manual logging from workloads where presets collect different events.
 
+## Local source maps by release
+
+Open the hosted viewer and choose **Import JSON** to inspect an archive. To try two releases, unzip the example, open `events.json`, then use **Local source maps** to register each release’s `manifest.json` and `assets/app.js.map`. Files are read in the current tab. [Hosted viewer](https://hyeonse-swing.github.io/browser-error-log/) · [Download the two-release example](https://hyeonse-swing.github.io/browser-error-log/source-map-example.zip)
+
+Set a unique SDK `release` for each build. Keep the emitted JavaScript and its regular v3 `.map` file together. The viewer in this repository resolves their original locations. After `npm ci`, run this from the repository root for each deployed chunk:
+
+```sh
+npm run source-map:prepare -- --project my-web --environment production \
+  --release build-42 --url https://cdn.example.com/assets/app.js \
+  --bundle dist/assets/app.js --map dist/assets/app.js.map --out build-42.app.manifest.json
+```
+
+1. Open the viewer with `npm run dev`. In **Local source maps**, select the manifest and the matching `.map`, then choose **Register map**. The project, environment, release and full deployed asset URL must match the event. File selection and SHA-256 verification take place in this tab. Use HTTPS or localhost.
+2. Open an error in the **Event Timeline** or **Error Dashboard**. **Original locations** shows the generated file, line and column alongside the original position. Both use one-based coordinates. Adjacent generated columns may map to the start of the same original token.
+3. Register other releases the same way. Different artifacts registered under one key suspend mapping for that key. Remove it and register the intended build again. Reloading clears the registrations. Maps and original sources stay out of network requests and event exports.
+
+Each map can be up to 8 MiB. A tab can hold up to 32 registrations totaling 32 MiB. For large builds, start with the chunks in the error stack.
+
+**Try two releases.** Run the following from the repository root to create a fresh example directory. If you already generated it, start the viewer and reuse the files. Import `events.json` in the dashboard, then register `A/manifest.json` with `A/assets/app.js.map`. Repeat for B. The two synthetic events resolve to `release-a.ts:2:3` and `release-b.ts:7:3`.
+
+```sh
+node examples/source-maps/build-fixture.mjs --output-dir output/source-map-example
+npm run dev
+```
+
+Events do not carry a hash of the executed JavaScript. Assign a fresh release ID when replacing a build at the same URL. Missing maps and ambiguous frames show an unmapped reason. SDK 0.2.20 preserves verified positions from scripts with query strings. Imported frames that still contain a raw query or fragment, events captured without a stack, and React component stacks are excluded from resolution. The viewer never fetches linked sources or follows intermediate maps. [Source map coordinate conventions](https://tc39.es/ecma426/#sec-terms-and-definitions)
+
 ## AI-assisted integration
 
 Use the [portable integration skill](skills/browser-error-log/SKILL.md) with an existing coding agent. All three npm packages include `ai/` with the skill, its self-contained references, the measured 0.2.13 performance report, raw results and reproduction scripts. See the [AI guide](docs/ai.md) for local copy instructions and version checks.
@@ -96,7 +123,7 @@ Infrastructure is not included. Hosting, servers, databases, storage, bandwidth,
 Run `npm run check`, `npm run check:package`, and `npm run check:micro` to validate code and built examples. For actual Chromium and WebKit delivery checks, install the test browsers once and run:
 
 ```sh
-npx playwright install --with-deps chromium webkit
+npx playwright install --with-deps chromium firefox webkit
 npm run check:browser
 ```
 

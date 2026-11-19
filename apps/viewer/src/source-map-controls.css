@@ -1,0 +1,100 @@
+.source-map-panel {
+  margin: var(--spacing-16) 0;
+  border: 1px solid var(--color-ash);
+  border-radius: var(--radius-cards);
+  background: var(--surface-card);
+  color: var(--color-charcoal);
+}
+
+.source-map-panel summary {
+  cursor: pointer;
+  padding: var(--spacing-12) var(--spacing-16);
+  font-weight: var(--font-weight-medium);
+}
+
+.source-map-panel summary span {
+  margin-left: var(--spacing-8);
+  font-size: var(--text-caption);
+  color: var(--color-fog);
+}
+
+.source-map-panel-body {
+  padding: 0 var(--spacing-16) var(--spacing-16);
+}
+
+.source-map-panel-body p {
+  margin: var(--spacing-8) 0;
+  font-size: var(--text-caption);
+  color: var(--color-fog);
+}
+
+.source-map-panel form {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: var(--spacing-12);
+}
+
+.source-map-panel form label {
+  display: grid;
+  min-width: min(100%, 200px);
+  gap: var(--spacing-4);
+  font-size: var(--text-caption);
+}
+
+.source-map-panel input[type="file"] {
+  max-width: 100%;
+  font-size: var(--text-caption);
+}
+
+.source-map-panel button {
+  min-height: 36px;
+  border: 1px solid var(--color-ash);
+  border-radius: var(--radius-buttons);
+  background: var(--surface-card);
+  color: var(--color-charcoal);
+  padding: var(--spacing-8) var(--spacing-12);
+  cursor: pointer;
+}
+
+.source-map-panel button:disabled { opacity: .5; cursor: default; }
+.source-map-panel-body .source-map-error, .source-map-entries em { color: var(--color-red, #b42318); }
+
+.source-map-entries {
+  list-style: none;
+  padding: 0;
+  margin: var(--spacing-12) 0 0;
+}
+
+.source-map-entries li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-12);
+  padding: var(--spacing-8) 0;
+  border-top: 1px solid var(--color-ash);
+}
+
+.source-map-entries li div { min-width: 0; }
+.source-map-entries small, .source-map-entries em {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: var(--text-caption);
+  font-style: normal;
+}
+
+.source-map-locations {
+  padding: var(--spacing-12) 0;
+  overflow-wrap: anywhere;
+}
+
+.source-map-locations h4 { margin: 0 0 var(--spacing-8); }
+.source-map-locations ol { margin: 0; padding-left: var(--spacing-20); }
+.source-map-locations li { padding: var(--spacing-4) 0; }
+.source-map-locations span { color: var(--color-fog); }
+.source-map-locations code { color: var(--color-charcoal); font-size: var(--text-code); }
+.source-map-locations small { display: block; color: var(--color-fog); }
+
+@media (max-width: 650px) {
+  .source-map-entries li { align-items: start; flex-direction: column; }
+}

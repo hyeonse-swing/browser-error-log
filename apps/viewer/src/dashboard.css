@@ -4,6 +4,7 @@
 .dash-file-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-8); }
 .dash-file-input { display: none; }
 .dash-button { min-height: 36px; padding: var(--spacing-8) var(--spacing-12); background: var(--surface-card); border: 1px solid var(--color-ash); border-radius: var(--radius-buttons); color: var(--color-charcoal); font-size: var(--text-caption); font-weight: var(--font-weight-medium); white-space: nowrap; }
+.dash-file-actions > a.dash-button { display: inline-flex; align-items: center; text-decoration: none; }
 .dash-button:hover { background: var(--surface-paper); border-color: var(--color-smoke); }
 .dash-button.primary { background: var(--color-primary-action-fill); color: var(--color-canvas-white); border-color: var(--color-primary-action-fill); padding-inline: var(--spacing-24); }
 .dash-button.primary:hover { background: var(--color-graphite); }
@@ -64,7 +65,7 @@
   .dash-heading { padding: var(--spacing-24) 0 var(--spacing-16); gap: var(--spacing-16); }
   .dash-heading h1 { font-size: var(--text-heading-sm); }
   .dash-heading p { font-size: var(--text-caption); }
-  .dash-file-actions { width: 100%; } .dash-file-actions > button { flex: 1; }
+  .dash-file-actions { width: 100%; } .dash-file-actions > button,.dash-file-actions > a { flex: 1; justify-content: center; }
   .dash-source { flex-wrap: wrap; gap: var(--spacing-8); }
   .dash-filter-row { grid-template-columns: 1fr 1fr; }
   .dash-filter-row label:nth-child(2) { border-right: 0; }

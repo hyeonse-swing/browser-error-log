@@ -65,6 +65,33 @@ await errorLog.flush();
 
 모드별 CPU·메모리·전송량은 [12회 반복 실측 보고서](docs/preset-performance-2026-11-17.ko.md)에 정리했습니다. 같은 수동 오류를 기록한 비교와 자동 수집 범위가 다른 비교를 나누고 원시 측정값·재실행 방법을 함께 제공합니다.
 
+## 릴리스별 로컬 소스맵
+
+설치 없이 확인하려면 공개 뷰어에서 **JSON 불러오기**로 오류 기록을 여세요. 두 릴리스 예제의 압축을 풀고 `events.json`을 연 다음, **로컬 소스맵**에서 A와 B 각각의 `manifest.json`과 `assets/app.js.map`을 등록하세요. 선택한 파일은 현재 탭에서만 읽습니다. [공개 뷰어](https://hyeonse-swing.github.io/browser-error-log/) · [두 릴리스 예제 ZIP](https://hyeonse-swing.github.io/browser-error-log/source-map-example.zip)
+
+앱 SDK에 빌드마다 고유한 `release`를 지정하고, 빌드에 사용한 JS와 일반 v3 `.map`을 보관하세요. 이 저장소의 뷰어에서 원본 위치를 확인할 수 있습니다. 저장소 루트에서 `npm ci` 후 배포한 청크마다 명세 하나를 만듭니다.
+
+```sh
+npm run source-map:prepare -- --project my-web --environment production \
+  --release build-42 --url https://cdn.example.com/assets/app.js \
+  --bundle dist/assets/app.js --map dist/assets/app.js.map --out build-42.app.manifest.json
+```
+
+1. `npm run dev`로 뷰어를 열고 **로컬 소스맵**에서 명세와 같은 빌드의 `.map`을 선택한 뒤 **맵 등록**을 누르세요. 앱에서 수집한 프로젝트·환경·릴리스와 배포된 JS의 전체 URL이 일치해야 합니다. 파일 선택과 SHA-256 검사는 현재 탭에서 수행됩니다. HTTPS 또는 localhost에서 사용하세요.
+2. **이벤트 타임라인** 또는 **오류 대시보드**의 상세를 열면 **원본 위치**에서 압축 파일의 줄·열과 연결된 원본 파일·줄·열을 함께 볼 수 있습니다. 화면의 좌표는 1부터 시작합니다. 맵은 원본 토큰의 시작 위치를 반환하므로 인접한 두 압축 열이 같은 원본 위치를 가리킬 수 있습니다.
+3. 다른 릴리스도 같은 방식으로 등록하세요. 같은 키에 다른 빌드 자료가 등록되면 해당 키의 매핑을 중단합니다. 충돌한 항목을 제거하고 의도한 빌드를 다시 등록하세요. 새로고침하면 다시 파일을 선택해야 합니다. 맵과 원본 소스는 업로드하거나 이벤트 JSON에 추가하지 않습니다.
+
+맵 하나는 최대 8 MiB이고 탭 하나에 최대 32개, 합계 32 MiB까지 등록할 수 있습니다. 큰 번들이라면 조사할 오류에 나온 청크부터 등록하세요.
+
+**두 릴리스로 연습하기.** 아래 명령은 새 디렉터리에 예제 파일을 만듭니다. 이미 생성했다면 뷰어만 실행하세요. 대시보드에서 생성된 `events.json`을 가져오고 `A/manifest.json`과 `A/assets/app.js.map`을 등록하세요. B도 같은 방식으로 등록하면 두 합성 오류가 각각 `release-a.ts:2:3`, `release-b.ts:7:3`으로 연결됩니다.
+
+```sh
+node examples/source-maps/build-fixture.mjs --output-dir output/source-map-example
+npm run dev
+```
+
+이벤트에는 실행된 JS의 해시가 없습니다. 같은 배포 주소에서 빌드를 바꾸면 릴리스 ID도 바꾸세요. 맵이 없거나 스택의 파일·줄·열을 신뢰할 수 없으면 미매핑 사유를 표시합니다. SDK 0.2.20이 정리한 쿼리 포함 JS 오류는 보존된 좌표로 해석합니다. 수동 이력에 원시 쿼리·프래그먼트가 남은 모호한 프레임, 스택 수집이 꺼진 이벤트, React 컴포넌트 스택은 복원 대상에서 제외합니다. 맵에 있는 원격 URL을 열거나 중간 맵을 따라가지 않습니다. [소스맵 좌표 규격](https://tc39.es/ecma426/#sec-terms-and-definitions)
+
 ## AI와 함께 적용하기
 
 [통합 스킬](skills/browser-error-log/SKILL.md)을 기존 코딩 에이전트에서 사용할 수 있습니다. 세 npm 패키지의 `ai/`에 스킬·독립 참조·0.2.13 실측 보고서·원시 결과·재실행 스크립트를 함께 제공합니다. [AI 가이드](docs/ai.md)에서 프로젝트 내 복사 방법과 버전 확인 절차를 확인하세요.
@@ -96,7 +123,7 @@ SDK는 URL의 쿼리·해시·사용자 정보를 제거하고 흔한 민감정�
 코드와 빌드 예제는 `npm run check`, `npm run check:package`, `npm run check:micro`로 검증합니다. 실제 Chromium·WebKit 전송 검사는 테스트 브라우저를 한 번 설치한 뒤 실행합니다.
 
 ```sh
-npx playwright install --with-deps chromium webkit
+npx playwright install --with-deps chromium firefox webkit
 npm run check:browser
 ```
 

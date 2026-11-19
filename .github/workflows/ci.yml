@@ -37,7 +37,7 @@ jobs:
           npm run check:package
           npm run check:micro
       - name: Install test browsers
-        run: npx --no-install playwright install --with-deps chromium webkit
+        run: npx --no-install playwright install --with-deps chromium firefox webkit
       - name: Verify browser delivery
         run: npm run check:browser
       - name: Save browser failure evidence

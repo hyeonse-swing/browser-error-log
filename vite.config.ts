@@ -15,18 +15,21 @@ function collectorTarget(value: string | undefined): string | undefined {
 
 const externalCollector = collectorTarget(process.env.ERROR_LOG_COLLECTOR_URL);
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   root: 'apps/viewer',
   resolve: { alias: {
     '@ihyeon/browser-error-log-protocol': fileURLToPath(new URL('./packages/protocol/src/index.ts', import.meta.url)),
     '@ihyeon/browser-error-log': fileURLToPath(new URL('./packages/browser/src/index.ts', import.meta.url)),
     '@ihyeon/browser-error-log-react': fileURLToPath(new URL('./packages/react/src/index.tsx', import.meta.url)),
   } },
-  plugins: [localCollector(Boolean(externalCollector))],
+  plugins: mode === 'archive' ? [] : [localCollector(Boolean(externalCollector))],
   server: { port: 4317, strictPort: true, ...(externalCollector ? { proxy: { '/api': { target: externalCollector, changeOrigin: true } } } : {}) },
   preview: { port: 4317, strictPort: true },
   build: {
-    outDir: '../../dist/viewer', emptyOutDir: true,
-    rolldownOptions: { input: { main: fileURLToPath(new URL('./apps/viewer/index.html', import.meta.url)), demo: fileURLToPath(new URL('./apps/viewer/demo.html', import.meta.url)) } },
+    outDir: mode === 'archive' ? '../../dist/viewer-static' : '../../dist/viewer', emptyOutDir: true,
+    rolldownOptions: { input: {
+      main: fileURLToPath(new URL('./apps/viewer/index.html', import.meta.url)),
+      ...(mode === 'archive' ? {} : { demo: fileURLToPath(new URL('./apps/viewer/demo.html', import.meta.url)) }),
+    } },
   },
-});
+}));

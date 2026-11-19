@@ -125,7 +125,7 @@ minor는 minor 버전을 올리고 patch를 0으로, major는 major 버전을 �
 
 [Verify changes](https://github.com/hyeonse-swing/browser-error-log/actions/workflows/ci.yml)는 `main` 대상 PR에서 실행되며 수동으로 실행할 수도 있습니다. 릴리스 로직, TypeScript, 애플리케이션 테스트, 빌드, 패키지 consumer, 마이크로 서버, 실제 Chromium·WebKit 전송을 검사합니다. 작업에는 저장소 읽기 권한만 있으며 패키지를 게시하지 않습니다. 브라우저 검사 실패 시 증거 파일을 워크플로 아티팩트로 7일간 보관합니다.
 
-로컬에서는 `npx playwright install --with-deps chromium webkit` 후 `npm run check:browser`로 실행합니다. SDK와 수집기를 빌드하고 임시 로컬 데이터를 사용해 런타임 오류, 처리되지 않은 Promise 거부, HTTP 실패가 수집기에 도착하는지 검사합니다. 이 브라우저 엔진 검사로 실제 기기나 WebView 호환성까지 검증한 것은 아닙니다.
+로컬에서는 `npx playwright install --with-deps chromium firefox webkit` 후 `npm run check:browser`로 실행합니다. SDK와 수집기를 빌드하고 임시 로컬 데이터를 사용해 런타임 오류, 처리되지 않은 Promise 거부, HTTP 실패가 수집기에 도착하는지 검사합니다. 이 브라우저 엔진 검사로 실제 기기나 WebView 호환성까지 검증한 것은 아닙니다.
 
 ## 수동 릴리스 체크리스트
 
