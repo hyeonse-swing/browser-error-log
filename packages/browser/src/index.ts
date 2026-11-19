@@ -302,12 +302,17 @@ class Client implements BrowserErrorLogDeliveryClient {
   }
 
   captureException(error: unknown, extra: CaptureExtra = {}): string | undefined {
+    return this.captureExceptionInternal(error, extra);
+  }
+
+  private captureExceptionInternal(error: unknown, extra: CaptureExtra,
+    nativeLocation?: { filename: string; lineno: number; colno: number }): string | undefined {
     if (!this.active || this.destroyed || isAbort(error)) return;
     try {
       if (error !== null && (typeof error === 'object' || typeof error === 'function')) {
         if (this.seenErrors.has(error)) { this.deduplicated++; return; }
       }
-      const fields = this.exceptionFields(error);
+      const fields = this.exceptionFields(error, nativeLocation);
       const type = EVENT_TYPES.has(extra.type as EventType) ? extra.type! : 'manual';
       const event = this.makeEvent(type, fields.message, {
         name: fields.name,
@@ -535,9 +540,11 @@ class Client implements BrowserErrorLogDeliveryClient {
       if (typeof filename === 'string' && filename.trim()) context.filename = this.cleanUrl(filename);
       if (typeof lineno === 'number' && Number.isFinite(lineno) && lineno > 0) context.lineno = lineno;
       if (typeof colno === 'number' && Number.isFinite(colno) && colno > 0) context.colno = colno;
-      this.captureException(read(event, 'error') ?? read(event, 'message') ?? 'Script error', {
+      this.captureExceptionInternal(read(event, 'error') ?? read(event, 'message') ?? 'Script error', {
         type: 'javascript', ...(Object.keys(context).length ? { context } : {}),
-      });
+      }, typeof filename === 'string' && typeof lineno === 'number' && typeof colno === 'number' &&
+        Number.isSafeInteger(lineno) && Number.isSafeInteger(colno) && lineno > 0 && colno > 0
+        ? { filename, lineno, colno } : undefined);
     } catch { this.recordDrop('processingError'); /* a failing URL hook must not affect the host app */ }
   };
 
@@ -692,8 +699,42 @@ class Client implements BrowserErrorLogDeliveryClient {
       .slice(0, length);
   }
 
-  private exceptionFields(error: unknown): ReturnType<typeof errorFields> {
+  private restoreGlobalStackLocation(rawStack: string, cleanStack: string,
+    { filename, lineno, colno }: { filename: string; lineno: number; colno: number }): string {
+    const rawLines = rawStack.slice(0, 4096).split('\n');
+    const cleanLines = cleanStack.split('\n');
+    const suffix = `:${lineno}:${colno}`;
+    for (let index = 0; index < rawLines.length; index++) {
+      const rawLine = rawLines[index];
+      const isV8 = /^\s*at\s+/.test(rawLine);
+      const isFirefox = /^[^@\n]*@https?:\/\//.test(rawLine);
+      if (!isV8 && !isFirefox) continue;
+      if (rawStack.length > 4096 && index === rawLines.length - 1) return cleanStack;
+      const match = isV8
+        ? /^\s*at\s+(?:[^()\n]*\()?((?:https?):\/\/[^\s()]+):(\d+):(\d+)(\))?\s*$/.exec(rawLine)
+        : /^[^@\n]*@((?:https?):\/\/[^\s()]+):(\d+):(\d+)\s*$/.exec(rawLine);
+      if (!match || match[1] !== filename || Number(match[2]) !== lineno ||
+        Number(match[3]) !== colno) return cleanStack;
+
+      const cleanLine = cleanLines[index];
+      if (!cleanLine || cleanLine !== this.cleanText(rawLine, 4096)) return cleanStack;
+      const cleanFilename = this.cleanUrl(filename);
+      const expectedEnd = `${cleanFilename}${match[4] ?? ''}`;
+      if (!cleanLine.endsWith(expectedEnd) || cleanStack.length + suffix.length > 4096) return cleanStack;
+      cleanLines[index] = `${cleanLine.slice(0, -expectedEnd.length)}${cleanFilename}${suffix}${match[4] ?? ''}`;
+      return cleanLines.join('\n');
+    }
+    return cleanStack;
+  }
+
+  private exceptionFields(error: unknown,
+    nativeLocation?: { filename: string; lineno: number; colno: number }): ReturnType<typeof errorFields> {
     const fields = errorFields(error, this.captureStack);
+    if (nativeLocation && fields.stack && !this.options.sanitizeUrl && /[?#]/.test(nativeLocation.filename)) {
+      fields.stack = this.restoreGlobalStackLocation(
+        fields.stack, this.cleanText(fields.stack, 4096), nativeLocation,
+      );
+    }
     if (!this.captureStack || !this.captureErrorCause || error === null || (typeof error !== 'object' && typeof error !== 'function')) return fields;
     const seen = new WeakSet<object>([error]);
     const segments: string[] = [];

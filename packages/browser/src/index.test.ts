@@ -471,6 +471,120 @@ describe('browser error client', () => {
     expect(JSON.stringify(captured)).not.toMatch(/user:pass|token=private|#part/);
   });
 
+  it.each([
+    ['Chromium', 'Error: failed\n    at fail (https://example.test/assets/app.js?token=secret:12:7&n=12:7:12:7)\n    at caller (https://example.test/other.js?private=99:8:4)', '    at fail (https://example.test/assets/app.js:12:7)'],
+    ['Firefox', 'fail@https://example.test/assets/app.js?token=secret:12:7&n=12:7:12:7\ncaller@https://example.test/other.js?private=99:8:4', 'fail@https://example.test/assets/app.js:12:7'],
+  ])('keeps the native-attested first %s stack frame location after query removal', async (_browser, stack, firstLine) => {
+    const instance = client();
+    const error = Object.assign(new Error('failed'), { stack });
+    window.dispatchEvent(new ErrorEvent('error', {
+      error, message: 'failed', filename: 'https://example.test/assets/app.js?token=secret:12:7&n=12:7',
+      lineno: 12, colno: 7,
+    }));
+    await instance.flush();
+    const event = captured[0].events[0];
+    expect(event.stack).toContain(firstLine);
+    expect(event.stack).toContain('https://example.test/other.js');
+    expect(event.stack).not.toContain('other.js:8:4');
+    expect(JSON.stringify(event)).not.toMatch(/token=secret|private=99|\?token|&n=/);
+    expect(event.context).toMatchObject({ filename: 'https://example.test/assets/app.js', lineno: 12, colno: 7 });
+  });
+
+  it('leaves conflicting and non-first native locations out of the stack', async () => {
+    const instance = client();
+    const filename = 'https://example.test/assets/app.js?private=1';
+    const conflicting = Object.assign(new Error('conflict'), {
+      stack: `Error: conflict\n    at fail (${filename}:12:8)`,
+    });
+    const later = Object.assign(new Error('later'), {
+      stack: `Error: later\n    at caller (https://example.test/other.js:3:4)\n    at fail (${filename}:12:7)`,
+    });
+    window.dispatchEvent(new ErrorEvent('error', { error: conflicting, filename, lineno: 12, colno: 7 }));
+    window.dispatchEvent(new ErrorEvent('error', { error: later, filename, lineno: 12, colno: 7 }));
+    await instance.flush();
+    expect(captured[0].events[0].stack).not.toContain('app.js:12:7');
+    expect(captured[0].events[1].stack).not.toContain('app.js:12:7');
+    expect(JSON.stringify(captured)).not.toContain('private=1');
+  });
+
+  it('does not repair a first frame whose raw line runs past the bounded stack prefix', async () => {
+    const instance = client();
+    const filename = `https://example.test/assets/app.js?token=${'x'.repeat(4200)}`;
+    const error = Object.assign(new Error('large URL'), {
+      stack: `Error: large URL\n    at fail (${filename}:12:7)`,
+    });
+    window.dispatchEvent(new ErrorEvent('error', { error, filename, lineno: 12, colno: 7 }));
+    await instance.flush();
+    expect(captured[0].events[0].stack).toContain('https://example.test/assets/app.js)');
+    expect(captured[0].events[0].stack).not.toContain('app.js:12:7');
+    expect(captured[0].events[0].stack).not.toContain('token=');
+  });
+
+  it('keeps caller redaction, beforeSend replacement, and disabled stacks authoritative', async () => {
+    const filename = 'https://example.test/assets/app.js?token=secret';
+    const rawStack = `Error: failed\n    at fail (${filename}:12:7)`;
+    const redacted = client({ sanitizeUrl: url => url.replace('/assets/app.js', '/redacted.js') });
+    window.dispatchEvent(new ErrorEvent('error', {
+      error: Object.assign(new Error('redacted'), { stack: rawStack }), filename, lineno: 12, colno: 7,
+    }));
+    await redacted.flush();
+    expect(captured[0].events[0].stack).toContain('/redacted.js');
+    expect(captured[0].events[0].stack).not.toContain('/redacted.js:12:7');
+    redacted.destroy();
+
+    const removed = client({ beforeSend: event => { event.stack = undefined; return event; } });
+    window.dispatchEvent(new ErrorEvent('error', {
+      error: Object.assign(new Error('removed'), { stack: rawStack }), filename, lineno: 12, colno: 7,
+    }));
+    await removed.flush();
+    expect(captured.at(-1)?.events[0].stack).toBeUndefined();
+    removed.destroy();
+
+    const replaced = client({ beforeSend: event => { event.stack = 'filtered by host'; return event; } });
+    window.dispatchEvent(new ErrorEvent('error', {
+      error: Object.assign(new Error('replaced'), { stack: rawStack }), filename, lineno: 12, colno: 7,
+    }));
+    await replaced.flush();
+    expect(captured.at(-1)?.events[0].stack).toBe('filtered by host');
+    replaced.destroy();
+
+    const noStack = client({ captureStack: false, captureGlobalErrors: true });
+    const stackGetter = vi.fn(() => rawStack);
+    const error = new Error('off');
+    Object.defineProperty(error, 'stack', { get: stackGetter });
+    window.dispatchEvent(new ErrorEvent('error', { error, filename, lineno: 12, colno: 7 }));
+    await noStack.flush();
+    expect(stackGetter).not.toHaveBeenCalled();
+    expect(captured.at(-1)?.events[0].stack).toBeUndefined();
+    expect(captured.at(-1)?.events[0].context).toMatchObject({ lineno: 12, colno: 7 });
+  });
+
+  it('repairs only the outer native frame when a cause is captured', async () => {
+    const instance = client({ captureErrorCause: true });
+    const filename = 'https://example.test/assets/app.js?token=secret';
+    const cause = Object.assign(new Error('inner'), { stack: `Error: inner\n    at inner (${filename}:22:3)` });
+    const error = Object.assign(new Error('outer'), {
+      stack: `Error: outer\n    at outer (${filename}:12:7)`, cause,
+    });
+    window.dispatchEvent(new ErrorEvent('error', { error, filename, lineno: 12, colno: 7 }));
+    await instance.flush();
+    const stack = captured[0].events[0].stack;
+    expect(stack).toContain('at outer (https://example.test/assets/app.js:12:7)');
+    expect(stack).toContain('at inner (https://example.test/assets/app.js)');
+    expect(stack).not.toContain('app.js:22:3');
+    expect(stack).not.toContain('token=secret');
+  });
+
+  it('does not restore a location for manual errors without native error coordinates', async () => {
+    const instance = client();
+    instance.captureException(Object.assign(new Error('manual'), {
+      stack: 'Error: manual\n    at fail (https://example.test/assets/app.js?token=secret:12:7)',
+    }));
+    await instance.flush();
+    expect(captured[0].events[0].stack).toContain('https://example.test/assets/app.js)');
+    expect(captured[0].events[0].stack).not.toContain('app.js:12:7');
+  });
+
   it('adds shared context to manual, React, global, promise, HTTP, network, and console events', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.stubGlobal('fetch', vi.fn((url: string) => url.includes('offline')
