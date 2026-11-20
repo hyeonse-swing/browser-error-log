@@ -31,8 +31,10 @@ const protocolConsumer = createConsumer('protocol-smoke');
 npm(['install', tarballs[0]], protocolConsumer);
 execFileSync(process.execPath, ['--input-type=module', '-e', `
   import { createRequire } from 'node:module';
-  import { SCHEMA_VERSION, EVENT_LABELS, isBreadcrumbTrail, BREADCRUMB_LIMITS } from '@ihyeon/browser-error-log-protocol';
+  import { SCHEMA_VERSION, EVENT_LABELS, getEventReference, isBreadcrumbTrail, BREADCRUMB_LIMITS } from '@ihyeon/browser-error-log-protocol';
   if (SCHEMA_VERSION !== 1 || EVENT_LABELS.manual !== 'Manual' || EVENT_LABELS.resource !== 'Resource failure') throw Error('Protocol exports invalid');
+  const ref = getEventReference({ project: 'web', eventId: 'example', message: 'private' });
+  if (ref.project !== 'web' || ref.eventId !== 'example' || 'message' in ref) throw Error('Protocol reference invalid');
   if (!isBreadcrumbTrail([]) || BREADCRUMB_LIMITS.count !== 20) throw Error('Breadcrumb contract exports invalid');
   const require = createRequire(import.meta.url);
   for (const name of ['@ihyeon/browser-error-log', '@ihyeon/browser-error-log-react', 'react']) {
@@ -56,6 +58,7 @@ execFileSync(process.execPath, ['--input-type=module', '-e', `
   try { require.resolve('react'); throw new Error('Browser package unexpectedly requires React'); }
   catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
   const client = init({ project: 'ssr', deliveryStatusLimit: 2 }); client.addBreadcrumb({ message: 'SSR no-op' }); client.clearBreadcrumbs(); await client.flush(); client.destroy();
+  if (client.captureExceptionWithReference('SSR') !== undefined) throw Error('SSR returned a reference');
   if (client.getDeliveryStatus('unknown').state !== 'unknown') throw Error('SSR delivery status invalid');
   const diagnostics = client.getDiagnostics();
   if (diagnostics.dropped !== 0 || diagnostics.inFlight !== 0 || diagnostics.filtered !== 0 || diagnostics.deduplicated !== 0
@@ -83,7 +86,7 @@ const diagnostics: BrowserErrorLogDiagnostics = diagnosticClient.getDiagnostics(
 const reason: BrowserErrorLogDropReason = 'rateLimit'; void diagnostics.droppedByReason[reason];
 const oldNode = <ErrorBoundary client={oldClient}><p>Compatible</p></ErrorBoundary>; void oldNode;
 client.captureException(new Error(EVENT_LABELS.manual));
-const node = <ErrorBoundary client={client} fallback={<p>Fallback</p>}><p>Ready</p></ErrorBoundary>;
+const node = <ErrorBoundary client={client} onCapture={ref => client.getDeliveryStatus(ref.eventId)} fallback={<p>Fallback</p>}><p>Ready</p></ErrorBoundary>;
 void node; client.destroy();`);
 execFileSync(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--jsx', 'react-jsx', 'consumer.tsx'], { cwd: consumer, stdio: 'inherit' });
 execFileSync(process.execPath, ['--input-type=module', '-e', `import {init} from '@ihyeon/browser-error-log'; import {ErrorBoundary} from '@ihyeon/browser-error-log-react'; if(typeof ErrorBoundary!=='function') throw new Error('adapter missing'); const c=init({project:'ssr'}); await c.flush(); c.destroy();`], { cwd: consumer, stdio: 'inherit' });

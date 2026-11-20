@@ -65,6 +65,13 @@ export interface ErrorEventRecord {
   network?: { method: string; url: string; status?: number; durationMs: number };
 }
 
+/** Fields used together to look up a stored event within its project. */
+export type EventReference = Pick<ErrorEventRecord, 'project' | 'eventId'>;
+
+export function getEventReference({ project, eventId }: EventReference): EventReference {
+  return { project, eventId };
+}
+
 export interface EventBatch { schemaVersion: 1; events: ErrorEventRecord[] }
 export interface EventFilter {
   project?: string;

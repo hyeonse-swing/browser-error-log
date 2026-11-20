@@ -66,6 +66,8 @@ try {
 
 `eventId` is the same identifier used by the collector and viewer for this event. It is returned only when the SDK accepts the error for its delivery queue; duplicates, filters, sampling, limits, and disabled clients return `undefined`. Queue eviction, delivery failure, and page closure can still prevent storage, so confirm the record in the collector before relying on it. The existing `BrowserErrorLogClient` and `BrowserErrorLogDiagnosticsClient` interfaces keep their `void` return for adapter compatibility; use the inferred `init()` return type or `BrowserErrorLogCaptureClient` when reading the ID.
 
+Use `errorLog.captureExceptionWithReference(error)` when handing off a report. It captures once and returns `{ project, eventId }` for an admitted event, or `undefined`. Pass those two fields to the collector’s `getEvent(project, eventId)` to find the stored record.
+
 To inspect the SDK delivery path for a recent ID, enable the bounded, per-client history:
 
 ```ts
@@ -144,7 +146,7 @@ errorLog.clearBreadcrumbs(); // start a new flow; captured errors keep their sna
 
 Each client keeps the latest 20 recorded steps, within a 12,000-byte UTF-8 JSON budget. Adding a step does not send a separate event; subsequent errors include an oldest-first snapshot. Steps have an SDK-generated UTC timestamp, a category (default `manual`, up to 40 characters), a message (up to 256 characters), and optional scalar data (six keys, 80 characters per key and 200 per string value). The existing sensitive-key, URL, and text filters apply; `beforeSend` can edit or remove `event.breadcrumbs`. `clearBreadcrumbs()` affects future captures, and `destroy()` also clears the local trail.
 
-`init()` returns `BrowserErrorLogDeliveryClient`, which extends `BrowserErrorLogCaptureClient`, `BrowserErrorLogDiagnosticsClient`, `BrowserErrorLogBreadcrumbClient`, and the original `BrowserErrorLogClient`. Existing clients and React Error Boundary mocks can keep their original interfaces; use the corresponding extended type when explicitly typing a client that calls breadcrumb, diagnostic, or delivery status methods.
+`init()` returns `BrowserErrorLogReferenceClient`, which extends `BrowserErrorLogDeliveryClient`, `BrowserErrorLogCaptureClient`, `BrowserErrorLogDiagnosticsClient`, `BrowserErrorLogBreadcrumbClient`, and the original `BrowserErrorLogClient`. Existing clients and React Error Boundary mocks can keep their original interfaces; use the corresponding extended type when explicitly typing a client that calls breadcrumb, diagnostic, or delivery status methods.
 
 The viewer shows these steps in both error detail views and preserves them in history JSON. Use a collector and viewer with breadcrumb support (introduced in 0.1.16) to retain and display this optional field; older collectors may accept an event while omitting its breadcrumbs. Custom backends can validate the trail with `isBreadcrumbTrail` from `@ihyeon/browser-error-log-protocol`.
 

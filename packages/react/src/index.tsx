@@ -1,8 +1,10 @@
 import * as React from 'react';
-import type { BrowserErrorLogClient } from '@ihyeon/browser-error-log';
+import type { BrowserErrorLogClient, BrowserErrorLogReferenceClient, CaptureExtra, EventReference } from '@ihyeon/browser-error-log';
 
 export interface ErrorBoundaryProps {
-  client: BrowserErrorLogClient;
+  client: BrowserErrorLogClient & Partial<Pick<BrowserErrorLogReferenceClient, 'captureExceptionWithReference'>>;
+  /** Called when a reference-aware client admits this render error to its queue. */
+  onCapture?: (reference: EventReference) => void;
   children: React.ReactNode;
   fallback?: React.ReactNode | ((error: Error, reset: () => void) => React.ReactNode);
 }
@@ -26,10 +28,17 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   componentDidCatch(error: unknown, info: React.ErrorInfo): void {
     try {
-      this.props.client.captureException(error, {
+      const { client, onCapture } = this.props;
+      const extra: CaptureExtra = {
         type: 'react',
         componentStack: info.componentStack ?? undefined,
-      });
+      };
+      if (onCapture && client.captureExceptionWithReference) {
+        const reference = client.captureExceptionWithReference(error, extra);
+        if (reference) onCapture(reference);
+      } else {
+        client.captureException(error, extra);
+      }
     } catch { /* a diagnostics hook must not replace the render error */ }
   }
 

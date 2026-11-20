@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
+const sdkVersion = JSON.parse(await readFile(new URL('../../packages/browser/package.json', import.meta.url), 'utf8')).version;
+
 let scratch;
 let fixture;
 let collector;
@@ -38,7 +40,7 @@ async function trigger(page, release) {
   await page.evaluate(() => window.__sourceMapFixtureClient.flush());
   await expect.poll(async () => (await receivedEvents()).filter(event => event.release === release).length).toBe(1);
   const [event] = (await receivedEvents()).filter(item => item.release === release);
-  expect(event.sdkVersion).toBe('0.2.20');
+  expect(event.sdkVersion).toBe(sdkVersion);
   expect(event.stack).toMatch(/\/assets\/app\.js:\d+:\d+/);
   expect(JSON.stringify(event)).not.toMatch(/private-fixture|private-fragment/);
   return event;

@@ -38,6 +38,24 @@ describe('manual capture event ID', () => {
     expect(client.getStats()).toMatchObject({ sent: 1, dropped: 0 });
   });
 
+  it('returns only the lookup fields used by the collector', async () => {
+    const store = new EventStore();
+    const client = init({
+      project: 'a'.repeat(90), captureNetwork: false,
+      beforeSend: event => ({ ...event, project: 'rewritten', eventId: 'rewritten' }),
+      transport: batch => { batch.events.forEach(event => store.add(event)); },
+    });
+    clients.push(client);
+
+    const error = new Error('review failed');
+    const reference = client.captureExceptionWithReference(error);
+    expect(reference).toEqual({ project: 'a'.repeat(80), eventId: expect.any(String) });
+    expect(client.captureExceptionWithReference(error)).toBeUndefined();
+    await client.flush();
+    expect(store.get(reference!.project, reference!.eventId)?.message).toBe('review failed');
+    expect(client.getStats().sent).toBe(1);
+  });
+
   it('returns no ID when the candidate is not admitted', async () => {
     const sent: EventBatch[] = [];
     const client = init({ project: 'test', captureNetwork: false,

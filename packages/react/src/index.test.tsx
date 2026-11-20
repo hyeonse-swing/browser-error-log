@@ -11,6 +11,7 @@ afterEach(() => { vi.restoreAllMocks(); });
 it.each([null, undefined, false, 0, '', 'render failed', { toString() { throw new Error('unreadable'); } }])(
   'keeps the fallback usable for a non-Error throw (case %#)', async (thrown) => {
     const captureException = vi.fn();
+    const onCapture = vi.fn();
     const client = { captureException, flush: async () => {}, destroy: () => {}, getStats: () => ({ queued: 0, sent: 0, dropped: 0 }) };
     const node = document.createElement('div');
     document.body.append(node);
@@ -20,10 +21,12 @@ it.each([null, undefined, false, 0, '', 'render failed', { toString() { throw ne
     const fallback = vi.fn((error: Error, reset: () => void) => <button onClick={reset}>{error.message || 'retry'}</button>);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      await act(async () => { root.render(<ErrorBoundary client={client} fallback={fallback}><Child /></ErrorBoundary>); });
+      await act(async () => { root.render(<ErrorBoundary client={client} onCapture={onCapture} fallback={fallback}><Child /></ErrorBoundary>); });
       expect(node.querySelector('button')).not.toBeNull();
       expect(fallback.mock.calls[0][0]).toBeInstanceOf(Error);
       expect(captureException).toHaveBeenCalledWith(thrown, expect.objectContaining({ type: 'react' }));
+      expect(captureException).toHaveBeenCalledTimes(1);
+      expect(onCapture).not.toHaveBeenCalled();
       shouldThrow = false;
       await act(async () => { node.querySelector('button')!.click(); });
       expect(node.textContent).toBe('healthy');
@@ -36,6 +39,7 @@ it.each([null, undefined, false, 0, '', 'render failed', { toString() { throw ne
 
 it('records a rendering error and renders then resets the fallback', async () => {
   const batches: EventBatch[] = [];
+  const onCapture = vi.fn(() => { throw new Error('consumer callback failed'); });
   const client = init({
     project: 'react-app',
     transport: batch => { batches.push(batch); },
@@ -52,12 +56,14 @@ it('records a rendering error and renders then resets the fallback', async () =>
   vi.spyOn(console, 'error').mockImplementation(() => {});
   try {
     await act(async () => {
-      root.render(<ErrorBoundary client={client} fallback={(_error, reset) => <button onClick={reset}>retry</button>}><Child /></ErrorBoundary>);
+      root.render(<ErrorBoundary client={client} onCapture={onCapture} fallback={(_error, reset) => <button onClick={reset}>retry</button>}><Child /></ErrorBoundary>);
     });
     expect(node.textContent).toBe('retry');
     await client.flush();
     expect(batches[0].events).toHaveLength(1);
     expect(batches[0].events[0]).toMatchObject({ type: 'react', message: 'render failed' });
+    expect(onCapture).toHaveBeenCalledTimes(1);
+    expect(onCapture).toHaveBeenCalledWith({ project: 'react-app', eventId: batches[0].events[0].eventId });
     expect(batches[0].events[0].componentStack).toContain('Child');
 
     shouldThrow = false;

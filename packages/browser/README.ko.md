@@ -66,6 +66,8 @@ try {
 
 `eventId`는 이 이벤트를 수집기와 뷰어에서 찾을 때 쓰는 식별자입니다. SDK가 전송 큐에 수락한 경우에만 반환하며 중복·필터·샘플링·한도·비활성 클라이언트는 `undefined`를 반환합니다. 큐에서 밀리거나 전송 실패·페이지 종료로 저장되지 않을 수 있으므로 실제 수집기 기록을 확인하세요. 기존 `BrowserErrorLogClient`와 `BrowserErrorLogDiagnosticsClient` 인터페이스는 어댑터 호환성을 위해 반환형 `void`를 유지합니다. ID를 읽을 때는 `init()`의 추론 타입 또는 `BrowserErrorLogCaptureClient`를 사용하세요.
 
+오류를 다른 담당자에게 전달할 때는 `errorLog.captureExceptionWithReference(error)`를 사용하세요. 한 번 수집하고 큐에 수락된 이벤트의 `{ project, eventId }`를 반환합니다. 수락되지 않으면 `undefined`를 반환합니다. 두 값을 수집기의 `getEvent(project, eventId)`에 전달하면 저장된 기록을 조회할 수 있습니다.
+
 최근 이벤트의 SDK 전송 상태가 필요하면 클라이언트별 기록 한도를 설정합니다.
 
 ```ts
@@ -144,7 +146,7 @@ errorLog.clearBreadcrumbs(); // 새 흐름 시작; 이미 수집한 오류는 �
 
 클라이언트마다 최근 20개 작업을 UTF-8 JSON 기준 12,000바이트 안에서 유지합니다. 작업 추가만으로 별도 이벤트를 보내지 않으며 이후 오류에 오래된 순서의 복사본을 붙입니다. 각 작업에는 SDK가 만든 UTC 시각, 분류(기본 `manual`, 최대 40자), 메시지(최대 256자), 선택적인 단일 값 데이터(6개 키, 키 80자·문자열 값 200자)가 있습니다. 기존 민감 키·URL·텍스트 필터와 `beforeSend`가 적용되며 `event.breadcrumbs`를 수정하거나 제거할 수 있습니다. `clearBreadcrumbs()`는 이후 수집에 적용되고 `destroy()`도 로컬 작업 기록을 비웁니다.
 
-`init()`은 `BrowserErrorLogCaptureClient`, `BrowserErrorLogDiagnosticsClient`, `BrowserErrorLogBreadcrumbClient`, 원래 `BrowserErrorLogClient`를 확장한 `BrowserErrorLogDeliveryClient`를 반환합니다. 기존 클라이언트와 React Error Boundary 모형은 원래 인터페이스를 유지할 수 있습니다. 작업 기록·진단·전송 상태 메서드를 쓰는 클라이언트의 타입을 직접 선언할 때는 해당 확장 타입을 사용하세요.
+`init()`은 `BrowserErrorLogCaptureClient`, `BrowserErrorLogDiagnosticsClient`, `BrowserErrorLogBreadcrumbClient`, 원래 `BrowserErrorLogClient`를 확장한 `BrowserErrorLogDeliveryClient`의 하위 타입인 `BrowserErrorLogReferenceClient`를 반환합니다. 기존 클라이언트와 React Error Boundary 모형은 원래 인터페이스를 유지할 수 있습니다. 작업 기록·진단·전송 상태 메서드를 쓰는 클라이언트의 타입을 직접 선언할 때는 해당 확장 타입을 사용하세요.
 
 뷰어는 두 오류 상세 화면에 이 기록을 표시하고 히스토리 JSON에도 보존합니다. 자체 호스팅 수집기·뷰어는 작업 기록 지원 버전(0.1.16부터)에서 이 선택 필드를 저장·표시합니다. 이전 수집기는 이벤트를 받아도 작업 기록을 생략할 수 있습니다. 자체 백엔드는 `@ihyeon/browser-error-log-protocol`의 `isBreadcrumbTrail`로 작업 기록을 검증할 수 있습니다.
 

@@ -1,6 +1,6 @@
-import { BREADCRUMB_LIMITS, type Breadcrumb, type ErrorEventRecord, type EventBatch, type EventType, type Runtime } from '@ihyeon/browser-error-log-protocol';
+import { BREADCRUMB_LIMITS, getEventReference, type EventReference, type Breadcrumb, type ErrorEventRecord, type EventBatch, type EventType, type Runtime } from '@ihyeon/browser-error-log-protocol';
 
-export type { Breadcrumb, ErrorEventRecord, EventBatch } from '@ihyeon/browser-error-log-protocol';
+export type { Breadcrumb, ErrorEventRecord, EventBatch, EventReference } from '@ihyeon/browser-error-log-protocol';
 
 export interface CaptureExtra {
   type?: EventType;
@@ -117,6 +117,11 @@ export interface BrowserErrorLogDeliveryClient extends BrowserErrorLogCaptureCli
   getDeliveryStatus(eventId: string): BrowserErrorLogDeliveryStatus;
 }
 
+export interface BrowserErrorLogReferenceClient extends BrowserErrorLogDeliveryClient {
+  /** Returns the lookup fields for an event admitted to the delivery queue. */
+  captureExceptionWithReference(error: unknown, extra?: CaptureExtra): EventReference | undefined;
+}
+
 const MAX_BATCH_EVENTS = 20;
 const MAX_BATCH_BYTES = 48_000;
 const MAX_BEACON_EVENTS = 10;
@@ -203,7 +208,7 @@ class UrlSanitizationError extends Error {}
 
 class ContextResolutionError extends Error {}
 
-class Client implements BrowserErrorLogDeliveryClient {
+class Client implements BrowserErrorLogReferenceClient {
   private readonly active: boolean;
   private readonly endpoint?: string;
   private readonly options: BrowserErrorLogOptions;
@@ -302,11 +307,16 @@ class Client implements BrowserErrorLogDeliveryClient {
   }
 
   captureException(error: unknown, extra: CaptureExtra = {}): string | undefined {
-    return this.captureExceptionInternal(error, extra);
+    return this.captureExceptionInternal(error, extra)?.eventId;
+  }
+
+  captureExceptionWithReference(error: unknown, extra: CaptureExtra = {}): EventReference | undefined {
+    const event = this.captureExceptionInternal(error, extra);
+    return event && getEventReference(event);
   }
 
   private captureExceptionInternal(error: unknown, extra: CaptureExtra,
-    nativeLocation?: { filename: string; lineno: number; colno: number }): string | undefined {
+    nativeLocation?: { filename: string; lineno: number; colno: number }): ErrorEventRecord | undefined {
     if (!this.active || this.destroyed || isAbort(error)) return;
     try {
       if (error !== null && (typeof error === 'object' || typeof error === 'function')) {
@@ -322,7 +332,7 @@ class Client implements BrowserErrorLogDeliveryClient {
       });
       if (this.enqueue(event)) {
         if (error !== null && (typeof error === 'object' || typeof error === 'function')) this.seenErrors.add(error);
-        return event.eventId;
+        return event;
       }
     } catch (error) {
       if (error instanceof UrlSanitizationError || error instanceof ContextResolutionError) this.recordDrop('processingError');
@@ -1491,6 +1501,6 @@ function installConsole(): Instrumentation {
   return { clients, cleanup() { if (console.error === wrapped) console.error = original; } };
 }
 
-export function init(options: BrowserErrorLogOptions): BrowserErrorLogDeliveryClient {
+export function init(options: BrowserErrorLogOptions): BrowserErrorLogReferenceClient {
   return new Client(options);
 }
