@@ -11,6 +11,7 @@ services:
       MICRO_ALLOWED_ORIGINS: ${MICRO_ALLOWED_ORIGINS:?Set exact website origins}
       MICRO_PROJECTS: ${MICRO_PROJECTS:-my-web}
       MICRO_VIEWER_PASSWORD: ${MICRO_VIEWER_PASSWORD:?Set a viewer password in the environment}
+      MICRO_SOURCE_MAP_TOKEN: ${MICRO_SOURCE_MAP_TOKEN:-}
       MICRO_RETENTION_DAYS: 7
       MICRO_MAX_EVENTS: 10000
       MICRO_MAX_DB_MB: 64

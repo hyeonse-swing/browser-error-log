@@ -72,7 +72,10 @@ try {
   assert.equal((await fetch(address)).status, 401);
   const viewer = await fetch(address, { headers: auth });
   assert.equal(viewer.status, 200);
-  assert.match(await viewer.text(), /mode:'live'/);
+  assert.match(await viewer.text(), /<script src="\/api\/viewer-config\.js"><\/script>/);
+  const configScript = await fetch(`${address}/api/viewer-config.js`, { headers: auth });
+  assert.equal(configScript.status, 200);
+  assert.match(await configScript.text(), /"mode"\s*:\s*"live"/);
   const malformed = await fetch(`${address}/api/events`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: origin },
     body: JSON.stringify({ schemaVersion: 1, events: [{ ...event, breadcrumbs: Array(21).fill(event.breadcrumbs[0]) }] }) });
   assert.equal(malformed.status, 400);

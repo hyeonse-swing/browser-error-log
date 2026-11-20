@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { BREADCRUMB_LIMITS, EVENT_LABELS, isBreadcrumbTrail, type Breadcrumb, type EventType } from './index';
+import { BREADCRUMB_LIMITS, EVENT_LABELS, isBreadcrumbTrail, parseEventReference, type Breadcrumb, type EventType } from './index';
+
+it('reads only the project and event ID from a support reference or v1 event', () => {
+  for (const project of ['first', 'second']) {
+    const ref = { project, eventId: 'shared-id' };
+    expect(parseEventReference({ schemaVersion: 1, ...ref, message: 'some details' })).toEqual(ref);
+    expect(parseEventReference(ref)).toEqual(ref);
+  }
+  for (const value of [null, [], {}, { project: 'web' }, { project: '', eventId: 'id' },
+    { project: 'web', eventId: '  ' }, { project: 1, eventId: 'id' },
+    Object.create({ project: 'inherited', eventId: 'id' })]) {
+    expect(parseEventReference(value)).toBeUndefined();
+  }
+});
 
 it('exposes resource failures as a distinct event type', () => {
   const type: EventType = 'resource';

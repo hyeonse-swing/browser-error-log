@@ -83,6 +83,8 @@ if (eventId) {
 
 선택적인 `@ihyeon/browser-error-log-react` 패키지는 Error Boundary를 제공합니다. 기본 SDK에는 React가 필요하지 않습니다. SSR에서 import·초기화할 수 있지만 서버 오류는 수집하지 않으므로 프레임워크의 브라우저/클라이언트 진입점에서 초기화하세요.
 
+실제 페이지에서 로드한 번들의 URL을 확인할 수 있으면 수동 오류, 연결된 원인 오류, React 스택에서 쿼리와 프래그먼트를 제거하면서 행·열을 보존합니다. 같은 번들 경로를 다시 배포할 때는 빌드마다 고유한 `release`를 지정하세요. [소스맵 등록과 원본 코드 확인](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/source-map-ci.md)
+
 ## 수집 비용 선택
 
 `init()`에서 `preset: 'minimal' | 'standard' | 'detailed'`를 지정할 수 있습니다. 생략하면 기존 기본값인 `standard`입니다. `minimal`은 자동 오류 수집·브라우저 계측을 끄지만 `captureException()`과 `addBreadcrumb()`의 수동 기록은 기존 큐와 주기 전송을 사용합니다. 오류·컴포넌트 스택도 생략합니다. `detailed` 모드는 기본 수집에 console 오류, 리소스 오류, 화면 이동·네트워크 작업 기록, 연결된 `Error.cause` 정보를 추가합니다. 세 모드는 동일한 SDK 파일을 사용하며 실행 중 작업량과 이벤트 내용만 다릅니다.

@@ -3,11 +3,16 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { ErrorEventRecord, EventFilter, EventPage } from '@ihyeon/browser-error-log-protocol';
 import { isEventRecord } from '../../../apps/local-collector/store.ts';
-import type { MicroStorage, StorageMode, StorageOptions, WriteResult } from './types.ts';
+import type { SourceMapManifest } from '../../../apps/viewer/src/source-map-manifest.ts';
+import type { MicroStorage, SourceMapRegistrationResult, StorageMode, StorageOptions, StoredSourceMap, WriteResult } from './types.ts';
 
 const DAY_MS = 86_400_000;
 const DEFAULT_PAGE_SIZE = 4096;
 const CURSOR_MAX_LENGTH = 32_768;
+const MAX_SOURCE_MAPS = 32;
+const MAX_SOURCE_MAP_BYTES = 32 * 1024 * 1024;
+const MAX_SOURCE_MAP_SEGMENTS = 1_000_000;
+const MAX_SOURCE_MAP_DB_BYTES = 48 * 1024 * 1024;
 
 function normalizeEvents(events: ErrorEventRecord[], receivedAt: string): ErrorEventRecord[] {
   if (!Array.isArray(events) || events.some(event => !isEventRecord(event))) {
@@ -94,13 +99,16 @@ type Row = { payload: string; occurred_at: string; event_id: string; project: st
 class SqliteStorage implements MicroStorage {
   readonly mode = 'sqlite' as const;
   readonly queryable = true;
+  readonly sourceMapRegistry: boolean;
   private closed = false;
   private readonly insert;
   private readonly deleteExpired;
   private readonly deleteBeyondCap;
   private readonly selectOne;
 
-  constructor(private readonly db: DatabaseSync, private readonly options: StorageOptions) {
+  constructor(private readonly db: DatabaseSync, private readonly options: StorageOptions,
+    private readonly mapDb?: DatabaseSync) {
+    this.sourceMapRegistry = Boolean(mapDb);
     // One server process owns this connection. Cross-process writer coordination is outside this store.
     db.exec('PRAGMA journal_mode=DELETE');
     db.exec('PRAGMA synchronous=FULL');
@@ -129,6 +137,30 @@ class SqliteStorage implements MicroStorage {
       CREATE INDEX IF NOT EXISTS events_order ON events (occurred_at DESC, event_id DESC, project DESC);
       CREATE INDEX IF NOT EXISTS events_received ON events (received_at);
     `);
+    if (mapDb) {
+      mapDb.exec('PRAGMA journal_mode=DELETE');
+      mapDb.exec('PRAGMA synchronous=FULL');
+      mapDb.exec(`PRAGMA page_size=${DEFAULT_PAGE_SIZE}`);
+      const mapPageSize = Number((mapDb.prepare('PRAGMA page_size').get() as { page_size: number }).page_size);
+      const mapPageLimit = Math.floor(MAX_SOURCE_MAP_DB_BYTES / mapPageSize);
+      mapDb.exec(`PRAGMA max_page_count=${mapPageLimit}`);
+      if (Number((mapDb.prepare('PRAGMA page_count').get() as { page_count: number }).page_count) > mapPageLimit) {
+        throw new Error('Existing source map database exceeds its size limit');
+      }
+      mapDb.exec(`CREATE TABLE IF NOT EXISTS source_maps (
+        project TEXT NOT NULL COLLATE BINARY,
+        environment TEXT NOT NULL COLLATE BINARY,
+        release TEXT NOT NULL COLLATE BINARY,
+        asset_url TEXT NOT NULL COLLATE BINARY,
+        bundle_sha256 TEXT NOT NULL COLLATE BINARY,
+        map_sha256 TEXT NOT NULL COLLATE BINARY,
+        manifest_json TEXT NOT NULL,
+        map_bytes BLOB NOT NULL,
+        map_length INTEGER NOT NULL,
+        segment_count INTEGER NOT NULL,
+        PRIMARY KEY (project, environment, release, asset_url)
+      )`);
+    }
     this.insert = db.prepare(`INSERT INTO events
       (project, event_id, occurred_at, received_at, environment, type, search_text, payload)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -146,16 +178,22 @@ class SqliteStorage implements MicroStorage {
     if (this.closed) throw new Error('Storage is closed');
   }
 
-  private transaction<T>(run: () => T): T {
-    this.db.exec('BEGIN IMMEDIATE');
+  private transaction<T>(run: () => T, db = this.db): T {
+    db.exec('BEGIN IMMEDIATE');
     try {
       const result = run();
-      this.db.exec('COMMIT');
+      db.exec('COMMIT');
       return result;
     } catch (error) {
-      try { this.db.exec('ROLLBACK'); } catch { /* Preserve the original storage error. */ }
+      try { db.exec('ROLLBACK'); } catch { /* Preserve the original storage error. */ }
       throw error;
     }
+  }
+
+  private sourceMapDatabase(): DatabaseSync {
+    this.ensureOpen();
+    if (!this.mapDb) throw new Error('Source map registry is disabled');
+    return this.mapDb;
   }
 
   private cutoff(): string {
@@ -232,6 +270,42 @@ class SqliteStorage implements MicroStorage {
     return row ? JSON.parse(row.payload) as ErrorEventRecord : null;
   }
 
+  registerSourceMap(manifest: SourceMapManifest, mapBytes: Buffer, segmentCount: number): SourceMapRegistrationResult {
+    const mapDb = this.sourceMapDatabase();
+    return this.transaction(() => {
+      const key = [manifest.project, manifest.environment, manifest.release, manifest.assetUrl];
+      const prior = mapDb.prepare(`SELECT bundle_sha256, map_sha256 FROM source_maps
+        WHERE project = ? AND environment = ? AND release = ? AND asset_url = ?`).get(...key) as
+        { bundle_sha256: string; map_sha256: string } | undefined;
+      if (prior) {
+        return prior.bundle_sha256 === manifest.bundleSha256 && prior.map_sha256 === manifest.mapSha256
+          ? 'duplicate' : 'conflict';
+      }
+      const usage = mapDb.prepare(`SELECT COUNT(*) AS count, COALESCE(SUM(map_length), 0) AS bytes,
+        COALESCE(SUM(segment_count), 0) AS segments FROM source_maps`).get() as
+        { count: number; bytes: number; segments: number };
+      if (usage.count >= MAX_SOURCE_MAPS || usage.bytes + mapBytes.byteLength > MAX_SOURCE_MAP_BYTES ||
+          usage.segments + segmentCount > MAX_SOURCE_MAP_SEGMENTS) return 'full';
+      mapDb.prepare(`INSERT INTO source_maps
+        (project, environment, release, asset_url, bundle_sha256, map_sha256, manifest_json, map_bytes, map_length, segment_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+        ...key, manifest.bundleSha256, manifest.mapSha256, JSON.stringify(manifest), mapBytes,
+        mapBytes.byteLength, segmentCount,
+      );
+      return 'created';
+    }, mapDb);
+  }
+
+  getSourceMap(key: Pick<SourceMapManifest, 'project' | 'environment' | 'release' | 'assetUrl'>): StoredSourceMap | null {
+    const mapDb = this.sourceMapDatabase();
+    const row = mapDb.prepare(`SELECT manifest_json, map_bytes FROM source_maps
+      WHERE project = ? AND environment = ? AND release = ? AND asset_url = ?`).get(
+      key.project, key.environment, key.release, key.assetUrl,
+    ) as { manifest_json: string; map_bytes: Uint8Array } | undefined;
+    return row ? { manifest: JSON.parse(row.manifest_json) as SourceMapManifest,
+      mapBase64: Buffer.from(row.map_bytes).toString('base64') } : null;
+  }
+
   async maintain(): Promise<void> {
     this.ensureOpen();
     this.transaction(() => this.prune());
@@ -240,7 +314,8 @@ class SqliteStorage implements MicroStorage {
   async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    this.db.close();
+    try { this.mapDb?.close(); }
+    finally { this.db.close(); }
   }
 }
 
@@ -377,6 +452,13 @@ export async function createStorage(mode: StorageMode, options: StorageOptions):
   }
   if (mode !== 'sqlite') throw new Error('Invalid storage mode');
   const db = new DatabaseSync(join(options.dataDir, 'events.sqlite'));
-  try { return new SqliteStorage(db, options); }
-  catch (error) { db.close(); throw error; }
+  let mapDb: DatabaseSync | undefined;
+  try {
+    if (options.sourceMapToken) mapDb = new DatabaseSync(join(options.dataDir, 'source-maps.sqlite'));
+    return new SqliteStorage(db, options, mapDb);
+  } catch (error) {
+    mapDb?.close();
+    db.close();
+    throw error;
+  }
 }

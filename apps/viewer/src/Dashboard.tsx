@@ -9,7 +9,8 @@ import type { Locale } from '../../i18n/locale';
 import { countText, eventLabel, localizeError, numberText, t } from './i18n';
 import './dashboard.css';
 import { BreadcrumbTrail } from './BreadcrumbTrail';
-import { OriginalLocations, SourceMapPanel, type SourceMapActions } from './SourceMapControls';
+import { EventSourceLocations } from './EventSourceLocations';
+import { SourceMapPanel, type SourceMapActions } from './SourceMapControls';
 
 type Period = '24h' | '7d' | '30d' | 'all' | 'custom';
 type Controls = { project: string; environment: string; type: EventType | ''; query: string; period: Period; from: string; to: string };
@@ -46,7 +47,7 @@ function toFilter(controls: Controls, source: Source): EventFilter {
 const dateLabel = (value: string | number, locale: Locale) => new Date(value).toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US', { hour12: false });
 const messageOf = (error: unknown) => error instanceof Error ? error.message : 'Could not load data.';
 
-function EventDialog({ event, onClose, sourceMapActions }: { event: ErrorEventRecord; onClose: () => void; sourceMapActions?: SourceMapActions }) {
+function EventDialog({ event, onClose, sourceMapActions, live }: { event: ErrorEventRecord; live: boolean; onClose: () => void; sourceMapActions?: SourceMapActions }) {
   const locale = useLocale();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -65,7 +66,7 @@ function EventDialog({ event, onClose, sourceMapActions }: { event: ErrorEventRe
       </dl>
       {event.network && <section><h4>{t(locale, 'Network')}</h4><p>{event.network.method} {event.network.url}</p><p>{t(locale, 'Response')} {event.network.status || t(locale, 'None')} · {numberText(locale, event.network.durationMs)} ms</p></section>}
       {event.stack && <section><h4>{t(locale, 'Stack trace')}</h4><pre className="code-block">{event.stack}</pre></section>}
-      {sourceMapActions && <><OriginalLocations event={event} sourceMaps={sourceMapActions.sourceMaps}/><SourceMapPanel {...sourceMapActions} compact/></>}
+      {sourceMapActions && <><EventSourceLocations event={event} sourceMaps={sourceMapActions.sourceMaps} live={live}/><SourceMapPanel {...sourceMapActions} compact/></>}
       {event.componentStack && <section><h4>{t(locale, 'Component stack')}</h4><pre className="code-block">{event.componentStack}</pre></section>}
       <BreadcrumbTrail breadcrumbs={event.breadcrumbs}/>
       {event.context && <section><h4>{t(locale, 'Additional context')}</h4><pre className="code-block">{JSON.stringify(event.context, null, 2)}</pre></section>}
@@ -210,6 +211,6 @@ export function Dashboard({ sourceMaps, onRegisterMap, onRemoveMap }: Partial<So
       <p className="dash-footnote">{t(locale, 'These counts exclude duplicate errors. Total requests and visitors are not collected, so they do not represent error rates or affected users.')}</p>
     </>}
     <details className="dash-help"><summary>{t(locale, 'How to load historical data')}</summary>{!archiveMode && <p>{t(locale, 'The API queries by occurrence time. A connected server must provide persistent storage and history. The development demo keeps up to 2,000 events in memory and clears them on restart.')}</p>}{archiveMode && <p>{t(locale, 'Extract the source map example, import events.json, then register each release manifest with its matching .map file.')}</p>}<p>{t(locale, 'Import a file saved from this page, a v1 event array, or a JSON object in the')} <code>{'{ "schemaVersion": 1, "events": [...] }'}</code> {t(locale, 'format. The limit is 10 MiB and 10,000 events. Refreshing clears file analysis; import the file again to restore it.')}</p><a href={`${import.meta.env.BASE_URL}history-example.json`} download>{t(locale, 'Download sample history JSON ↓')}</a></details>
-    {selected && <EventDialog event={selected} onClose={() => setSelected(null)} sourceMapActions={sourceMapActions}/>}
+    {selected && <EventDialog live={loaded?.sourceKind === 'api'} event={selected} onClose={() => setSelected(null)} sourceMapActions={sourceMapActions}/>}
   </div>;
 }

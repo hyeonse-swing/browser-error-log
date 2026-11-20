@@ -72,6 +72,19 @@ export function getEventReference({ project, eventId }: EventReference): EventRe
   return { project, eventId };
 }
 
+/** Read lookup fields from a decoded JSON object, preserving their exact values. */
+export function parseEventReference(value: unknown): EventReference | undefined {
+  try {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    const project = Object.getOwnPropertyDescriptor(value, 'project')?.value;
+    const eventId = Object.getOwnPropertyDescriptor(value, 'eventId')?.value;
+    if (typeof project !== 'string' || !project.trim() || typeof eventId !== 'string' || !eventId.trim()) return undefined;
+    return { project, eventId };
+  } catch {
+    return undefined;
+  }
+}
+
 export interface EventBatch { schemaVersion: 1; events: ErrorEventRecord[] }
 export interface EventFilter {
   project?: string;

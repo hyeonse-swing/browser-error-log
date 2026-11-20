@@ -2,7 +2,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import type { ErrorEventRecord } from '@ihyeon/browser-error-log-protocol';
 import { useLocale } from '../../i18n/react';
 import { t } from './i18n';
-import { resolveStack, type MapRegistry } from './source-maps';
+import { resolveComponentStack, resolveStack, sourceExcerpt, type MapRegistry, type ResolvedFrame } from './source-maps';
 import './source-map-controls.css';
 
 export type RegisterOutcome = 'registered' | 'already-registered' | 'conflict';
@@ -20,6 +20,7 @@ const reasons = {
   'registration-conflict': 'Conflicting maps are registered for this release and file.',
   'no-mapping': 'The map has no original location for this position.',
   'invalid-frame': 'Stack frame has an invalid position.',
+  'no-location': 'React did not provide a source position for this component.',
 } as const;
 
 const inputErrors: Record<string, string> = {
@@ -85,15 +86,51 @@ export function SourceMapPanel({ sourceMaps, onRegisterMap, onRemoveMap, compact
   </details>;
 }
 
+function FrameLocation({ frame, sourceMaps, component = false }: {
+  frame: ResolvedFrame; sourceMaps: MapRegistry; component?: boolean;
+}) {
+  const locale = useLocale();
+  const [open, setOpen] = useState(false);
+  const reference = frame.sourceReference;
+  const hasContent = reference && !sourceMaps.conflicts.has(reference.key) &&
+    sourceMaps.entries.get(reference.key)?.sourceContents?.has(reference.index);
+  const excerpt = open ? sourceExcerpt(frame, sourceMaps) : null;
+  return <li>
+    {component && frame.name && <strong className="source-map-component-name">{frame.name}</strong>}
+    {frame.generated && <div><span>{t(locale, 'Generated')}</span> <code>{frame.generated.url}:{frame.generated.line}:{frame.generated.column}</code></div>}
+    {frame.original && <div><span>{t(locale, 'Original')}</span> <code>{frame.original.source}:{frame.original.line}:{frame.original.column}</code></div>}
+    {component && (!frame.generated || !frame.name) && <code className="source-map-raw-frame">{frame.raw}</code>}
+    {frame.reason && <small>{t(locale, reasons[frame.reason])}</small>}
+    {frame.original && (!hasContent ? <small>{t(locale, 'Original source content is unavailable in this map.')}</small>
+      : <>
+        <button type="button" aria-expanded={open} onClick={() => setOpen(value => !value)}>
+          {t(locale, open ? 'Hide source' : 'View source')}
+        </button>
+        {excerpt && (excerpt.status === 'available' ? <div className="source-map-preview" role="region" aria-label={t(locale, 'Original source excerpt')}>
+          <div className="source-map-preview-lines">{excerpt.lines.map(line => <div key={line.number} className={line.marked ? 'source-map-preview-target' : undefined}>
+            <span aria-hidden="true" className="source-map-preview-number">{line.number}</span>
+            <code>{line.before}{line.marked && <mark aria-label={`${t(locale, 'Original column')} ${frame.original?.column}`}>{line.marked}</mark>}{line.after}</code>
+          </div>)}</div>
+        </div> : <small>{t(locale, excerpt.status === 'missing-line' ? 'Original source line is unavailable.'
+          : excerpt.status === 'missing-column' ? 'Original source column is outside the line.'
+            : 'Original source content is unavailable in this map.')}</small>)}
+      </>)}
+  </li>;
+}
+
 export function OriginalLocations({ event, sourceMaps }: { event: ErrorEventRecord; sourceMaps: MapRegistry }) {
   const locale = useLocale();
   const frames = resolveStack(event, sourceMaps);
+  const componentFrames = resolveComponentStack(event, sourceMaps);
   return <section className="source-map-locations" aria-label={t(locale, 'Original locations')}>
     <h4>{t(locale, 'Original locations')}</h4>
-    {frames.length === 0 ? <p>{t(locale, 'No JavaScript stack to map.')}</p> : <ol>{frames.map((frame, index) => <li key={`${index}-${frame.generated?.line ?? frame.reason ?? 'frame'}`}>
-      {frame.generated && <div><span>{t(locale, 'Generated')}</span> <code>{frame.generated.url}:{frame.generated.line}:{frame.generated.column}</code></div>}
-      {frame.original && <div><span>{t(locale, 'Original')}</span> <code>{frame.original.source}:{frame.original.line}:{frame.original.column}</code></div>}
-      {frame.reason && <small>{t(locale, reasons[frame.reason])}</small>}
-    </li>)}</ol>}
+    <h5>{t(locale, 'JavaScript frames')}</h5>
+    {frames.length === 0 ? <p>{t(locale, 'No JavaScript stack to map.')}</p> : <ol>{frames.map((frame, index) =>
+      <FrameLocation key={`js-${index}-${frame.raw}`} frame={frame} sourceMaps={sourceMaps}/>)}</ol>}
+    {componentFrames.length > 0 && <>
+      <h5>{t(locale, 'React component frames')}</h5>
+      <ol>{componentFrames.map((frame, index) =>
+        <FrameLocation key={`component-${index}-${frame.raw}`} frame={frame} sourceMaps={sourceMaps} component/>)}</ol>
+    </>}
   </section>;
 }

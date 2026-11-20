@@ -29,6 +29,6 @@ For a small single-host deployment, the included SQLite implementation already c
 
 ## Later extensions
 
-The current viewer fetches up to 100 pages and 10,000 unique events and computes charts locally. At that cap, it marks the result partial. If an operator needs complete counts across more stored events, design a server aggregate API and adapt the viewer together, with the same filters, authorization, and retention boundary as event reads. Source-map upload and symbolication, grouping events into issues, alerts, and operator workflows are roadmap items, not current APIs. See the [roadmap](expansion-roadmap.md).
+The current viewer fetches up to 100 pages and 10,000 unique events and computes charts locally. At that cap, it marks the result partial. If an operator needs complete counts across more stored events, design a server aggregate API and adapt the viewer together, with the same filters, authorization, and retention boundary as event reads. The self-hosted SQLite collector has an optional [private CI map registry](source-map-ci.md). Issue grouping, alerts and operator workflows are roadmap items. See the [roadmap](expansion-roadmap.md).
 
 Infrastructure is not included. Hosting, servers, databases, storage, bandwidth, domains, backups, and third-party services are selected and paid for by each operator. Any charges are billed independently by their providers, not by this project or its maintainers.

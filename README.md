@@ -81,7 +81,7 @@ npm run source-map:prepare -- --project my-web --environment production \
 2. Open an error in the **Event Timeline** or **Error Dashboard**. **Original locations** shows the generated file, line and column alongside the original position. Both use one-based coordinates. Adjacent generated columns may map to the start of the same original token.
 3. Register other releases the same way. Different artifacts registered under one key suspend mapping for that key. Remove it and register the intended build again. Reloading clears the registrations. Maps and original sources stay out of network requests and event exports.
 
-Each map can be up to 8 MiB. A tab can hold up to 32 registrations totaling 32 MiB. For large builds, start with the chunks in the error stack.
+Each map can be up to 8 MiB. A tab can hold up to 32 manual registrations totaling 32 MiB. For large builds, start with the chunks in the error stack.
 
 **Try two releases.** Run the following from the repository root to create a fresh example directory. If you already generated it, start the viewer and reuse the files. Import `events.json` in the dashboard, then register `A/manifest.json` with `A/assets/app.js.map`. Repeat for B. The two synthetic events resolve to `release-a.ts:2:3` and `release-b.ts:7:3`.
 
@@ -90,7 +90,11 @@ node examples/source-maps/build-fixture.mjs --output-dir output/source-map-examp
 npm run dev
 ```
 
-Events do not carry a hash of the executed JavaScript. Assign a fresh release ID when replacing a build at the same URL. Missing maps and ambiguous frames show an unmapped reason. SDK 0.2.20 preserves verified positions from scripts with query strings. Imported frames that still contain a raw query or fragment, events captured without a stack, and React component stacks are excluded from resolution. The viewer never fetches linked sources or follows intermediate maps. [Source map coordinate conventions](https://tc39.es/ecma426/#sec-terms-and-definitions)
+Events do not carry a hash of the executed JavaScript. Assign a fresh release ID when replacing a build at the same URL. Missing maps and ambiguous frames show an unmapped reason. SDK 0.2.20 preserves verified positions from scripts with query strings. JavaScript and React component frames with a usable bundle URL, line and column resolve independently. Name-only React frames retain their reported names. Imported frames with a raw query or fragment remain unmapped. The viewer never fetches linked sources or follows intermediate maps. [Source map coordinate conventions](https://tc39.es/ecma426/#sec-terms-and-definitions)
+
+### Register from a build and inspect source code
+
+In the self-hosted SQLite viewer, CI can register hidden maps for each release before deploying its JavaScript. The timeline and dashboard retrieve matching maps for live events. Open **View source** beside a mapped JavaScript or React frame to see the original line and highlighted column when the map embeds `sourcesContent`. Maps without embedded source still provide coordinates. JSON archives use tab-local registrations. [Collector configuration, GitHub Actions and CLI](docs/source-map-ci.md)
 
 ## AI-assisted integration
 
@@ -103,7 +107,7 @@ Use the [portable integration skill](skills/browser-error-log/SKILL.md) with an 
 - **Keep integration flexible:** use the supplied endpoint or `transport(batch, { signal })`. Public event and viewer data-source types support a self-owned backend.
 - **Bound reporting work:** queue, batch, timeout, and retry limits make delivery best-effort and keep diagnostics from replacing an application error.
 
-The SDK strips URL query strings, fragments, and user information and masks common sensitive patterns. This does **not** guarantee complete redaction: add application-specific `sanitizeUrl` and `beforeSend` rules. Request/response bodies, cookies, form values, DOM snapshots, and session replay are not collected. Source-map automation, alerts, native crashes, and guaranteed delivery are not included.
+The SDK strips URL query strings, fragments, and user information and masks common sensitive patterns. This does **not** guarantee complete redaction: add application-specific `sanitizeUrl` and `beforeSend` rules. Request/response bodies, cookies, form values, DOM snapshots, and session replay are not collected. Alerts, native crashes, and guaranteed delivery are not included.
 
 Infrastructure is not included. Hosting, servers, databases, storage, bandwidth, domains, backups, and third-party services are selected and paid for by each operator. Any charges are billed independently by their providers, not by this project or its maintainers.
 

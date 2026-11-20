@@ -1,0 +1,53 @@
+name: Register Browser Error Log source maps
+description: Register a deployed release's JavaScript source maps with a Browser Error Log collector.
+
+inputs:
+  build-dir:
+    description: Directory containing deployed JavaScript bundles and adjacent .map files.
+    required: true
+  asset-base-url:
+    description: Public HTTPS base URL for the deployed bundles, ending in /.
+    required: true
+  collector-url:
+    description: HTTPS origin of the Browser Error Log collector.
+    required: true
+  project:
+    description: Project identifier used by the collector.
+    required: true
+  environment:
+    description: Deployment environment used by the collector.
+    required: true
+  release:
+    description: Explicit immutable release identifier.
+    required: true
+  token:
+    description: Collector source map registration token.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Use Node.js 24
+      uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      with:
+        node-version: '24'
+        package-manager-cache: false
+    - name: Register source maps
+      shell: bash
+      env:
+        BEL_SOURCE_MAP_TOKEN: ${{ inputs.token }}
+        BEL_BUILD_DIR: ${{ inputs.build-dir }}
+        BEL_ASSET_BASE_URL: ${{ inputs.asset-base-url }}
+        BEL_COLLECTOR_URL: ${{ inputs.collector-url }}
+        BEL_PROJECT: ${{ inputs.project }}
+        BEL_ENVIRONMENT: ${{ inputs.environment }}
+        BEL_RELEASE: ${{ inputs.release }}
+      run: |
+        cd "$GITHUB_WORKSPACE"
+        node "$GITHUB_ACTION_PATH/../../../scripts/register-source-maps.mjs" \
+          --build-dir "$BEL_BUILD_DIR" \
+          --asset-base-url "$BEL_ASSET_BASE_URL" \
+          --collector-url "$BEL_COLLECTOR_URL" \
+          --project "$BEL_PROJECT" \
+          --environment "$BEL_ENVIRONMENT" \
+          --release "$BEL_RELEASE"

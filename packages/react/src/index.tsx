@@ -6,10 +6,10 @@ export interface ErrorBoundaryProps {
   /** Called when a reference-aware client admits this render error to its queue. */
   onCapture?: (reference: EventReference) => void;
   children: React.ReactNode;
-  fallback?: React.ReactNode | ((error: Error, reset: () => void) => React.ReactNode);
+  fallback?: React.ReactNode | ((error: Error, reset: () => void, reference?: EventReference) => React.ReactNode);
 }
 
-interface ErrorBoundaryState { error: Error | null }
+interface ErrorBoundaryState { error: Error | null; reference?: EventReference }
 
 function normalizeError(error: unknown): Error {
   try {
@@ -23,7 +23,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   state: ErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: unknown): ErrorBoundaryState {
-    return { error: normalizeError(error) };
+    return { error: normalizeError(error), reference: undefined };
   }
 
   componentDidCatch(error: unknown, info: React.ErrorInfo): void {
@@ -33,22 +33,25 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
         type: 'react',
         componentStack: info.componentStack ?? undefined,
       };
-      if (onCapture && client.captureExceptionWithReference) {
+      if ((onCapture || typeof this.props.fallback === 'function') && client.captureExceptionWithReference) {
         const reference = client.captureExceptionWithReference(error, extra);
-        if (reference) onCapture(reference);
+        if (reference) {
+          this.setState({ reference });
+          onCapture?.(reference);
+        }
       } else {
         client.captureException(error, extra);
       }
     } catch { /* a diagnostics hook must not replace the render error */ }
   }
 
-  private readonly reset = (): void => { this.setState({ error: null }); };
+  private readonly reset = (): void => { this.setState({ error: null, reference: undefined }); };
 
   render(): React.ReactNode {
     const error = this.state.error;
     if (!error) return this.props.children;
     return typeof this.props.fallback === 'function'
-      ? this.props.fallback(error, this.reset)
+      ? this.props.fallback(error, this.reset, this.state.reference)
       : (this.props.fallback ?? null);
   }
 }

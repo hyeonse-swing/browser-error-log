@@ -6,6 +6,7 @@ declare global {
       apiBase?: string;
       mode?: 'local' | 'live';
       title?: string;
+      sourceMapRegistry?: boolean;
     };
   }
 }

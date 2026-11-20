@@ -6,7 +6,8 @@ import { LanguageSwitcher, useLocale } from '../../i18n/react';
 import { eventLabel, localizeError, numberText, t } from './i18n';
 import type { Locale } from '../../i18n/locale';
 import { BreadcrumbTrail } from './BreadcrumbTrail';
-import { OriginalLocations, SourceMapPanel, type RegisterOutcome, type SourceMapActions } from './SourceMapControls';
+import { EventSourceLocations } from './EventSourceLocations';
+import { SourceMapPanel, type RegisterOutcome, type SourceMapActions } from './SourceMapControls';
 import { emptySourceMaps, prepareSourceMap, registerSourceMap, removeSourceMap } from './source-maps';
 
 const archiveMode = import.meta.env.MODE === 'archive';
@@ -289,7 +290,7 @@ export function App() {
           <div className="detail-block"><div className="block-title">{t(locale, 'Location and identifiers')} <span>02</span></div><dl className="info-grid"><div className="wide"><dt>{t(locale, 'Page')}</dt><dd className="breakable">{selected.page}</dd></div><div className="wide"><dt>{t(locale, 'Event ID')}</dt><dd className="mono breakable">{selected.eventId}</dd></div><div><dt>{t(locale, 'View ID')}</dt><dd className="mono breakable">{selected.viewId}</dd></div><div><dt>{t(locale, 'Elapsed time')}</dt><dd className="mono">{numberText(locale, selected.elapsedMs)} ms</dd></div></dl></div>
           {selected.network && <div className="detail-block"><div className="block-title">{t(locale, 'Network')} <span>03</span></div><div className="network-summary"><span className="method-tag">{selected.network.method}</span><span className="network-url">{selected.network.url}</span></div><dl className="info-grid compact"><div><dt>{t(locale, 'HTTP status')}</dt><dd className="mono">{selected.network.status ?? t(locale, 'No response')}</dd></div><div><dt>{t(locale, 'Duration')}</dt><dd className="mono">{numberText(locale, selected.network.durationMs)} ms</dd></div></dl></div>}
           {selected.stack && <div className="detail-block"><div className="block-title">{t(locale, 'Stack trace')}</div><pre className="code-block">{selected.stack}</pre></div>}
-          <div className="detail-block"><OriginalLocations event={selected} sourceMaps={sourceMaps}/></div>
+          <div className="detail-block"><EventSourceLocations event={selected} sourceMaps={sourceMaps} live/></div>
           {selected.componentStack && <div className="detail-block"><div className="block-title">{t(locale, 'Component stack')}</div><pre className="code-block">{selected.componentStack}</pre></div>}
           <BreadcrumbTrail breadcrumbs={selected.breadcrumbs}/>
           {selected.context && Object.keys(selected.context).length > 0 && <div className="detail-block"><div className="block-title">{t(locale, 'Additional context')}</div><dl className="info-grid context-grid">{Object.entries(selected.context).map(([key, value]) => <div key={key}><dt>{key}</dt><dd className="breakable">{value === null ? 'null' : String(value)}</dd></div>)}</dl></div>}

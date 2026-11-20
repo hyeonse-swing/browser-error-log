@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { ErrorEventRecord } from '@ihyeon/browser-error-log-protocol';
 import {
   SourceMapInputError, emptySourceMaps, prepareSourceMap, registerSourceMap,
-  removeSourceMap, resolveStack,
+  generatedAssetUrls, removeSourceMap, resolveComponentStack, resolveStack, sourceExcerpt,
 } from './source-maps';
 
 beforeAll(() => vi.stubGlobal('crypto', webcrypto));
@@ -256,5 +256,127 @@ describe('private release source maps', () => {
     const frames = resolveStack(event(stack), registry);
     expect(frames[0].original?.source).toBe('src/a.ts');
     expect(frames.at(-1)?.reason).toBe('invalid-frame');
+  });
+
+  it('retains bounded source content by source index and previews the mapped line on demand', async () => {
+    const entry = await prepared('A', {
+      version: 3, file: 'app.js', sources: ['src/same.ts', 'src/same.ts'],
+      sourcesContent: ['wrong source', 'first\r\nconst 😀name = <img src=x onerror=alert(1)>;\r\nthird'],
+      names: [], mappings: 'ACCG',
+    });
+    const registry = registerSourceMap(emptySourceMaps(), entry);
+    const frame = resolveStack(event(`at fn (${assetUrl}:1:1)`), registry)[0];
+    expect(frame.original).toEqual({ source: 'src/same.ts', line: 2, column: 4 });
+    expect(frame.sourceReference).toEqual({ key: entry.key, index: 1 });
+    expect(sourceExcerpt(frame, registry)).toEqual({
+      status: 'available', lines: [
+        { number: 1, before: 'first', after: '' },
+        { number: 2, before: 'con', marked: 's', after: 't 😀name = <img src=x onerror=alert(1)>;' },
+        { number: 3, before: 'third', after: '' },
+      ],
+    });
+    expect(JSON.stringify(entry.trace)).not.toContain('wrong source');
+    expect(JSON.stringify(entry.trace)).not.toContain('onerror');
+  });
+
+  it('keeps missing, invalid and oversized source contents from inventing a preview', async () => {
+    const absent = await prepared();
+    const missingRegistry = registerSourceMap(emptySourceMaps(), absent);
+    expect(sourceExcerpt(resolveStack(event(`at fn (${assetUrl}:1:1)`), missingRegistry)[0], missingRegistry))
+      .toEqual({ status: 'missing-source' });
+    const oversized = await prepared('A', {
+      version: 3, sources: ['src/a.ts'], sourcesContent: ['x'.repeat(512 * 1024 + 1)], names: [], mappings: 'AAAA',
+    });
+    expect(oversized.sourceContents?.size).toBe(0);
+    const short = await prepared('A', {
+      version: 3, sources: ['src/a.ts'], sourcesContent: ['short'], names: [], mappings: 'AAEA',
+    });
+    const shortRegistry = registerSourceMap(emptySourceMaps(), short);
+    expect(sourceExcerpt(resolveStack(event(`at fn (${assetUrl}:1:1)`), shortRegistry)[0], shortRegistry))
+      .toEqual({ status: 'missing-line' });
+    const wide = await prepared('A', {
+      version: 3, sources: ['src/a.ts'], sourcesContent: ['short'], names: [], mappings: 'AAAM',
+    });
+    const wideRegistry = registerSourceMap(emptySourceMaps(), wide);
+    expect(sourceExcerpt(resolveStack(event(`at fn (${assetUrl}:1:1)`), wideRegistry)[0], wideRegistry))
+      .toEqual({ status: 'missing-column' });
+  });
+
+  it('marks an emoji as a whole while preserving its UTF-16 source-map column', async () => {
+    const entry = await prepared('A', {
+      version: 3, sources: ['src/a.ts'], sourcesContent: ['😀 end'], names: [], mappings: 'AAAC',
+    });
+    const registry = registerSourceMap(emptySourceMaps(), entry);
+    const frame = resolveStack(event(`at fn (${assetUrl}:1:1)`), registry)[0];
+    expect(frame.original?.column).toBe(2);
+    expect(sourceExcerpt(frame, registry)).toEqual({
+      status: 'available', lines: [{ number: 1, before: '', marked: '😀', after: ' end' }],
+    });
+  });
+
+  it('bounds long source lines while retaining the exact requested column', async () => {
+    const entry = await prepared('A', {
+      version: 3, sources: ['src/a.ts'], sourcesContent: [`${'a'.repeat(500)}X${'b'.repeat(500)}`],
+      names: [], mappings: 'AAAA',
+    });
+    const registry = registerSourceMap(emptySourceMaps(), entry);
+    const frame = resolveStack(event(`at fn (${assetUrl}:1:1)`), registry)[0];
+    const excerpt = sourceExcerpt({ ...frame, original: { ...frame.original!, column: 501 } }, registry);
+    expect(excerpt.status).toBe('available');
+    if (excerpt.status !== 'available') return;
+    expect(excerpt.lines[0].marked).toBe('X');
+    expect(excerpt.lines[0].before).toMatch(/^…a+$/);
+    expect(excerpt.lines[0].after).toMatch(/^b+…$/);
+    expect(excerpt.lines[0].before.length + excerpt.lines[0].after.length).toBeLessThan(250);
+  });
+
+  it('maps V8, Firefox and WebKit React frames and retains name-only component frames', async () => {
+    const a = await prepared('A', {
+      version: 3, file: 'app.js', sources: ['src/A.tsx'], names: [], mappings: 'AAAA',
+    });
+    const b = await prepared('B', {
+      version: 3, file: 'app.js', sources: ['src/B.tsx'], names: [], mappings: 'AAAA',
+    });
+    const registry = registerSourceMap(registerSourceMap(emptySourceMaps(), a), b);
+    const componentStack = [
+      `    at ProductSummary (${assetUrl}:1:1)`,
+      `ProductPage@${assetUrl}:1:1`,
+      `render@${assetUrl}:1:1`,
+      '    at App',
+      '    in Router (at Router.tsx:3:2)',
+    ].join('\n');
+    const frames = resolveComponentStack(event(undefined, 'B', { componentStack }), registry);
+    expect(frames.map(frame => frame.name)).toEqual(['ProductSummary', 'ProductPage', 'render', 'App', 'Router']);
+    expect(frames.slice(0, 3).map(frame => frame.original?.source)).toEqual(['src/B.tsx', 'src/B.tsx', 'src/B.tsx']);
+    expect(frames.slice(3).map(frame => frame.reason)).toEqual(['no-location', 'no-location']);
+    expect(frames[3]).toMatchObject({ raw: '    at App' });
+    expect(resolveComponentStack(event(undefined, 'A', { componentStack }), registry)[0].original?.source).toBe('src/A.tsx');
+    expect(generatedAssetUrls({ stack: `Error: x\n at run (${assetUrl}:1:1)`, componentStack }))
+      .toEqual([assetUrl]);
+    expect(generatedAssetUrls({ componentStack: '    at App' })).toEqual([]);
+  });
+
+  it('does not trust a final React frame at the SDK component-stack length limit', async () => {
+    const registry = registerSourceMap(emptySourceMaps(), await prepared());
+    const first = `    at App (${assetUrl}:1:1)\n`;
+    const last = `    at App (${assetUrl}:1:1)`;
+    const componentStack = first + 'x'.repeat(2048 - first.length - last.length - 1) + '\n' + last;
+    expect(componentStack).toHaveLength(2048);
+    const frames = resolveComponentStack(event(undefined, 'A', { componentStack }), registry);
+    expect(frames[0].original?.source).toBe('src/a.ts');
+    expect(frames.at(-1)?.reason).toBe('invalid-frame');
+    expect(generatedAssetUrls({ componentStack })).toEqual([assetUrl]);
+  });
+
+  it('does not map credential-bearing URLs or merge duplicate component names', async () => {
+    const registry = registerSourceMap(emptySourceMaps(), await prepared());
+    const credentialFrame = '    at App (https://user:secret@example.test/assets/app.js:1:1)';
+    const componentStack = `${credentialFrame}\n    at App\n    at App`;
+    const frames = resolveComponentStack(event(undefined, 'A', { componentStack }), registry);
+    expect(frames).toHaveLength(3);
+    expect(frames.map(frame => frame.name)).toEqual(['App', 'App', 'App']);
+    expect(frames.map(frame => frame.reason)).toEqual(['invalid-frame', 'no-location', 'no-location']);
+    expect(frames.every(frame => !frame.original)).toBe(true);
+    expect(generatedAssetUrls({ componentStack })).toEqual([]);
   });
 });

@@ -31,10 +31,11 @@ const protocolConsumer = createConsumer('protocol-smoke');
 npm(['install', tarballs[0]], protocolConsumer);
 execFileSync(process.execPath, ['--input-type=module', '-e', `
   import { createRequire } from 'node:module';
-  import { SCHEMA_VERSION, EVENT_LABELS, getEventReference, isBreadcrumbTrail, BREADCRUMB_LIMITS } from '@ihyeon/browser-error-log-protocol';
+  import { SCHEMA_VERSION, EVENT_LABELS, getEventReference, parseEventReference, isBreadcrumbTrail, BREADCRUMB_LIMITS } from '@ihyeon/browser-error-log-protocol';
   if (SCHEMA_VERSION !== 1 || EVENT_LABELS.manual !== 'Manual' || EVENT_LABELS.resource !== 'Resource failure') throw Error('Protocol exports invalid');
   const ref = getEventReference({ project: 'web', eventId: 'example', message: 'private' });
   if (ref.project !== 'web' || ref.eventId !== 'example' || 'message' in ref) throw Error('Protocol reference invalid');
+  if (parseEventReference(ref)?.eventId !== 'example' || parseEventReference({eventId:'example'}) !== undefined) throw Error('Protocol lookup parsing invalid');
   if (!isBreadcrumbTrail([]) || BREADCRUMB_LIMITS.count !== 20) throw Error('Breadcrumb contract exports invalid');
   const require = createRequire(import.meta.url);
   for (const name of ['@ihyeon/browser-error-log', '@ihyeon/browser-error-log-react', 'react']) {
@@ -42,7 +43,7 @@ execFileSync(process.execPath, ['--input-type=module', '-e', `
     catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error; }
   }
 `], { cwd: protocolConsumer, stdio: 'inherit' });
-execFileSync(process.execPath, ['-e', `const {SCHEMA_VERSION}=require('@ihyeon/browser-error-log-protocol');if(SCHEMA_VERSION!==1)throw Error('Protocol CJS export invalid');`], { cwd: protocolConsumer, stdio: 'inherit' });
+execFileSync(process.execPath, ['-e', `const {SCHEMA_VERSION,parseEventReference}=require('@ihyeon/browser-error-log-protocol');if(SCHEMA_VERSION!==1 || parseEventReference({project:'web',eventId:'one'})?.eventId!=='one')throw Error('Protocol CJS export invalid');`], { cwd: protocolConsumer, stdio: 'inherit' });
 writeFileSync(join(protocolConsumer, 'consumer.ts'), `import { SCHEMA_VERSION, type EventBatch, type EventType } from '@ihyeon/browser-error-log-protocol';
 const resourceType: EventType = 'resource'; void resourceType;
 const batch: EventBatch = { schemaVersion: SCHEMA_VERSION, events: [] }; void batch;`);
@@ -86,7 +87,7 @@ const diagnostics: BrowserErrorLogDiagnostics = diagnosticClient.getDiagnostics(
 const reason: BrowserErrorLogDropReason = 'rateLimit'; void diagnostics.droppedByReason[reason];
 const oldNode = <ErrorBoundary client={oldClient}><p>Compatible</p></ErrorBoundary>; void oldNode;
 client.captureException(new Error(EVENT_LABELS.manual));
-const node = <ErrorBoundary client={client} onCapture={ref => client.getDeliveryStatus(ref.eventId)} fallback={<p>Fallback</p>}><p>Ready</p></ErrorBoundary>;
+const node = <ErrorBoundary client={client} onCapture={ref => client.getDeliveryStatus(ref.eventId)} fallback={(_error, reset, ref) => <button onClick={reset}>{ref?.eventId}</button>}><p>Ready</p></ErrorBoundary>;
 void node; client.destroy();`);
 execFileSync(process.execPath, [join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '--strict', '--target', 'ES2022', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--jsx', 'react-jsx', 'consumer.tsx'], { cwd: consumer, stdio: 'inherit' });
 execFileSync(process.execPath, ['--input-type=module', '-e', `import {init} from '@ihyeon/browser-error-log'; import {ErrorBoundary} from '@ihyeon/browser-error-log-react'; if(typeof ErrorBoundary!=='function') throw new Error('adapter missing'); const c=init({project:'ssr'}); await c.flush(); c.destroy();`], { cwd: consumer, stdio: 'inherit' });

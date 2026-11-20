@@ -5,10 +5,14 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { extname, resolve, sep } from 'node:path';
 import type { EventFilter, EventType } from '@ihyeon/browser-error-log-protocol';
 import { isEventRecord } from '../../../apps/local-collector/store.ts';
+import { MAX_MANIFEST_BYTES, MAX_MAP_BYTES, canonicalAssetUrl, parseSourceMapManifest, type SourceMapManifest } from '../../../apps/viewer/src/source-map-manifest.ts';
+import { prepareSourceMap, SourceMapInputError } from '../../../apps/viewer/src/source-maps.ts';
 import type { MicroConfig, MicroStorage } from './types.ts';
 
 const MAX_BODY_BYTES = 64 * 1024;
 const BODY_TIMEOUT_MS = 10_000;
+const SOURCE_MAP_BODY_TIMEOUT_MS = 30_000;
+const MAX_SOURCE_MAP_BODY_BYTES = 4 * Math.ceil(MAX_MAP_BYTES / 3) + MAX_MANIFEST_BYTES + 2048;
 const DETAIL_PREFIX = '/api/events/';
 const EVENT_TYPES = new Set<EventType>(['javascript', 'promise', 'react', 'console', 'http', 'network', 'resource', 'manual']);
 const MIME_TYPES: Record<string, string> = {
@@ -38,6 +42,15 @@ function basicAuthorized(header: string | undefined, password: string): boolean 
   return timingSafeEqual(actual, expected);
 }
 
+function bearerAuthorized(header: string | undefined, token: string): boolean {
+  if (!header || header.length > 300 || !header.startsWith('Bearer ')) return false;
+  const candidate = header.slice(7);
+  if (!candidate || /\s/.test(candidate)) return false;
+  const expected = createHash('sha256').update(token).digest();
+  const actual = createHash('sha256').update(candidate).digest();
+  return timingSafeEqual(actual, expected);
+}
+
 function requireViewer(req: IncomingMessage, res: ServerResponse, password: string | undefined): boolean {
   if (password === undefined || basicAuthorized(req.headers.authorization, password)) return true;
   res.setHeader('WWW-Authenticate', 'Basic realm="micro-server", charset="UTF-8"');
@@ -56,12 +69,13 @@ function validHost(req: IncomingMessage, config: MicroConfig, port: number): boo
   return typeof host === 'string' && (host === `127.0.0.1:${port}` || host === `localhost:${port}` || (config.publicUrl !== undefined && host === new URL(config.publicUrl).host));
 }
 
-function readBody(req: IncomingMessage, res: ServerResponse): Promise<Buffer | null> {
+function readBody(req: IncomingMessage, res: ServerResponse, maximum = MAX_BODY_BYTES,
+  timeout = BODY_TIMEOUT_MS): Promise<Buffer | null> {
   return new Promise(resolveBody => {
     let bytes = 0;
     const chunks: Buffer[] = [];
     let finished = false;
-    const timer = setTimeout(() => fail(408, 'Request timed out'), BODY_TIMEOUT_MS);
+    const timer = setTimeout(() => fail(408, 'Request timed out'), timeout);
     function finish(body: Buffer | null): void {
       if (finished) return;
       finished = true;
@@ -82,7 +96,7 @@ function readBody(req: IncomingMessage, res: ServerResponse): Promise<Buffer | n
     function onData(chunk: Buffer | string): void {
       const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       bytes += data.length;
-      if (bytes > MAX_BODY_BYTES) return fail(413, 'Batch exceeds 64 KiB');
+      if (bytes > maximum) return fail(413, 'Request body too large');
       chunks.push(data);
     }
     function onEnd(): void { finish(Buffer.concat(chunks, bytes)); }
@@ -93,6 +107,58 @@ function readBody(req: IncomingMessage, res: ServerResponse): Promise<Buffer | n
     req.on('error', onError);
     req.on('aborted', onAborted);
   });
+}
+
+function sourceMapEnabled(config: MicroConfig, storage: MicroStorage): boolean {
+  return typeof config.sourceMapToken === 'string' && config.sourceMapToken.length >= 32 &&
+    config.sourceMapToken.length <= 256 && Boolean(config.viewerPassword) &&
+    storage.mode === 'sqlite' && storage.sourceMapRegistry === true &&
+    typeof storage.registerSourceMap === 'function' &&
+    typeof storage.getSourceMap === 'function';
+}
+
+function sourceMapQuery(url: URL, projects: string[]): Pick<SourceMapManifest, 'project' | 'environment' | 'release' | 'assetUrl'> {
+  const allowed = new Set(['project', 'environment', 'release', 'assetUrl']);
+  if ([...url.searchParams.keys()].some(key => !allowed.has(key))) throw new Error('Invalid request');
+  const project = boundedParam(url, 'project', 80);
+  const environment = boundedParam(url, 'environment', 80);
+  const release = boundedParam(url, 'release', 120);
+  const assetUrl = boundedParam(url, 'assetUrl', 4096);
+  if (!project || !projects.includes(project) || environment === undefined || release === undefined ||
+      !release || release === 'unknown' || environment.trim() !== environment || release.trim() !== release ||
+      /[\x00-\x1f\x7f]/.test(environment + release) || !assetUrl) throw new Error('Invalid request');
+  const canonical = canonicalAssetUrl(assetUrl);
+  if (!canonical) throw new Error('Invalid request');
+  return { project, environment, release, assetUrl: canonical };
+}
+
+async function sourceMapUpload(body: Buffer, projects: string[]): Promise<{
+  manifest: SourceMapManifest; mapBytes: Buffer; segmentCount: number;
+}> {
+  let parsed: unknown;
+  try { parsed = JSON.parse(body.toString('utf8')); }
+  catch { throw new Error('Invalid JSON'); }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid source map upload');
+  const candidate = parsed as Record<string, unknown>;
+  if (Object.keys(candidate).length !== 2 || !('manifest' in candidate) || !('mapBase64' in candidate)) {
+    throw new Error('Invalid source map upload');
+  }
+  const manifestJson = JSON.stringify(candidate.manifest);
+  if (!manifestJson || Buffer.byteLength(manifestJson) > MAX_MANIFEST_BYTES) throw new Error('Invalid source map manifest');
+  const manifest = parseSourceMapManifest(candidate.manifest);
+  if (!projects.includes(manifest.project)) throw new Error('Project not allowed');
+  const encoded = candidate.mapBase64;
+  if (typeof encoded !== 'string' || encoded.length < 4 || encoded.length > 4 * Math.ceil(MAX_MAP_BYTES / 3) ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) throw new Error('Invalid source map encoding');
+  const mapBytes = Buffer.from(encoded, 'base64');
+  if (mapBytes.byteLength < 1 || mapBytes.byteLength > MAX_MAP_BYTES || mapBytes.toString('base64') !== encoded) {
+    throw new Error('Invalid source map encoding');
+  }
+  const prepared = await prepareSourceMap(
+    new File([manifestJson], 'manifest.json'),
+    new File([new Uint8Array(mapBytes)], 'source.map'),
+  );
+  return { manifest: prepared.manifest, mapBytes, segmentCount: prepared.segmentCount };
 }
 
 function boundedParam(url: URL, key: string, maxLength: number): string | undefined {
@@ -232,7 +298,52 @@ export function createMicroServer(config: MicroConfig, storage: MicroStorage): S
         catch { return json(res, 503, { error: 'Storage unavailable' }); }
       }
       if (origin && !own.has(origin)) return json(res, 403, { error: 'Origin not allowed' });
+      if (pathname === '/api/source-maps' && req.method === 'POST') {
+        if (!sourceMapEnabled(config, storage)) return json(res, 404, { error: 'Not found' });
+        if (!bearerAuthorized(req.headers.authorization, config.sourceMapToken!)) {
+          return json(res, 401, { error: 'Source map token required' });
+        }
+        if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] ?? '')) {
+          return json(res, 415, { error: 'application/json required' });
+        }
+        const declaredLength = req.headers['content-length'];
+        if (declaredLength !== undefined && Number(declaredLength) > MAX_SOURCE_MAP_BODY_BYTES) {
+          res.setHeader('Connection', 'close');
+          return json(res, 413, { error: 'Request body too large' });
+        }
+        const body = await readBody(req, res, MAX_SOURCE_MAP_BODY_BYTES, SOURCE_MAP_BODY_TIMEOUT_MS);
+        if (body === null) return;
+        let upload: Awaited<ReturnType<typeof sourceMapUpload>>;
+        try { upload = await sourceMapUpload(body, config.projects); }
+        catch (error) {
+          return json(res, 400, { error: error instanceof SourceMapInputError ? error.code : 'Invalid source map upload' });
+        }
+        try {
+          const result = storage.registerSourceMap!(upload.manifest, upload.mapBytes, upload.segmentCount);
+          if (result === 'conflict') return json(res, 409, { error: 'Source map registration conflict' });
+          if (result === 'full') return json(res, 507, { error: 'Source map registry full' });
+          return json(res, result === 'created' ? 201 : 200, { status: result });
+        } catch { return json(res, 503, { error: 'Storage unavailable' }); }
+      }
       if (!requireViewer(req, res, config.viewerPassword)) return;
+      if (pathname === '/api/viewer-config.js' && req.method === 'GET') {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.end(`window.__ERROR_LOG_VIEWER_CONFIG__=${JSON.stringify({ mode: 'live', title: 'Browser Error Log', sourceMapRegistry: sourceMapEnabled(config, storage) })};`);
+        return;
+      }
+      if (pathname === '/api/source-maps' && req.method === 'GET') {
+        if (!sourceMapEnabled(config, storage)) return json(res, 404, { error: 'Not found' });
+        let key: Pick<SourceMapManifest, 'project' | 'environment' | 'release' | 'assetUrl'>;
+        try { key = sourceMapQuery(url, config.projects); }
+        catch { return json(res, 400, { error: 'Invalid request' }); }
+        try {
+          const entry = storage.getSourceMap!(key);
+          return json(res, entry ? 200 : 404, entry ?? { error: 'Source map not found' });
+        } catch { return json(res, 503, { error: 'Storage unavailable' }); }
+      }
       if (pathname === '/api/events' && req.method === 'GET') {
         if (!storage.queryable) return json(res, 501, { error: 'Queries unavailable in jsonl mode' });
         let filter: EventFilter;
@@ -271,8 +382,8 @@ export function createMicroServer(config: MicroConfig, storage: MicroStorage): S
       return staticFile(res, config, target.split('?')[0]);
     })().catch(() => json(res, 500, { error: 'Internal server error' }));
   });
-  server.requestTimeout = BODY_TIMEOUT_MS;
+  server.requestTimeout = SOURCE_MAP_BODY_TIMEOUT_MS;
   server.headersTimeout = BODY_TIMEOUT_MS;
-  server.timeout = BODY_TIMEOUT_MS;
+  server.timeout = SOURCE_MAP_BODY_TIMEOUT_MS;
   return server;
 }

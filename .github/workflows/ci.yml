@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -36,6 +37,39 @@ jobs:
         run: |
           npm run check:package
           npm run check:micro
+      - name: Start a disposable source-map collector
+        env:
+          MICRO_PROJECTS: sample-web
+          MICRO_VIEWER_PASSWORD: synthetic-viewer
+          MICRO_SOURCE_MAP_TOKEN: synthetic-source-map-registration-token-ci
+          MICRO_DATA_DIR: ${{ runner.temp }}/source-map-collector
+        run: |
+          node examples/source-maps/build-fixture.mjs --output-dir "$RUNNER_TEMP/source-map-fixture"
+          node dist/micro-server/server.mjs > "$RUNNER_TEMP/source-map-collector.log" 2>&1 &
+          curl --retry 10 --retry-connrefused --retry-delay 1 --fail --silent http://127.0.0.1:4319/api/health
+      - name: Register the first fixture through the consumer action
+        uses: ./.github/actions/register-source-maps
+        with:
+          build-dir: ${{ runner.temp }}/source-map-fixture/A/assets
+          asset-base-url: https://app.example.test/assets/
+          collector-url: http://127.0.0.1:4319
+          project: sample-web
+          environment: production
+          release: fixture
+          token: synthetic-source-map-registration-token-ci
+      - name: Check duplicate registration and conflicting bytes
+        env:
+          BEL_SOURCE_MAP_TOKEN: synthetic-source-map-registration-token-ci
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { join } from 'node:path';
+          import { registerBuildMaps } from './scripts/register-source-maps.mjs';
+          const input = { 'asset-base-url': 'https://app.example.test/assets/', 'collector-url': 'http://127.0.0.1:4319', project: 'sample-web', environment: 'production', release: 'fixture' };
+          const register = release => registerBuildMaps({ ...input, 'build-dir': join(process.env.RUNNER_TEMP, 'source-map-fixture', release, 'assets') });
+          assert.equal(await register('A'), 1);
+          await assert.rejects(register('B'), /HTTP 409/);
+          JS
       - name: Install test browsers
         run: npx --no-install playwright install --with-deps chromium firefox webkit
       - name: Verify browser delivery

@@ -83,6 +83,8 @@ The lookup reports `queued`, `in-flight`, `transport-accepted`, `beacon-queued`,
 
 The optional `@ihyeon/browser-error-log-react` package provides an Error Boundary. The base SDK does not require React. Imports and initialization are safe during SSR but do not collect server-side errors; initialize in your framework's browser/client entry point.
 
+When the browser can confirm which bundle URL it loaded, manual, cause and React stacks retain line and column numbers as the SDK removes the query and fragment. Set a unique `release` for each build that reuses a bundle path. [Register source maps and inspect original code](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/source-map-ci.md)
+
 ## Choose capture overhead
 
 Set `preset: 'minimal' | 'standard' | 'detailed'` at `init()`; omitting it keeps the previous `standard` defaults. `minimal` disables automatic error hooks and browser instrumentation, while manual `captureException()` and `addBreadcrumb()` still use normal queued delivery. It also omits error and component stacks. `detailed` enables console errors, resource errors, navigation and network breadcrumbs, and linked `Error.cause` details in addition to standard capture. All modes use the same SDK bundle; the choice changes runtime work and event detail, not download size.

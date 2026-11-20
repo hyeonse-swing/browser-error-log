@@ -44,7 +44,7 @@ for (const [release, file] of [['A', 'release-a.ts'], ['B', 'release-b.ts']]) {
     bundle: true,
     minify: true,
     sourcemap: 'external',
-    sourcesContent: false,
+    sourcesContent: true,
     platform: 'browser',
     format: 'iife',
     target: 'es2020',

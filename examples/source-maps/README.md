@@ -22,7 +22,7 @@ node examples/source-maps/build-fixture.mjs --output-dir /tmp/bel-source-map-exa
 | A | `A/manifest.json` | `A/assets/app.js.map` |
 | B | `B/manifest.json` | `B/assets/app.js.map` |
 
-`Top errors`에서 A와 B의 합성 오류를 각각 열어 `Original locations`를 확인한다. A 맵을 제거하면 A 오류는 미매핑 상태가 되고 B는 계속 원본 위치를 보여준다. 맵은 현재 뷰어 탭에만 등록된다. JS 빌드와 맵은 출력 디렉터리에만 있고, 예제의 배포 주소 `app.example.test`에는 업로드하지 않는다.
+`Top errors`에서 A와 B의 합성 오류를 각각 열어 `Original locations`를 확인한다. 각 좌표에서 `View source`를 눌러 실제 오류 표현식 `SOURCE_MAP_FIXTURE_MISSING()`이 표시되는지도 확인한다. A 맵을 제거하면 A 오류는 미매핑 상태가 되고 B는 계속 원본 위치를 보여준다. 맵은 현재 뷰어 탭에만 등록된다. JS 빌드와 맵은 출력 디렉터리에만 있고, 예제의 배포 주소 `app.example.test`에는 업로드하지 않는다.
 
 실제 SDK 수집과 SQLite 수집기, 빌드된 뷰어를 함께 검사하려면 저장소 루트에서 다음 명령을 실행한다. 이 검사는 Chromium·Firefox·WebKit에서 같은 URL의 두 빌드를 번갈아 제공한다.
 

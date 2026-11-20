@@ -41,9 +41,16 @@ export function Root() {
   return (
     <ErrorBoundary
       client={errorLog}
-      fallback={(_error, reset) => (
+      fallback={(_error, reset, reference) => (
         <section>
           <p>This view could not be displayed.</p>
+          {reference && (
+            <label>
+              Error reference
+              <input readOnly value={JSON.stringify(reference)} onFocus={e => e.currentTarget.select()} />
+              <small>Copy this reference when contacting support.</small>
+            </label>
+          )}
           <button onClick={reset}>Try again</button>
         </section>
       )}
@@ -54,7 +61,7 @@ export function Root() {
 }
 ```
 
-`App` above is your application component. The fallback can be a React node or a function receiving an `Error` and a reset callback. Non-Error throws, including `null` and `false`, are normalized for the fallback; the original thrown value is still forwarded to the SDK. Reset clears the boundary's error state and retries rendering its children; fix the underlying state if rendering would fail again. With no fallback, a failed boundary renders nothing.
+`App` above is your application component. The fallback can be a React node or a function receiving an error, a reset callback, and an optional lookup reference. The reference appears once the client accepts the current error into its queue. Clients without reference support still show the retry button. Non-Error throws, including `null` and `false`, are normalized for the fallback; the original thrown value is still forwarded to the SDK. Reset clears the boundary's error state and retries rendering its children; fix the underlying state if rendering would fail again. With no fallback, a failed boundary renders nothing.
 
 Pass `onCapture={({ project, eventId }) => showReportId(project, eventId)}` to give the fallback UI or a support form the lookup fields for the queued error. Use your own `showReportId` handler. The callback runs after capture when the client supports `captureExceptionWithReference` and admits the error. A stored record can be confirmed through the collector.
 

@@ -709,6 +709,66 @@ class Client implements BrowserErrorLogReferenceClient {
       .slice(0, length);
   }
 
+  private observedStackUrls(): Map<string, boolean> {
+    // Other resources can rule out ambiguous URL tails, but only scripts attest a frame.
+    const urls = new Map<string, boolean>();
+    try {
+      const scripts = document.scripts;
+      for (let index = 0; index < Math.min(scripts.length, 256); index++) {
+        const url = scripts[index]?.src;
+        if (url && url.length <= 4096) urls.set(url, true);
+      }
+    } catch { /* unavailable DOM */ }
+    try {
+      const resources = performance.getEntriesByType('resource');
+      for (let index = 0; index < Math.min(resources.length, 256); index++) {
+        const entry = resources[index] as PerformanceResourceTiming;
+        if (entry.name && entry.name.length <= 4096) {
+          urls.set(entry.name, urls.get(entry.name) === true || entry.initiatorType === 'script');
+        }
+      }
+    } catch { /* unavailable resource timing */ }
+    return urls;
+  }
+
+  private cleanStackText(input: unknown, length: number): string {
+    const raw = safeString(input);
+    const clean = this.cleanText(raw, length);
+    // A caller's sanitizer may intentionally change the asset identity.
+    if (this.options.sanitizeUrl || !/[?#]/.test(raw)) return clean;
+    const rawPrefix = raw.slice(0, length);
+    const rawLines = rawPrefix.split('\n');
+    const cleanLines = clean.split('\n');
+    if (rawLines.length !== cleanLines.length) return clean;
+    let observed: Map<string, boolean> | undefined;
+    for (let index = 0; index < rawLines.length; index++) {
+      const rawLine = rawLines[index];
+      if (!/[?#]/.test(rawLine) || (index === rawLines.length - 1 && raw.length >= length && !rawPrefix.endsWith('\n'))) continue;
+      if ((rawLine.match(/https?:\/\//g) ?? []).length !== 1) continue;
+      const v8 = /^\s*at\s+(?:[^()\n]*\()?((?:https?):\/\/[^\s()]+):([1-9]\d*):([1-9]\d*)(\))?\s*$/u.exec(rawLine);
+      const gecko = /^(?:[^@\n]*@)?((?:https?):\/\/\S+):([1-9]\d*):([1-9]\d*)\s*$/u.exec(rawLine);
+      const match = v8 ?? gecko;
+      if (!match) continue;
+      const [, rawUrl, line, column] = match;
+      if (!/[?#]/.test(rawUrl) || !Number.isSafeInteger(Number(line)) || !Number.isSafeInteger(Number(column))) continue;
+      try {
+        const parsed = new URL(rawUrl);
+        if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) continue;
+      } catch { continue; }
+      observed ??= this.observedStackUrls();
+      if (!observed.get(rawUrl) || observed.has(`${rawUrl}:${line}:${column}`)) continue;
+      const cleanLine = cleanLines[index];
+      if (cleanLine !== this.cleanText(rawLine, length)) continue;
+      const safeUrl = this.cleanUrl(rawUrl);
+      const closing = v8?.[4] ?? '';
+      const expectedEnd = `${safeUrl}${closing}`;
+      const suffix = `:${line}:${column}`;
+      if (!cleanLine.endsWith(expectedEnd) || cleanLines.join('\n').length + suffix.length > length) continue;
+      cleanLines[index] = `${cleanLine.slice(0, -expectedEnd.length)}${safeUrl}${suffix}${closing}`;
+    }
+    return cleanLines.join('\n');
+  }
+
   private restoreGlobalStackLocation(rawStack: string, cleanStack: string,
     { filename, lineno, colno }: { filename: string; lineno: number; colno: number }): string {
     const rawLines = rawStack.slice(0, 4096).split('\n');
@@ -759,14 +819,14 @@ class Client implements BrowserErrorLogReferenceClient {
       const name = read(cause, 'name');
       const safeName = this.cleanText(typeof name === 'string' ? name : 'Error', 100);
       const safeMessage = typeof message === 'string' ? this.cleanText(message, 256) : '';
-      const safeStack = typeof stack === 'string' ? this.cleanText(stack, 480) : '';
+      const safeStack = typeof stack === 'string' ? this.cleanStackText(stack, 480) : '';
       segments.push(`Caused by: ${safeName}: ${safeMessage}${safeStack ? `\n${safeStack}` : ''}`.slice(0, 480));
       current = cause;
     }
     if (!segments.length) return fields;
     const outer = fields.stack === undefined
       ? `${this.cleanText(fields.name ?? 'Error', 100)}: ${this.cleanText(fields.message, 256)}`
-      : this.cleanText(fields.stack, 2048);
+      : this.cleanStackText(fields.stack, 2048);
     return { ...fields, stack: `${outer}\n${segments.join('\n')}` };
   }
 
@@ -891,8 +951,8 @@ class Client implements BrowserErrorLogReferenceClient {
       type,
       message: this.cleanText(message, 1024),
       ...(extra.name === undefined ? {} : { name: this.cleanText(extra.name, 100) }),
-      ...(this.captureStack && extra.stack !== undefined ? { stack: this.cleanText(extra.stack, 4096) } : {}),
-      ...(this.captureStack && extra.componentStack !== undefined ? { componentStack: this.cleanText(extra.componentStack, 2048) } : {}),
+      ...(this.captureStack && extra.stack !== undefined ? { stack: this.cleanStackText(extra.stack, 4096) } : {}),
+      ...(this.captureStack && extra.componentStack !== undefined ? { componentStack: this.cleanStackText(extra.componentStack, 2048) } : {}),
       page: this.cleanUrl(window.location.href),
       runtime: RUNTIMES.has(this.options.runtime as Runtime) ? this.options.runtime! : 'browser',
       ...(typeof userAgent === 'string' ? { browser: this.cleanText(userAgent, 300) } : {}),
@@ -919,8 +979,8 @@ class Client implements BrowserErrorLogReferenceClient {
       type: EVENT_TYPES.has(type as EventType) ? type as EventType : base.type,
       message: this.cleanText(read(candidate, 'message') ?? base.message, 1024),
       ...(name === undefined ? { name: base.name } : { name: this.cleanText(name, 100) }),
-      ...(this.captureStack ? (stack === undefined ? { stack: undefined } : { stack: this.cleanText(stack, 4096) }) : {}),
-      ...(this.captureStack ? (componentStack === undefined ? { componentStack: base.componentStack } : { componentStack: this.cleanText(componentStack, 2048) }) : {}),
+      ...(this.captureStack ? (stack === undefined ? { stack: undefined } : { stack: this.cleanStackText(stack, 4096) }) : {}),
+      ...(this.captureStack ? (componentStack === undefined ? { componentStack: base.componentStack } : { componentStack: this.cleanStackText(componentStack, 2048) }) : {}),
       page: this.cleanUrl(read(candidate, 'page') ?? base.page),
       runtime: RUNTIMES.has(runtime as Runtime) ? runtime as Runtime : base.runtime,
       ...(browser === undefined ? { browser: base.browser } : { browser: this.cleanText(browser, 300) }),

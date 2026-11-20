@@ -33,6 +33,7 @@ function makeBatch(events: ErrorEventRecord[]): EventBatch {
 - `ErrorEventRecord`는 프로젝트·환경·릴리스·이벤트 ID·발생 시각·종류·메시지·페이지·런타임과 선택적인 스택·네트워크·context를 담는 v1 이벤트입니다.
 - `EventBatch`는 `{ schemaVersion: 1, events: [...] }`로 이벤트를 묶어 전송합니다.
 - `getEventReference(event)`는 조회나 인수인계에 쓸 `project`와 `eventId`를 추려 `EventReference`로 반환합니다.
+- `parseEventReference(value)`는 문의 양식에서 받은 JSON 객체에서 조회 필드를 읽습니다. `project`와 `eventId`가 모두 비어 있지 않은 문자열이면 두 필드의 원래 값을 반환하고, 누락되거나 유효하지 않으면 `undefined`를 반환합니다.
 - `EventFilter`는 프로젝트·환경·종류·텍스트 검색·기간·커서·건수 제한을 지원합니다.
 - `EventPage`는 `events`와 선택적인 `nextCursor`를 반환합니다.
 - `EventDataSource`는 뷰어용 `listEvents(filter, signal?)`, `getEvent(project, eventId, signal?)`을 정의합니다.

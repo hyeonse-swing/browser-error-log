@@ -36,7 +36,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
   prepare:
+    needs: verify
     if: github.repository == 'hyeonse-swing/browser-error-log' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 25

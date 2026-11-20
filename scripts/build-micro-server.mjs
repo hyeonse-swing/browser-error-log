@@ -29,7 +29,7 @@ for (const name of ['assets', 'favicon.svg', 'history-example.json']) {
 }
 const index = await readFile('dist/viewer/index.html', 'utf8');
 await writeFile(`${out}/public/index.html`, index.replace('</head>',
-  `<script>window.__ERROR_LOG_VIEWER_CONFIG__={mode:'live',title:'Browser Error Log'};</script></head>`));
+  `<script src="/api/viewer-config.js"></script></head>`));
 await cp('packages/browser/dist/index.js', `${out}/public/sdk.js`);
 await build({
   entryPoints: ['examples/micro-server/src/install.ts'],

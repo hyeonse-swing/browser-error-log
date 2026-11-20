@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import { resolve, sep } from 'node:path';
 import type { MicroConfig, StorageMode } from './types.ts';
 
 const PROJECT_ID = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/;
@@ -57,6 +57,19 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): MicroConfig {
   if (viewerPassword !== undefined && (!viewerPassword || viewerPassword.length > 256 || /[\x00-\x1f\x7f]/.test(viewerPassword))) {
     throw new Error('MICRO_VIEWER_PASSWORD must be 1 to 256 printable characters');
   }
+  const sourceMapToken = env.MICRO_SOURCE_MAP_TOKEN || undefined;
+  if (sourceMapToken !== undefined) {
+    if (!/^[\x21-\x7e]{32,256}$/.test(sourceMapToken)) {
+      throw new Error('MICRO_SOURCE_MAP_TOKEN must be 32 to 256 printable non-space ASCII characters');
+    }
+    if (mode !== 'sqlite') throw new Error('MICRO_SOURCE_MAP_TOKEN requires MICRO_STORAGE=sqlite');
+    if (!viewerPassword) throw new Error('MICRO_SOURCE_MAP_TOKEN requires MICRO_VIEWER_PASSWORD');
+  }
+  const dataDir = path(env.MICRO_DATA_DIR, 'MICRO_DATA_DIR', '.data/micro-server');
+  const publicDir = path(env.MICRO_PUBLIC_DIR, 'MICRO_PUBLIC_DIR', 'dist/micro-server/public');
+  if (sourceMapToken !== undefined && (dataDir === publicDir || dataDir.startsWith(publicDir + sep))) {
+    throw new Error('MICRO_DATA_DIR must be outside MICRO_PUBLIC_DIR');
+  }
   // A loopback listener behind a reverse proxy is public too when a public URL is configured.
   if (host === '0.0.0.0' || publicUrl !== undefined) {
     if (!publicUrl?.startsWith('https://')) throw new Error('MICRO_PUBLIC_URL must be an HTTPS origin for external binding');
@@ -69,12 +82,13 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): MicroConfig {
     host,
     port: integer(env.MICRO_PORT, 'MICRO_PORT', 4319, 65535),
     mode: mode as StorageMode,
-    dataDir: path(env.MICRO_DATA_DIR, 'MICRO_DATA_DIR', '.data/micro-server'),
-    publicDir: path(env.MICRO_PUBLIC_DIR, 'MICRO_PUBLIC_DIR', 'dist/micro-server/public'),
+    dataDir,
+    publicDir,
     projects: projectIds,
     allowedOrigins,
     ...(publicUrl === undefined ? {} : { publicUrl }),
     ...(viewerPassword === undefined ? {} : { viewerPassword }),
+    ...(sourceMapToken === undefined ? {} : { sourceMapToken }),
     retentionDays: integer(env.MICRO_RETENTION_DAYS, 'MICRO_RETENTION_DAYS', 7, 365),
     maxEvents: integer(env.MICRO_MAX_EVENTS, 'MICRO_MAX_EVENTS', 10_000, 1_000_000),
     maxDbBytes: integer(env.MICRO_MAX_DB_MB, 'MICRO_MAX_DB_MB', 64, 1024) * 1024 * 1024,

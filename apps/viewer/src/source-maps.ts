@@ -12,6 +12,10 @@ const MAX_MAPPING_LINES = 100_000;
 const MAX_MAPPING_SEGMENTS = 300_000;
 const MAX_SOURCES = 10_000;
 const MAX_NAMES = 20_000;
+const MAX_SOURCE_CONTENT_BYTES = 512 * 1024;
+const MAX_RETAINED_SOURCE_BYTES = 4 * 1024 * 1024;
+const SOURCE_CONTEXT_LINES = 2;
+const MAX_PREVIEW_LINE_UNITS = 240;
 
 export type SourceMapInputCode =
   | 'manifest-too-large' | 'invalid-manifest' | 'map-too-large'
@@ -33,6 +37,8 @@ export interface PreparedSourceMap {
   byteLength: number;
   segmentCount: number;
   trace: TraceMap;
+  // Indexed by the original map source index. Never placed in TraceMap or fetched by URL.
+  sourceContents?: ReadonlyMap<number, string>;
 }
 
 export interface MapRegistry {
@@ -42,14 +48,20 @@ export interface MapRegistry {
 
 export type UnmappedReason =
   | 'no-stack' | 'unrecognized-frame' | 'unknown-release'
-  | 'no-registration' | 'registration-conflict' | 'no-mapping' | 'invalid-frame';
+  | 'no-registration' | 'registration-conflict' | 'no-mapping' | 'invalid-frame' | 'no-location';
 
 export interface ResolvedFrame {
   raw: string;
+  name?: string;
   generated?: { url: string; line: number; column: number };
   original?: { source: string; line: number; column: number };
+  sourceReference?: { key: string; index: number };
   reason?: UnmappedReason;
 }
+
+export type SourceExcerpt =
+  | { status: 'missing-source' | 'missing-line' | 'missing-column' }
+  | { status: 'available'; lines: { number: number; before: string; marked?: string; after: string }[] };
 
 export function sourceMapKey(manifest: Pick<SourceMapManifest, 'project' | 'environment' | 'release' | 'assetUrl'>): string {
   return JSON.stringify([manifest.project, manifest.environment, manifest.release, manifest.assetUrl]);
@@ -80,7 +92,9 @@ async function sha256(bytes: ArrayBuffer): Promise<string> {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function checkedMap(input: unknown, manifest: SourceMapManifest): { trace: TraceMap; segmentCount: number } {
+function checkedMap(input: unknown, manifest: SourceMapManifest): {
+  trace: TraceMap; segmentCount: number; sourceContents: ReadonlyMap<number, string>;
+} {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new SourceMapInputError('invalid-map');
   const map = input as Record<string, unknown>;
   if (map.version !== 3 || 'sections' in map) throw new SourceMapInputError('unsupported-map');
@@ -99,7 +113,7 @@ function checkedMap(input: unknown, manifest: SourceMapManifest): { trace: Trace
   validateMappingsEncoding(map.mappings);
   try {
     // Retain only safe relative root segments needed to distinguish author files.
-    // The original root and source contents do not remain in the registry.
+    // The original root and source contents never enter TraceMap.
     const root = typeof map.sourceRoot === 'string' ? map.sourceRoot.replaceAll('\\', '/') : '';
     const safeRoot = root && !root.startsWith('/') && !root.includes('..') &&
       !/[:?#\u0000-\u001f\u007f]/u.test(root) ? root.replace(/\/+$/, '') : '';
@@ -116,6 +130,19 @@ function checkedMap(input: unknown, manifest: SourceMapManifest): { trace: Trace
       names: Array((map.names as string[] | undefined)?.length ?? 0).fill(''),
       mappings: map.mappings,
     });
+    const sourceContents = new Map<number, string>();
+    const contents = map.sourcesContent;
+    if (Array.isArray(contents) && contents.length === sources.length) {
+      let retainedBytes = 0;
+      for (let index = 0; index < contents.length; index++) {
+        const content = contents[index];
+        if (!sources[index] || typeof content !== 'string') continue;
+        const bytes = new TextEncoder().encode(content).byteLength;
+        if (bytes > MAX_SOURCE_CONTENT_BYTES || retainedBytes + bytes > MAX_RETAINED_SOURCE_BYTES) continue;
+        sourceContents.set(index, content);
+        retainedBytes += bytes;
+      }
+    }
     let count = 0;
     for (const line of decodedMappings(trace)) {
       let lastColumn = -1;
@@ -130,7 +157,7 @@ function checkedMap(input: unknown, manifest: SourceMapManifest): { trace: Trace
         lastColumn = segment[0];
       }
     }
-    return { trace, segmentCount: count };
+    return { trace, segmentCount: count, sourceContents };
   } catch {
     throw new SourceMapInputError('invalid-map');
   }
@@ -192,11 +219,11 @@ export async function prepareSourceMap(manifestFile: File, mapFile: File): Promi
   } catch {
     throw new SourceMapInputError('invalid-map');
   }
-  const { trace, segmentCount } = checkedMap(map, manifest);
+  const { trace, segmentCount, sourceContents } = checkedMap(map, manifest);
   return {
     key: sourceMapKey(manifest), manifest,
     mapSha256: digest, bundleSha256: manifest.bundleSha256,
-    byteLength: mapBytes.byteLength, segmentCount, trace,
+    byteLength: mapBytes.byteLength, segmentCount, trace, sourceContents,
   };
 }
 
@@ -262,29 +289,129 @@ function parseFrame(raw: string): ResolvedFrame {
   return { raw, generated: { url, line, column } };
 }
 
+function parseComponentFrame(raw: string): ResolvedFrame {
+  const frame = parseFrame(raw);
+  const v8Name = /^\s*at\s+(.+?)\s*\(/u.exec(raw)?.[1] ?? /^\s*at\s+(\S+)\s*$/u.exec(raw)?.[1];
+  const geckoName = /^([^@\n]+)@https?:\/\//u.exec(raw)?.[1];
+  const reactName = /^\s*in\s+(.+?)(?:\s+\(|\s*$)/u.exec(raw)?.[1];
+  const name = (v8Name ?? geckoName ?? reactName)?.trim();
+  return {
+    ...frame,
+    ...(name ? { name: name.slice(0, 240) } : {}),
+    ...(!frame.generated && frame.reason === 'unrecognized-frame' ? { reason: 'no-location' as const } : {}),
+  };
+}
+
+function stackLines(stack: string, sdkLimit = 4096): { lines: string[]; tailMayBePartial: boolean } {
+  const clipped = stack.slice(0, 16 * 1024);
+  const allLines = clipped.split('\n');
+  return {
+    lines: allLines.slice(0, 100),
+    tailMayBePartial: stack.length >= sdkLimit && !clipped.endsWith('\n') && allLines.length <= 100,
+  };
+}
+
+function resolveFrame(
+  frame: ResolvedFrame,
+  event: Pick<ErrorEventRecord, 'project' | 'environment' | 'release'>,
+  registry: MapRegistry,
+): ResolvedFrame {
+  if (!frame.generated) return frame;
+  if (!event.release || event.release === 'unknown') return { ...frame, reason: 'unknown-release' };
+  const key = sourceMapKey({ ...event, assetUrl: frame.generated.url });
+  if (registry.conflicts.has(key)) return { ...frame, reason: 'registration-conflict' };
+  const registration = registry.entries.get(key);
+  if (!registration) return { ...frame, reason: 'no-registration' };
+  const segment = traceSegment(registration.trace, frame.generated.line - 1, frame.generated.column - 1);
+  if (!segment || segment.length === 1) return { ...frame, reason: 'no-mapping' };
+  const source = registration.trace.sources[segment[1]];
+  if (!source) return { ...frame, reason: 'no-mapping' };
+  return {
+    ...frame,
+    original: { source, line: segment[2] + 1, column: segment[3] + 1 },
+    sourceReference: { key, index: segment[1] },
+  };
+}
+
 export function resolveStack(
   event: Pick<ErrorEventRecord, 'project' | 'environment' | 'release' | 'stack'>,
   registry: MapRegistry,
 ): ResolvedFrame[] {
   if (!event.stack) return [{ raw: '', reason: 'no-stack' }];
-  const stack = event.stack.slice(0, 16 * 1024);
-  const allLines = stack.split('\n');
-  const frames = allLines.slice(0, 100).map(parseFrame);
-  const tailMayBePartial = event.stack.length >= 4096 && !stack.endsWith('\n') && frames.length === allLines.length;
+  const { lines, tailMayBePartial } = stackLines(event.stack);
+  const frames = lines.map(parseFrame);
   const hasLocation = frames.some(frame => frame.generated);
   return frames.map((frame, index): ResolvedFrame | null => {
     if (!frame.raw.trim() || (index === 0 && hasLocation && /^[\w.$]*(?:Error|Exception):/u.test(frame.raw))) return null;
     if (tailMayBePartial && index === frames.length - 1) return { raw: frame.raw, reason: 'invalid-frame' };
-    if (!frame.generated) return frame;
-    if (!event.release || event.release === 'unknown') return { ...frame, reason: 'unknown-release' };
-    const key = sourceMapKey({ ...event, assetUrl: frame.generated.url });
-    if (registry.conflicts.has(key)) return { ...frame, reason: 'registration-conflict' };
-    const registration = registry.entries.get(key);
-    if (!registration) return { ...frame, reason: 'no-registration' };
-    const segment = traceSegment(registration.trace, frame.generated.line - 1, frame.generated.column - 1);
-    if (!segment || segment.length === 1) return { ...frame, reason: 'no-mapping' };
-    const source = registration.trace.sources[segment[1]];
-    if (!source) return { ...frame, reason: 'no-mapping' };
-    return { ...frame, original: { source, line: segment[2] + 1, column: segment[3] + 1 } };
+    return resolveFrame(frame, event, registry);
   }).filter((frame): frame is ResolvedFrame => frame !== null);
+}
+
+export function resolveComponentStack(
+  event: Pick<ErrorEventRecord, 'project' | 'environment' | 'release' | 'componentStack'>,
+  registry: MapRegistry,
+): ResolvedFrame[] {
+  if (!event.componentStack) return [];
+  const { lines, tailMayBePartial } = stackLines(event.componentStack, 2048);
+  const frames = lines.map(parseComponentFrame);
+  return frames.map((frame, index): ResolvedFrame | null => {
+    if (!frame.raw.trim()) return null;
+    if (tailMayBePartial && index === frames.length - 1) return { raw: frame.raw, name: frame.name, reason: 'invalid-frame' };
+    return resolveFrame(frame, event, registry);
+  }).filter((frame): frame is ResolvedFrame => frame !== null);
+}
+
+export function generatedAssetUrls(event: Pick<ErrorEventRecord, 'stack' | 'componentStack'>): string[] {
+  const urls = new Set<string>();
+  for (const [stack, parser] of [
+    [event.stack, parseFrame], [event.componentStack, parseComponentFrame],
+  ] as const) {
+    if (!stack) continue;
+    const { lines, tailMayBePartial } = stackLines(stack, parser === parseComponentFrame ? 2048 : 4096);
+    for (const [index, raw] of lines.entries()) {
+      if (tailMayBePartial && index === lines.length - 1) continue;
+      const url = parser(raw).generated?.url;
+      if (url) urls.add(url);
+    }
+  }
+  return [...urls];
+}
+
+export function sourceExcerpt(frame: ResolvedFrame, registry: MapRegistry): SourceExcerpt {
+  if (!frame.original || !frame.sourceReference || registry.conflicts.has(frame.sourceReference.key)) {
+    return { status: 'missing-source' };
+  }
+  const content = registry.entries.get(frame.sourceReference.key)?.sourceContents?.get(frame.sourceReference.index);
+  if (content === undefined) return { status: 'missing-source' };
+  const lines = content.split(/\r\n|\n|\r/u);
+  const target = lines[frame.original.line - 1];
+  if (target === undefined) return { status: 'missing-line' };
+  if (frame.original.column > target.length + 1) return { status: 'missing-column' };
+  const start = Math.max(1, frame.original.line - SOURCE_CONTEXT_LINES);
+  const end = Math.min(lines.length, frame.original.line + SOURCE_CONTEXT_LINES);
+  const excerpt = [];
+  for (let number = start; number <= end; number++) {
+    const line = lines[number - 1];
+    if (number !== frame.original.line) {
+      excerpt.push({ number, before: line.length > MAX_PREVIEW_LINE_UNITS ? `${line.slice(0, MAX_PREVIEW_LINE_UNITS)}…` : line, after: '' });
+      continue;
+    }
+    const index = frame.original.column - 1;
+    const isLowSurrogate = index > 0 && /[\uDC00-\uDFFF]/u.test(line[index] ?? '') &&
+      /[\uD800-\uDBFF]/u.test(line[index - 1] ?? '');
+    const markStart = isLowSurrogate ? index - 1 : index;
+    const isHighSurrogate = /[\uD800-\uDBFF]/u.test(line[markStart] ?? '') &&
+      /[\uDC00-\uDFFF]/u.test(line[markStart + 1] ?? '');
+    const markEnd = Math.min(line.length, markStart + (isHighSurrogate ? 2 : 1));
+    const left = Math.max(0, markStart - Math.floor(MAX_PREVIEW_LINE_UNITS / 2));
+    const right = Math.min(line.length, markEnd + Math.floor(MAX_PREVIEW_LINE_UNITS / 2));
+    excerpt.push({
+      number,
+      before: `${left ? '…' : ''}${line.slice(left, markStart)}`,
+      marked: line.slice(markStart, markEnd) || '│',
+      after: `${line.slice(markEnd, right)}${right < line.length ? '…' : ''}`,
+    });
+  }
+  return { status: 'available', lines: excerpt };
 }

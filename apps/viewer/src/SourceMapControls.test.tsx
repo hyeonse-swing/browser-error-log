@@ -78,3 +78,30 @@ it('shows an event without a JavaScript stack without inventing an original loca
   expect(container.querySelector('.source-map-locations')?.textContent).toContain('No JavaScript stack to map');
   expect(container.querySelector('.source-map-locations')?.textContent).not.toContain('src/original.ts');
 });
+
+it('shows a bounded local source excerpt only after opening it and escapes source markup', async () => {
+  const withContent = { ...registration, sourceContents: new Map([[0, 'const x = <img src=x onerror=alert(1)>;\r\nnext']]) };
+  const sourceMaps = registerSourceMap(emptySourceMaps(), withContent);
+  await act(async () => root.render(<OriginalLocations event={{
+    ...event, componentStack: `    at ProductSummary (${manifest.assetUrl}:1:1)\n    at App`,
+  }} sourceMaps={sourceMaps}/>));
+  expect(container.querySelectorAll('.source-map-preview')).toHaveLength(0);
+  expect(container.querySelector('.source-map-locations')?.textContent).toContain('ProductSummary');
+  expect(container.querySelector('.source-map-locations')?.textContent).toContain('at App');
+  expect(container.querySelector('.source-map-locations')?.textContent).toContain('React did not provide a source position');
+  const button = container.querySelector<HTMLButtonElement>('.source-map-locations button')!;
+  await act(async () => button.click());
+  expect(button.getAttribute('aria-expanded')).toBe('true');
+  expect(container.querySelector('.source-map-preview')?.textContent).toContain('<img src=x onerror=alert(1)>');
+  expect(container.querySelector('.source-map-preview img')).toBeNull();
+  expect(container.querySelector('.source-map-preview mark')?.textContent).toBe('c');
+  await act(async () => button.click());
+  expect(container.querySelector('.source-map-preview')).toBeNull();
+});
+
+it('states when a mapped source has no embedded content', async () => {
+  const sourceMaps = registerSourceMap(emptySourceMaps(), registration);
+  await act(async () => root.render(<OriginalLocations event={event} sourceMaps={sourceMaps}/>));
+  expect(container.querySelector('.source-map-locations')?.textContent).toContain('Original source content is unavailable');
+  expect(container.querySelector('.source-map-locations button')).toBeNull();
+});

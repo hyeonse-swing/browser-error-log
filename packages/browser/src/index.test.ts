@@ -490,6 +490,111 @@ describe('browser error client', () => {
     expect(event.context).toMatchObject({ filename: 'https://example.test/assets/app.js', lineno: 12, colno: 7 });
   });
 
+  it('preserves attested query and fragment frame positions in React exception and component stacks', async () => {
+    const asset = 'https://example.test/assets/app.js?cache=release-A#module';
+    const script = document.createElement('script');
+    script.src = asset;
+    document.body.append(script);
+    try {
+      const instance = client();
+      const stack = `Error: render failed\n    at Broken (${asset}:12:7)\nrender@${asset}:13:9`;
+      const error = Object.assign(new Error('render failed'), { stack });
+      instance.captureException(error, { type: 'react', componentStack: `    at Broken (${asset}:12:7)\nBroken@${asset}:13:9` });
+      await instance.flush();
+      const event = captured[0].events[0];
+      expect(event.stack).toContain('at Broken (https://example.test/assets/app.js:12:7)');
+      expect(event.stack).toContain('render@https://example.test/assets/app.js:13:9');
+      expect(event.componentStack).toContain('at Broken (https://example.test/assets/app.js:12:7)');
+      expect(event.componentStack).toContain('Broken@https://example.test/assets/app.js:13:9');
+      expect(JSON.stringify(event)).not.toMatch(/cache=release-A|#module/);
+    } finally { script.remove(); }
+  });
+
+  it('uses browser resource timing for an exactly observed module URL', async () => {
+    const asset = 'https://example.test/assets/app.js?cache=dynamic';
+    vi.stubGlobal('performance', { now: () => 0, getEntriesByType: () => [{ name: asset, initiatorType: 'script' }] });
+    const instance = client();
+    instance.captureException(Object.assign(new Error('module'), {
+      stack: `Error: module\n    at Module (${asset}:5:11)`,
+    }), { type: 'react' });
+    await instance.flush();
+    expect(captured[0].events[0].stack).toContain('app.js:5:11');
+    expect(JSON.stringify(captured)).not.toContain('cache=dynamic');
+  });
+
+  it('does not attest a component URL from an image or fetch resource', async () => {
+    const asset = 'https://example.test/pixel?cache=A';
+    vi.stubGlobal('performance', { now: () => 0, getEntriesByType: () => [{ name: asset, initiatorType: 'img' }] });
+    const instance = client();
+    instance.captureException(new Error('test'), { type: 'react', componentStack: `at Broken (${asset}:2:7)` });
+    await instance.flush();
+    expect(captured[0].events[0].componentStack).toBe('at Broken (https://example.test/pixel)');
+  });
+
+  it('does not infer a position from numeric URL tails, credentials, or an unobserved URL', async () => {
+    const asset = 'https://example.test/assets/app.js?cache=A';
+    const numericAsset = `${asset}:12:7`;
+    const observed = [numericAsset, 'https://user:pass@example.test/assets/secret.js?cache=A'];
+    vi.stubGlobal('performance', { now: () => 0, getEntriesByType: () => observed.map(name => ({ name, initiatorType: 'script' })) });
+    const instance = client();
+    instance.captureException(Object.assign(new Error('numeric'), {
+      stack: `Error: numeric\n    at Broken (${numericAsset})`,
+    }), { type: 'react', componentStack: `    at Broken (${numericAsset})` });
+    instance.captureException(Object.assign(new Error('credentials'), {
+      stack: 'Error: credentials\n    at Broken (https://user:pass@example.test/assets/secret.js?cache=A:4:2)',
+    }), { type: 'react' });
+    instance.captureException(Object.assign(new Error('unobserved'), {
+      stack: `Error: unobserved\n    at Broken (${asset}:8:3)`,
+    }), { type: 'react' });
+    await instance.flush();
+    const [numeric, credentials, unobserved] = captured[0].events;
+    expect(numeric.stack).not.toContain('app.js:12:7');
+    expect(numeric.componentStack).not.toContain('app.js:12:7');
+    expect(credentials.stack).not.toContain('secret.js:4:2');
+    expect(unobserved.stack).not.toContain('app.js:8:3');
+    expect(JSON.stringify(captured)).not.toMatch(/cache=A|user:pass/);
+  });
+
+  it('does not restore an ambiguous full URL that is also an observed resource', async () => {
+    const asset = 'https://example.test/assets/app.js?cache=A';
+    vi.stubGlobal('performance', { now: () => 0, getEntriesByType: () => [
+      { name: asset, initiatorType: 'script' }, { name: `${asset}:12:7`, initiatorType: 'img' },
+    ] });
+    const instance = client();
+    instance.captureException(Object.assign(new Error('ambiguous'), {
+      stack: `Error: ambiguous\n    at Broken (${asset}:12:7)`,
+    }), { type: 'react' });
+    await instance.flush();
+    expect(captured[0].events[0].stack).not.toContain('app.js:12:7');
+  });
+
+  it('keeps sanitizer and beforeSend policy authoritative for React stack positions', async () => {
+    const asset = 'https://example.test/assets/app.js?cache=A';
+    const script = document.createElement('script');
+    script.src = asset;
+    document.body.append(script);
+    try {
+      const sanitizer = client({ sanitizeUrl: value => value.replace('/assets/app.js', '/redacted.js') });
+      sanitizer.captureException(Object.assign(new Error('hook'), {
+        stack: `Error: hook\n    at Broken (${asset}:12:7)`,
+      }), { type: 'react', componentStack: `    at Broken (${asset}:12:7)` });
+      await sanitizer.flush();
+      expect(captured[0].events[0].stack).not.toContain('redacted.js:12:7');
+      expect(captured[0].events[0].componentStack).not.toContain('redacted.js:12:7');
+      sanitizer.destroy();
+
+      const replaced = client({ beforeSend: event => ({ ...event,
+        stack: `Error: replaced\n    at Broken (${asset}:3:4)`,
+        componentStack: `    at Broken (${asset}:3:4)`,
+      }) });
+      replaced.captureException(new Error('replaced'), { type: 'react' });
+      await replaced.flush();
+      expect(captured.at(-1)?.events[0].stack).toContain('app.js:3:4');
+      expect(captured.at(-1)?.events[0].componentStack).toContain('app.js:3:4');
+      expect(JSON.stringify(captured)).not.toContain('cache=A');
+    } finally { script.remove(); }
+  });
+
   it('leaves conflicting and non-first native locations out of the stack', async () => {
     const instance = client();
     const filename = 'https://example.test/assets/app.js?private=1';

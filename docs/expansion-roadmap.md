@@ -18,12 +18,12 @@ The SQLite defaults are seven days from receipt, 10,000 events, and a 64 MiB mai
 | --- | --- | --- |
 | SDK reliability | Test supported browser and WebView versions under sustained load | Check behavior beyond local fixtures and bounded unit tests |
 | Privacy controls | Document tested application-specific filters and a server-side removal point | Reduce accidental collection of identifiers in paths, messages, stacks, or context |
-| Diagnostics | Extend the local release-map workflow with CI registration and improve event grouping | Connect deployed stacks to source and group repeat failures without hiding distinct causes |
+| Diagnostics | Improve event grouping | Group repeat failures without hiding distinct causes |
 | Larger datasets | Define server aggregation with the same filters and access rules as event queries | Show complete counts when viewer fetch limits are reached |
 | Operations | Restore exercises, backups, access review, optional alerts and issue workflow | Support operators who need longer retention or response processes |
 
 Each extension needs an implementation, documentation, and checks against the actual deployment. An operator can use the current SQLite server without waiting for these additions. A custom backend can implement the [self-owned contract](server-request.md) with its own storage and access design.
 
-Current exclusions include session replay, native app crashes, guaranteed or exactly-once browser delivery, automated source maps, alerts, and server-wide aggregates. Default URL masking is best-effort and does not replace application-specific privacy review. Charts count captured events, not users or error rates against all requests.
+Current exclusions include session replay, native app crashes, guaranteed or exactly-once browser delivery, alerts, and server-wide aggregates. Default URL masking is best-effort and does not replace application-specific privacy review. Charts count captured events, not users or error rates against all requests.
 
 Infrastructure is not included. Hosting, servers, databases, storage, bandwidth, domains, backups, and third-party services are selected and paid for by each operator. Any charges are billed independently by their providers, not by this project or its maintainers.
