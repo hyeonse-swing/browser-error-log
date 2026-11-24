@@ -66,7 +66,17 @@ try {
 
 `eventId` is the same identifier used by the collector and viewer for this event. It is returned only when the SDK accepts the error for its delivery queue; duplicates, filters, sampling, limits, and disabled clients return `undefined`. Queue eviction, delivery failure, and page closure can still prevent storage, so confirm the record in the collector before relying on it. The existing `BrowserErrorLogClient` and `BrowserErrorLogDiagnosticsClient` interfaces keep their `void` return for adapter compatibility; use the inferred `init()` return type or `BrowserErrorLogCaptureClient` when reading the ID.
 
-Use `errorLog.captureExceptionWithReference(error)` when handing off a report. It captures once and returns `{ project, eventId }` for an admitted event, or `undefined`. Pass those two fields to the collector’s `getEvent(project, eventId)` to find the stored record.
+Use `errorLog.captureExceptionWithReference(error)` when handing off a report. It captures once and returns `{ project, eventId }` for an admitted event, or `undefined`. Pass those two fields to the collector’s `getEvent(project, eventId)` to find the stored record. The SDK also exports `formatEventReference` for a copyable support reference:
+
+```ts
+import { formatEventReference } from '@ihyeon/browser-error-log';
+
+const reference = errorLog.captureExceptionWithReference(new Error('Load failed'));
+const text = formatEventReference(reference);
+if (text) supportForm.setReference(text);
+```
+
+Replace `supportForm.setReference` with your form's setter. The text contains only `project` and `eventId`. `formatEventReference` returns `undefined` if no valid reference was admitted.
 
 To inspect the SDK delivery path for a recent ID, enable the bounded, per-client history:
 

@@ -72,17 +72,24 @@ export function getEventReference({ project, eventId }: EventReference): EventRe
   return { project, eventId };
 }
 
-/** Read lookup fields from a decoded JSON object, preserving their exact values. */
+/** Read lookup fields from a JSON object or a single pasted JSON string. */
 export function parseEventReference(value: unknown): EventReference | undefined {
   try {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-    const project = Object.getOwnPropertyDescriptor(value, 'project')?.value;
-    const eventId = Object.getOwnPropertyDescriptor(value, 'eventId')?.value;
+    const input: unknown = typeof value === 'string' ? JSON.parse(value) : value;
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+    const project = Object.getOwnPropertyDescriptor(input, 'project')?.value;
+    const eventId = Object.getOwnPropertyDescriptor(input, 'eventId')?.value;
     if (typeof project !== 'string' || !project.trim() || typeof eventId !== 'string' || !eventId.trim()) return undefined;
     return { project, eventId };
   } catch {
     return undefined;
   }
+}
+
+/** Serialize only the two lookup fields for a support handoff. */
+export function formatEventReference(value: unknown): string | undefined {
+  const reference = parseEventReference(value);
+  return reference ? JSON.stringify(reference) : undefined;
 }
 
 export interface EventBatch { schemaVersion: 1; events: ErrorEventRecord[] }

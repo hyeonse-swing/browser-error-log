@@ -1,12 +1,12 @@
 import * as React from 'react';
-import type { BrowserErrorLogClient, BrowserErrorLogReferenceClient, CaptureExtra, EventReference } from '@ihyeon/browser-error-log';
+import { formatEventReference, type BrowserErrorLogClient, type BrowserErrorLogReferenceClient, type CaptureExtra, type EventReference } from '@ihyeon/browser-error-log';
 
 export interface ErrorBoundaryProps {
   client: BrowserErrorLogClient & Partial<Pick<BrowserErrorLogReferenceClient, 'captureExceptionWithReference'>>;
   /** Called when a reference-aware client admits this render error to its queue. */
   onCapture?: (reference: EventReference) => void;
   children: React.ReactNode;
-  fallback?: React.ReactNode | ((error: Error, reset: () => void, reference?: EventReference) => React.ReactNode);
+  fallback?: React.ReactNode | ((error: Error, reset: () => void, reference?: EventReference, referenceText?: string) => React.ReactNode);
 }
 
 interface ErrorBoundaryState { error: Error | null; reference?: EventReference }
@@ -51,7 +51,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     const error = this.state.error;
     if (!error) return this.props.children;
     return typeof this.props.fallback === 'function'
-      ? this.props.fallback(error, this.reset, this.state.reference)
+      ? this.props.fallback(error, this.reset, this.state.reference, formatEventReference(this.state.reference))
       : (this.props.fallback ?? null);
   }
 }

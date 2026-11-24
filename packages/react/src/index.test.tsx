@@ -14,23 +14,25 @@ it('shows only the current capture reference after retrying, without an onCaptur
   const rootNode = document.createElement('div');
   const root = createRoot(rootNode);
   let message = 'A';
-  const rendered: { message: string; eventId?: string }[] = [];
+  const rendered: { message: string; eventId?: string; referenceText?: string }[] = [];
   function Child(): React.ReactNode { throw new Error(message); }
   vi.spyOn(console, 'error').mockImplementation(() => {});
   try {
     await act(async () => {
-      root.render(<ErrorBoundary client={client} fallback={(error, reset, reference) => {
-        rendered.push({ message: error.message, eventId: reference?.eventId });
+      root.render(<ErrorBoundary client={client} fallback={(error, reset, reference, referenceText) => {
+        rendered.push({ message: error.message, eventId: reference?.eventId, referenceText });
         return <button onClick={reset}>{reference?.eventId}</button>;
       }}><Child /></ErrorBoundary>);
     });
     const first = rootNode.textContent;
     expect(first).toBeTruthy();
+    expect(rendered.at(-1)?.referenceText).toBe(JSON.stringify({ project: 'support', eventId: first }));
     message = 'B';
     await act(async () => { rootNode.querySelector('button')!.click(); });
     const second = rootNode.textContent;
     expect(second).toBeTruthy();
     expect(second).not.toBe(first);
+    expect(rendered.at(-1)?.referenceText).toBe(JSON.stringify({ project: 'support', eventId: second }));
     expect(rendered.some(frame => frame.message === 'B' && frame.eventId === first)).toBe(false);
     await client.flush();
     expect(batches.flatMap(batch => batch.events).map(event => event.eventId)).toEqual([first, second]);

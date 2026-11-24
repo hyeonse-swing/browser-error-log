@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { EventBatch } from '@ihyeon/browser-error-log-protocol';
-import { init, type BrowserErrorLogClient, type BrowserErrorLogDiagnosticsClient } from './index';
+import { parseEventReference, type EventBatch } from '@ihyeon/browser-error-log-protocol';
+import { formatEventReference, init, type BrowserErrorLogClient, type BrowserErrorLogDiagnosticsClient } from './index';
 import { EventStore, isEventRecord } from '../../../apps/local-collector/store';
 
 const clients: BrowserErrorLogClient[] = [];
@@ -50,7 +50,10 @@ describe('manual capture event ID', () => {
     const error = new Error('review failed');
     const reference = client.captureExceptionWithReference(error);
     expect(reference).toEqual({ project: 'a'.repeat(80), eventId: expect.any(String) });
+    const copied = formatEventReference(reference);
+    expect(parseEventReference(copied)).toEqual(reference);
     expect(client.captureExceptionWithReference(error)).toBeUndefined();
+    expect(formatEventReference(undefined)).toBeUndefined();
     await client.flush();
     expect(store.get(reference!.project, reference!.eventId)?.message).toBe('review failed');
     expect(client.getStats().sent).toBe(1);

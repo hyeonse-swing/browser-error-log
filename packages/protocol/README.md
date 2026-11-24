@@ -33,7 +33,8 @@ function makeBatch(events: ErrorEventRecord[]): EventBatch {
 - `ErrorEventRecord` describes a v1 event, including project, environment, release, event ID, occurrence time, type, message, page, runtime, and optional stack, network, and custom context fields.
 - `EventBatch` wraps events as `{ schemaVersion: 1, events: [...] }` for ingestion.
 - `getEventReference(event)` copies `project` and `eventId` into an `EventReference` for lookup or handoff.
-- `parseEventReference(value)` reads a decoded support-form JSON object. It returns only the original `project` and `eventId` strings when both are nonblank, or `undefined` when lookup fields are missing or invalid.
+- `formatEventReference(value)` creates copyable JSON containing only `project` and `eventId`. Invalid references return `undefined`.
+- `parseEventReference(value)` reads a lookup object or one pasted JSON string. It returns only the original `project` and `eventId` strings when both are nonblank, or `undefined` when lookup fields are missing or invalid. A string containing JSON text as another string is not decoded again.
 - `EventFilter` supports project, environment, type, text query, time range, cursor, and limit.
 - `EventPage` returns `events` and an optional `nextCursor`.
 - `EventDataSource` exposes `listEvents(filter, signal?)` and `getEvent(project, eventId, signal?)` for the viewer.

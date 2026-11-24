@@ -66,7 +66,17 @@ try {
 
 `eventId`는 이 이벤트를 수집기와 뷰어에서 찾을 때 쓰는 식별자입니다. SDK가 전송 큐에 수락한 경우에만 반환하며 중복·필터·샘플링·한도·비활성 클라이언트는 `undefined`를 반환합니다. 큐에서 밀리거나 전송 실패·페이지 종료로 저장되지 않을 수 있으므로 실제 수집기 기록을 확인하세요. 기존 `BrowserErrorLogClient`와 `BrowserErrorLogDiagnosticsClient` 인터페이스는 어댑터 호환성을 위해 반환형 `void`를 유지합니다. ID를 읽을 때는 `init()`의 추론 타입 또는 `BrowserErrorLogCaptureClient`를 사용하세요.
 
-오류를 다른 담당자에게 전달할 때는 `errorLog.captureExceptionWithReference(error)`를 사용하세요. 한 번 수집하고 큐에 수락된 이벤트의 `{ project, eventId }`를 반환합니다. 수락되지 않으면 `undefined`를 반환합니다. 두 값을 수집기의 `getEvent(project, eventId)`에 전달하면 저장된 기록을 조회할 수 있습니다.
+오류를 다른 담당자에게 전달할 때는 `errorLog.captureExceptionWithReference(error)`를 사용하세요. 한 번 수집하고 큐에 수락된 이벤트의 `{ project, eventId }`를 반환합니다. 수락되지 않으면 `undefined`를 반환합니다. 두 값을 수집기의 `getEvent(project, eventId)`에 전달하면 저장된 기록을 조회할 수 있습니다. SDK에서 제공하는 `formatEventReference`로 복사할 문자열도 만들 수 있습니다.
+
+```ts
+import { formatEventReference } from '@ihyeon/browser-error-log';
+
+const reference = errorLog.captureExceptionWithReference(new Error('화면을 불러오지 못했습니다'));
+const text = formatEventReference(reference);
+if (text) supportForm.setReference(text);
+```
+
+`supportForm.setReference`는 앱의 문의 양식 입력 함수로 바꿔 사용하세요. 문자열에는 `project`와 `eventId`만 들어갑니다. 유효한 참조가 없으면 `formatEventReference`는 `undefined`를 반환합니다.
 
 최근 이벤트의 SDK 전송 상태가 필요하면 클라이언트별 기록 한도를 설정합니다.
 

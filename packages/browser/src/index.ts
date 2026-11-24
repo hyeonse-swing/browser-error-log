@@ -1,6 +1,7 @@
 import { BREADCRUMB_LIMITS, getEventReference, type EventReference, type Breadcrumb, type ErrorEventRecord, type EventBatch, type EventType, type Runtime } from '@ihyeon/browser-error-log-protocol';
 
 export type { Breadcrumb, ErrorEventRecord, EventBatch, EventReference } from '@ihyeon/browser-error-log-protocol';
+export { formatEventReference } from '@ihyeon/browser-error-log-protocol';
 
 export interface CaptureExtra {
   type?: EventType;

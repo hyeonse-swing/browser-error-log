@@ -1,17 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { BREADCRUMB_LIMITS, EVENT_LABELS, isBreadcrumbTrail, parseEventReference, type Breadcrumb, type EventType } from './index';
+import { BREADCRUMB_LIMITS, EVENT_LABELS, formatEventReference, isBreadcrumbTrail, parseEventReference, type Breadcrumb, type EventType } from './index';
 
 it('reads only the project and event ID from a support reference or v1 event', () => {
   for (const project of ['first', 'second']) {
     const ref = { project, eventId: 'shared-id' };
     expect(parseEventReference({ schemaVersion: 1, ...ref, message: 'some details' })).toEqual(ref);
     expect(parseEventReference(ref)).toEqual(ref);
+    expect(parseEventReference(JSON.stringify(ref))).toEqual(ref);
   }
   for (const value of [null, [], {}, { project: 'web' }, { project: '', eventId: 'id' },
     { project: 'web', eventId: '  ' }, { project: 1, eventId: 'id' },
     Object.create({ project: 'inherited', eventId: 'id' })]) {
     expect(parseEventReference(value)).toBeUndefined();
   }
+});
+
+it('formats a support reference without event details and reads one pasted JSON layer', () => {
+  const reference = { project: 'web', eventId: 'id "one"', message: 'private details' };
+  const text = formatEventReference(reference);
+  expect(text).toBe('{"project":"web","eventId":"id \\"one\\""}');
+  expect(parseEventReference(text)).toEqual({ project: 'web', eventId: 'id "one"' });
+  expect(parseEventReference(JSON.stringify(text))).toBeUndefined();
+  expect(parseEventReference('invalid JSON')).toBeUndefined();
+  expect(parseEventReference('["web","id"]')).toBeUndefined();
+  expect(formatEventReference({ project: 'web', eventId: ' ' })).toBeUndefined();
 });
 
 it('exposes resource failures as a distinct event type', () => {
