@@ -19,7 +19,7 @@ npm ci
 npm run micro
 ```
 
-Open the [viewer](http://127.0.0.1:4319/) and [connection example](http://127.0.0.1:4319/install.html). Their language selector defaults to English and remembers your choice when browser storage is available. The collector accepts `POST http://127.0.0.1:4319/api/events` and stores records in `.data/micro-server/events.sqlite`. Send an example error, then refresh the viewer and select `my-web`. The default listener is local to your machine. After the first build, `npm run start:micro` restarts it using the same data directory.
+Open the [viewer](http://127.0.0.1:4319/) and [connection example](http://127.0.0.1:4319/install.html). Their language selector defaults to English and remembers your choice when browser storage is available. The collector accepts `POST http://127.0.0.1:4319/api/events` and stores records in `.data/micro-server/events.sqlite`. Send an example error, then refresh the viewer and select `my-web`. In **Event Timeline**, paste a copied `{"project":"my-web","eventId":"..."}` reference into **Search** to look up that exact stored event beyond the selected date range. The default listener is local to your machine. After the first build, `npm run start:micro` restarts it using the same data directory.
 
 SQLite defaults to seven days from server receipt, 10,000 events, and a 64 MiB limit for the main database file. Journal files and backups need additional space. [Self-hosting options](docs/micro-server.md) covers JSONL, external HTTPS access, and limits.
 

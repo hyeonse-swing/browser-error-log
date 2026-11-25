@@ -35,6 +35,7 @@ function makeBatch(events: ErrorEventRecord[]): EventBatch {
 - `getEventReference(event)`는 조회나 인수인계에 쓸 `project`와 `eventId`를 추려 `EventReference`로 반환합니다.
 - `formatEventReference(value)`는 `project`와 `eventId`만 포함한 복사용 JSON 문자열을 만듭니다. 유효하지 않은 참조는 `undefined`를 반환합니다.
 - `parseEventReference(value)`는 조회 객체나 붙여 넣은 JSON 문자열 한 겹에서 조회 필드를 읽습니다. `project`와 `eventId`가 모두 비어 있지 않은 문자열이면 두 필드의 원래 값을 반환하고, 누락되거나 유효하지 않으면 `undefined`를 반환합니다. JSON 문자열을 다시 감싼 문자열은 재귀적으로 읽지 않습니다.
+- 직접 운영하는 뷰어의 **이벤트 타임라인**에서는 같은 JSON 문자열을 **검색**에 붙여 넣어 두 필드로 저장 기록을 조회합니다. 다른 뷰어나 수집기에서는 `getEvent(project, eventId)`를 사용하세요. 이 조회에는 타임라인의 기간 필터가 적용되지 않습니다.
 - `EventFilter`는 프로젝트·환경·종류·텍스트 검색·기간·커서·건수 제한을 지원합니다.
 - `EventPage`는 `events`와 선택적인 `nextCursor`를 반환합니다.
 - `EventDataSource`는 뷰어용 `listEvents(filter, signal?)`, `getEvent(project, eventId, signal?)`을 정의합니다.

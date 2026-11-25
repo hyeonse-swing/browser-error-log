@@ -63,6 +63,8 @@ export function Root() {
 
 위 `App`은 앱 컴포넌트입니다. fallback은 React 노드 또는 오류, 재시도 함수, 선택적 조회 참조를 받는 함수입니다. 오류를 큐에 수락하면 현재 오류의 참조와 복사용 JSON 문자열이 나타납니다. fallback의 네 번째 인자인 문자열에는 `project`와 `eventId`만 들어가고 재시도하면 초기화됩니다. 유효한 참조가 없으면 `undefined`이며 기존 인자 세 개를 받는 fallback도 그대로 사용할 수 있습니다. 참조를 지원하지 않는 클라이언트에서는 재시도만 표시합니다. `null`·`false`처럼 Error가 아닌 값도 fallback에서는 `Error`로 변환하며 원래 던진 값은 SDK에 그대로 전달합니다. reset은 Boundary의 오류 상태를 지우고 자식을 다시 렌더링하므로 원인 상태가 그대로라면 다시 실패할 수 있습니다. fallback이 없으면 실패한 Boundary는 아무것도 렌더링하지 않습니다.
 
+fallback에 표시한 문자열을 직접 운영하는 뷰어의 **이벤트 타임라인**에서 **검색**에 붙여 넣으면 해당 저장 기록을 엽니다. 선택한 기간보다 오래된 기록도 조회합니다. 큐에서 참조를 받은 것만으로 수집기에 저장됐다고 판단하지 마세요.
+
 `onCapture={({ project, eventId }) => showReportId(project, eventId)}`를 전달하면 오류 안내 화면이나 문의 양식에 조회용 식별자를 표시할 수 있습니다. `showReportId`는 앱에서 구현합니다. 클라이언트가 `captureExceptionWithReference`를 지원하고 오류를 큐에 수락하면 콜백이 실행됩니다. 실제 저장 여부는 수집기에서 확인할 수 있습니다.
 
 SSR 프레임워크에서는 클라이언트 진입점을 사용하세요. 서버에서 SDK를 import할 수는 있지만 서버 오류를 수집하지 않습니다. 이 Boundary는 React가 `componentDidCatch`에 전달한 오류를 처리합니다. 앱에서 처리한 오류에는 `captureException`을 사용하고 전역 JavaScript·Promise·네트워크 오류에는 기본 SDK를 사용하세요. 네이티브 크래시나 서버 오류 처리기는 아닙니다.

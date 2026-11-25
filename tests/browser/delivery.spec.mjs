@@ -56,7 +56,7 @@ test.beforeAll(async () => {
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('MICRO_')));
   collector = spawn(process.execPath, [resolve('dist/micro-server/server.mjs')], {
     env: { ...env, MICRO_HOST: '127.0.0.1', MICRO_PORT: String(port),
-      MICRO_PROJECTS: 'browser-test', MICRO_STORAGE: 'sqlite',
+      MICRO_PROJECTS: 'browser-test,other-test', MICRO_STORAGE: 'sqlite',
       MICRO_REQUESTS_PER_MINUTE: '1000', // This suite exercises delivery; server rate limits have dedicated tests.
       MICRO_PUBLIC_DIR: publicDir, MICRO_DATA_DIR: join(scratch, 'data') },
     stdio: ['ignore', 'ignore', 'pipe'],
@@ -79,6 +79,108 @@ test.afterAll(async () => {
     try { await closed; } finally { clearTimeout(timeout); }
   }
   if (scratch) await rm(scratch, { recursive: true, force: true });
+});
+
+test('finds an older exact event from a copied reference across projects', async ({ page }) => {
+  await page.goto(`${origin}/`);
+  const captured = await page.evaluate(async () => {
+    const { init } = await import('/sdk.js');
+    const accepted = [];
+    const client = init({ project: 'browser-test', captureNetwork: false,
+      transport: batch => { accepted.push(...batch.events); } });
+    const reference = client.captureExceptionWithReference(new Error('Original project error'));
+    await client.flush();
+    client.destroy();
+    return { reference, event: accepted[0] };
+  });
+  expect(captured.reference).toMatchObject({ project: 'browser-test', eventId: captured.event.eventId });
+  for (const [project, message] of [
+    ['browser-test', 'Original project error'],
+    ['other-test', 'Other project error with the same ID'],
+  ]) {
+    const response = await fetch(`${origin}/api/events`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ schemaVersion: 1, events: [{
+        ...captured.event, project, message, occurredAt: '2025-01-02T03:04:05.000Z',
+      }] }),
+    });
+    expect(response.ok, `Seeding ${project} returned HTTP ${response.status}`).toBe(true);
+  }
+
+  await page.goto(`${origin}/viewer.html`);
+  await page.locator('.language-switcher select').selectOption('en');
+  await page.getByRole('button', { name: 'Event Timeline', exact: true }).last().click();
+  const search = page.locator('#search');
+  let originalLookupRequests = 0;
+  let otherLookupRequests = 0;
+  page.on('request', request => {
+    const url = new URL(request.url());
+    if (url.pathname !== `/api/events/${captured.reference.eventId}`) return;
+    if (url.searchParams.get('project') === 'browser-test') originalLookupRequests++;
+    if (url.searchParams.get('project') === 'other-test') otherLookupRequests++;
+  });
+  await search.fill(JSON.stringify(captured.reference));
+  await expect(page.locator('.event-row')).toHaveCount(1);
+  await expect(page.locator('.detail-lead h3')).toHaveText('Original project error');
+  await expect(page.locator('.detail-panel')).toContainText('browser-test');
+  await delay(150);
+  expect(originalLookupRequests).toBe(1);
+
+  const otherReference = { project: 'other-test', eventId: captured.reference.eventId };
+  await search.fill(JSON.stringify(otherReference));
+  await expect(page.locator('.event-row')).toHaveCount(1);
+  await expect(page.locator('.detail-lead h3')).toHaveText('Other project error with the same ID');
+  expect(originalLookupRequests).toBe(1);
+  expect(otherLookupRequests).toBe(1);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Back to list' }).click();
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(page.locator('.detail-panel')).not.toHaveClass(/mobile-visible/);
+
+  const expiredLookup = async route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === `/api/events/${captured.reference.eventId}` &&
+      url.searchParams.get('project') === 'other-test') {
+      await route.fulfill({ status: 404, body: '{}' });
+    } else {
+      await route.continue();
+    }
+  };
+  await page.route('**/api/events/*', expiredLookup);
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(page.getByText('No event found for this reference', { exact: true })).toBeVisible();
+  await expect(page.locator('.event-row')).toHaveCount(0);
+  await expect(page.locator('.detail-lead h3')).toHaveCount(0);
+  await page.unroute('**/api/events/*', expiredLookup);
+
+  await search.fill('{"project":"other-test",bad JSON');
+  await expect(page.getByText('Invalid error reference', { exact: true })).toBeVisible();
+  await search.fill(JSON.stringify({ project: 'other-test', eventId: randomUUID() }));
+  await expect(page.getByText('No event found for this reference', { exact: true })).toBeVisible();
+  await search.fill('ordinary text');
+  await expect(page.getByText('Invalid error reference', { exact: true })).toHaveCount(0);
+  await search.fill('[Vue warn] failed to render');
+  await expect(page.getByText('Invalid error reference', { exact: true })).toHaveCount(0);
+  await search.fill('{"message":"ordinary JSON log"}');
+  await expect(page.getByText('Invalid error reference', { exact: true })).toHaveCount(0);
+
+  await page.route('**/api/events/*', async route => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('project') === 'browser-test') await delay(700);
+    try { await route.continue(); } catch { /* a later search may abort this request */ }
+  });
+  const firstRequest = page.waitForRequest(request => {
+    const url = new URL(request.url());
+    return url.pathname === `/api/events/${captured.reference.eventId}` &&
+      url.searchParams.get('project') === 'browser-test';
+  });
+  await search.fill(JSON.stringify(captured.reference));
+  await firstRequest;
+  await search.fill(JSON.stringify(otherReference));
+  await expect(page.locator('.detail-lead h3')).toHaveText('Other project error with the same ID');
+  await delay(800);
+  await expect(page.locator('.detail-lead h3')).toHaveText('Other project error with the same ID');
 });
 
 test('delivers a queued error on native pagehide without the visibility handler', async ({ page }) => {

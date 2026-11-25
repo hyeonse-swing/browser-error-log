@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { EVENT_LABELS, type ErrorEventRecord, type EventFilter, type EventType } from '@ihyeon/browser-error-log-protocol';
+import { EVENT_LABELS, parseEventReference, type ErrorEventRecord, type EventFilter, type EventType } from '@ihyeon/browser-error-log-protocol';
 import { eventDataSource, viewerConfig } from './data-source';
 import { Dashboard } from './Dashboard';
 import { LanguageSwitcher, useLocale } from '../../i18n/react';
@@ -81,6 +81,8 @@ export function App() {
   const [timeRange, setTimeRange] = useState<TimeRange>('24h');
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
+  const lookupReference = useMemo(() => parseEventReference(query), [query]);
+  const invalidReference = !lookupReference && /^\{\s*"(?:project|eventId)"\s*:/.test(query);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshToken, setRefreshToken] = useState(0);
   const [events, setEvents] = useState<ErrorEventRecord[]>([]);
@@ -102,6 +104,8 @@ export function App() {
   const removalRevision = useRef(0);
   const loadMoreController = useRef<AbortController | null>(null);
   const previousCriteria = useRef<string | undefined>(undefined);
+  const previousReferenceKey = useRef<string | undefined>(undefined);
+  const openedReferenceKey = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setQuery(search.trim()), 300);
@@ -129,14 +133,57 @@ export function App() {
     if (activeView !== 'events') return;
     const controller = new AbortController();
     const criteria = JSON.stringify([project, environment, type, query, timeRange]);
+    const referenceKey = lookupReference && eventKey(lookupReference);
     if (previousCriteria.current !== criteria) {
       setEvents([]);
       setCursor(undefined);
       setSelectedId(undefined);
+      setSelected(null);
     }
+    if (previousReferenceKey.current !== referenceKey) setMobileDetail(false);
+    if (!referenceKey) openedReferenceKey.current = undefined;
+    previousReferenceKey.current = referenceKey;
     previousCriteria.current = criteria;
     setLoading(true);
     setListError('');
+    if (invalidReference) {
+      setListError('Invalid error reference. Paste JSON with project and eventId.');
+      setLoading(false);
+      return () => controller.abort();
+    }
+    if (lookupReference) {
+      setCursor(undefined);
+      eventDataSource.getEvent(lookupReference.project, lookupReference.eventId, controller.signal).then((event) => {
+        if (controller.signal.aborted) return;
+        if (!event || event.project !== lookupReference.project || event.eventId !== lookupReference.eventId) {
+          setEvents([]);
+          setSelectedId(undefined);
+          setSelected(null);
+          setMobileDetail(false);
+          setListError('This event could not be found.');
+          return;
+        }
+        const loadedId = eventKey(event);
+        setEvents([event]);
+        setSelected(event);
+        setSelectedId(loadedId);
+        if (openedReferenceKey.current !== referenceKey) {
+          openedReferenceKey.current = referenceKey;
+          setMobileDetail(true);
+        }
+        setKnownProjects((current) => [...new Set([...current, event.project])].sort());
+        setKnownEnvironments((current) => [...new Set([...current, event.environment])].sort());
+      }).catch((error: unknown) => {
+        if (!controller.signal.aborted && !isAbort(error)) {
+          setListErrorSource('list');
+          setMobileDetail(false);
+          setListError(errorMessage(error));
+        }
+      }).finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+      return () => controller.abort();
+    }
     eventDataSource.listEvents(filter, controller.signal).then((page) => {
       if (controller.signal.aborted) return;
       const ordered = newestFirst(page.events);
@@ -154,10 +201,17 @@ export function App() {
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, [filter, project, environment, type, query, timeRange, activeView]);
+  }, [filter, project, environment, type, query, timeRange, activeView, lookupReference, invalidReference]);
 
   useEffect(() => {
     if (activeView !== 'events') return;
+    // Exact-reference results already contain the full event. This effect can still
+    // see the previous selectedId during a query change, so never refetch it here.
+    if (lookupReference) {
+      setDetailLoading(false);
+      setDetailError('');
+      return;
+    }
     if (!selectedId) {
       setSelected(null);
       return;
@@ -177,7 +231,7 @@ export function App() {
       if (!controller.signal.aborted) setDetailLoading(false);
     });
     return () => controller.abort();
-  }, [selectedId, refreshToken, activeView]);
+  }, [selectedId, refreshToken, activeView, lookupReference]);
 
   const loadMore = useCallback(async () => {
     if (!cursor || loadingMore) return;
@@ -266,13 +320,13 @@ export function App() {
         <div className="filter-field env-field"><label htmlFor="environment">{t(locale, 'Environment')}</label><input id="environment" list="environment-options" placeholder={t(locale, 'All environments')} value={environment} onChange={(event) => setEnvironment(event.target.value)}/><datalist id="environment-options">{knownEnvironments.map((name) => <option key={name} value={name}/>)}</datalist></div>
         <div className="filter-field type-field"><label htmlFor="type">{t(locale, 'Type')}</label><select id="type" value={type} onChange={(event) => setType(event.target.value as EventType | '')}><option value="">{t(locale, 'All types')}</option>{eventTypes.map((value) => <option key={value} value={value}>{eventLabel(locale, value)}</option>)}</select></div>
         <div className="filter-field time-field"><label htmlFor="time-range">{t(locale, 'Time range')}</label><select id="time-range" value={timeRange} onChange={(event) => setTimeRange(event.target.value as TimeRange)}>{timeRanges.map((range) => <option key={range.value} value={range.value}>{t(locale, range.label)}</option>)}</select></div>
-        <div className="filter-field search-field"><label htmlFor="search">{t(locale, 'Search')}</label><div className="search-wrap"><Icon name="search" size={16}/><input id="search" type="search" placeholder={t(locale, 'Search message, page, or ID')} value={search} onChange={(event) => setSearch(event.target.value)}/></div></div>
+        <div className="filter-field search-field"><label htmlFor="search">{t(locale, 'Search')}</label><div className="search-wrap"><Icon name="search" size={16}/><input id="search" type="search" placeholder={t(locale, 'Search message, page, ID, or paste reference')} value={search} onChange={(event) => setSearch(event.target.value)}/></div></div>
       </section>
 
       <div className="content-grid"><section className={`event-list ${mobileDetail ? 'mobile-hidden' : ''}`} aria-label={t(locale, 'Event list')}><div className="panel-heading"><div><span className="section-index">{t(locale, '01 / TIMELINE')}</span><h2>{t(locale, 'Event list')}</h2></div><div className="record-count">{events.length}<span>{cursor ? '+' : ''} {locale === 'ko' ? '건' : events.length === 1 && !cursor ? 'record' : 'records'}</span></div></div>
         <div className="list-columns"><span>{t(locale, 'Occurred / type')}</span><span>{t(locale, 'Event')}</span><span>{t(locale, 'Project / environment')}</span></div>
         {loading && <div className="state-box"><span className="loading-mark"/>{t(locale, 'Loading events')}</div>}
-        {!loading && listError && events.length === 0 && <div className="state-box state-error"><strong>{t(locale, 'Could not load events')}</strong><span>{localizeError(locale, listError)}</span><button type="button" onClick={() => setRefreshToken((current) => current + 1)}>{t(locale, 'Retry')}</button></div>}
+        {!loading && listError && events.length === 0 && <div className="state-box state-error"><strong>{t(locale, invalidReference ? 'Invalid error reference' : lookupReference && listError === 'This event could not be found.' ? 'No event found for this reference' : 'Could not load events')}</strong><span>{localizeError(locale, listError)}</span>{!invalidReference && <button type="button" onClick={() => setRefreshToken((current) => current + 1)}>{t(locale, 'Retry')}</button>}</div>}
         {!loading && !listError && events.length === 0 && <div className="state-box"><span className="empty-glyph">∅</span><strong>{t(locale, 'No events match your filters')}</strong><span>{t(locale, 'Change the filters or trigger an error.')}</span><button type="button" onClick={clearFilters}>{t(locale, 'Clear filters')}</button></div>}
         {!loading && listError && events.length > 0 && <div className="list-inline-error">{localizeError(locale, listError)}<button type="button" onClick={listErrorSource === 'more' ? loadMore : () => setRefreshToken((current) => current + 1)}>{t(locale, 'Retry')}</button></div>}
         {!loading && events.length > 0 && <div className="rows">{events.map((event, index) => <button type="button" key={eventKey(event)} className={`event-row ${selectedId === eventKey(event) ? 'selected' : ''}`} onClick={() => { setSelectedId(eventKey(event)); setMobileDetail(true); }} style={{ animationDelay: `${Math.min(index, 10) * 25}ms` }}><span className="row-time"><span className="time-value">{formatDate(event.occurredAt, locale)}</span><span className={`type-pill type-${event.type}`}>{eventLabel(locale, event.type)}</span></span><span className="row-main"><strong title={event.message}>{event.message}</strong><small>{event.name && <span>{event.name} <b>·</b> </span>}{event.page}</small></span><span className="row-origin"><strong>{event.project}</strong><small>{event.environment}</small></span><span className="row-chevron"><Icon name="chevron" size={17}/></span></button>)}</div>}

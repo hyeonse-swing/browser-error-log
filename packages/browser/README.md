@@ -78,6 +78,8 @@ if (text) supportForm.setReference(text);
 
 Replace `supportForm.setReference` with your form's setter. The text contains only `project` and `eventId`. `formatEventReference` returns `undefined` if no valid reference was admitted.
 
+To look up a report, open the self-hosted viewer's **Event Timeline** and paste this text into **Search**. The viewer reads the two fields and requests the exact stored event, including events older than the timeline's selected date range. A reference can exist before delivery succeeds, so an absent record needs confirmation in the collector.
+
 To inspect the SDK delivery path for a recent ID, enable the bounded, per-client history:
 
 ```ts

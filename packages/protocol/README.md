@@ -35,6 +35,7 @@ function makeBatch(events: ErrorEventRecord[]): EventBatch {
 - `getEventReference(event)` copies `project` and `eventId` into an `EventReference` for lookup or handoff.
 - `formatEventReference(value)` creates copyable JSON containing only `project` and `eventId`. Invalid references return `undefined`.
 - `parseEventReference(value)` reads a lookup object or one pasted JSON string. It returns only the original `project` and `eventId` strings when both are nonblank, or `undefined` when lookup fields are missing or invalid. A string containing JSON text as another string is not decoded again.
+- The self-hosted viewer's **Event Timeline** accepts the same JSON string in **Search** and looks up the stored event by both fields. Use `getEvent(project, eventId)` in another viewer or collector. The lookup is independent of the selected timeline date range.
 - `EventFilter` supports project, environment, type, text query, time range, cursor, and limit.
 - `EventPage` returns `events` and an optional `nextCursor`.
 - `EventDataSource` exposes `listEvents(filter, signal?)` and `getEvent(project, eventId, signal?)` for the viewer.
