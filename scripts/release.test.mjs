@@ -21,15 +21,30 @@ const installError = (stderr, message = 'npm install failed', stdout = '') =>
   Object.assign(new Error(message), { stderr: Buffer.from(stderr), stdout: Buffer.from(stdout) });
 const targetError = spec => installError(`npm error code ETARGET\nnpm error notarget No matching version found for ${spec}.\n`);
 const notFoundError = spec => installError(`npm error code E404\nnpm error 404  '${spec}' is not in this registry.\n`);
+const tarballNotFoundError = (name, version = '0.1.6', host = 'registry.npmjs.org') => {
+  const url = `https://${host}/${name}/-/${name.split('/').pop()}-${version}.tgz`;
+  return installError(`npm error code E404\n` +
+    `npm error 404 Not Found - GET ${url} - Not found\n` +
+    `npm error 404\n` +
+    `npm error 404  The requested resource '${name}@${url}' could not be found or you do not have permission to access it.\n` +
+    `npm error 404\n` +
+    `npm error 404 Note that you can also install from a\n` +
+    `npm error 404 tarball, folder, http url, or git url.\n` +
+    `npm error A complete log of this run can be found in: /tmp/npm-debug.log\n`);
+};
 
 test('fresh consumer install retries exact missing direct or transitive release packages', async () => {
   for (const failure of [
     targetError('@ihyeon/browser-error-log-react@0.1.6'),
     notFoundError('@ihyeon/browser-error-log-react@0.1.6'),
+    tarballNotFoundError('@ihyeon/browser-error-log'),
     targetError('@ihyeon/browser-error-log-protocol@0.1.6'),
     installError(`npm error code ETARGET\nnpm error notarget No matching version found for @ihyeon/browser-error-log-react@0.1.6.\n` +
       `npm error notarget In most cases you or one of your dependencies are requesting\n` +
       `npm error notarget a package version that doesn't exist.\n` +
+      `npm error A complete log of this run can be found in: /tmp/npm-debug.log\n`),
+    installError(`npm error code ETARGET\nnpm error notarget No matching version found for @ihyeon/browser-error-log-react@0.1.6.\n` +
+      `npm error notarget In most cases you or one of your dependencies are requesting a package version that doesn't exist.\n` +
       `npm error A complete log of this run can be found in: /tmp/npm-debug.log\n`),
     installError(`npm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/pkg - Not found\n` +
       `npm error 404\nnpm error 404  '@ihyeon/browser-error-log-react@0.1.6' is not in this registry.\n` +
@@ -62,6 +77,12 @@ test('fresh consumer install fails immediately for unrelated or malformed npm fa
     installError('npm error code ETARGET\nnpm warn @ihyeon/browser-error-log-react@0.1.6\n'),
     installError('npm error notarget No matching version found for @ihyeon/browser-error-log-react@0.1.6.\n'),
     installError('npm error code E404\nnpm error 404 Not Found - GET https://registry.npmjs.org/react\n'),
+    tarballNotFoundError('@ihyeon/browser-error-log', '0.1.60'),
+    tarballNotFoundError('@ihyeon/browser-error-log-extra'),
+    tarballNotFoundError('@ihyeon/browser-error-log', '0.1.6', 'example.test'),
+    installError(`npm error code E404\n` +
+      `npm error 404 Not Found - GET https://registry.npmjs.org/@ihyeon/browser-error-log/-/browser-error-log-0.1.6.tgz - Not found\n` +
+      `npm error 404  The requested resource '@ihyeon/browser-error-log@https://registry.npmjs.org/react/-/react-0.1.6.tgz' could not be found or you do not have permission to access it.\n`),
     ...['network request failed: getaddrinfo ENOTFOUND registry.npmjs.org',
       'auth authentication required', 'integrity checksum failed'].map(detail =>
       installError(`npm error code ETARGET\nnpm error notarget No matching version found for @ihyeon/browser-error-log-react@0.1.6.\nnpm error ${detail}\n`)),
@@ -84,14 +105,15 @@ test('fresh consumer install fails immediately for unrelated or malformed npm fa
 });
 
 test('fresh consumer install has a finite wait budget and rethrows the final exact error', async () => {
-  const errors = Array.from({ length: 6 }, () => targetError('@ihyeon/browser-error-log-react@0.1.6'));
+  const expectedDelays = [5000, 10000, 20000, 30000, ...Array(4).fill(60000)];
+  const errors = Array.from({ length: expectedDelays.length + 1 }, () => targetError('@ihyeon/browser-error-log-react@0.1.6'));
   const sleeps = [];
   let installs = 0;
   await assert.rejects(retryRegistryInstall({ expectedPackages, version: '0.1.6',
     install: () => { throw errors[installs++]; }, sleep: async ms => { sleeps.push(ms); },
-  }), error => error === errors[5]);
-  assert.equal(installs, 6);
-  assert.deepEqual(sleeps, [5000, 10000, 20000, 30000, 60000]);
+  }), error => error === errors.at(-1));
+  assert.equal(installs, errors.length);
+  assert.deepEqual(sleeps, expectedDelays);
   let successInstalls = 0;
   const result = await retryRegistryInstall({ expectedPackages, version: '0.1.6',
     install: () => { successInstalls++; return 'installed'; },
