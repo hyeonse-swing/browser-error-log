@@ -1373,6 +1373,54 @@ test('delivers selected HTTP and fetch failures without recapturing collector re
   expect(await events(environment)).toHaveLength(2);
 });
 
+test('keeps delayed native fetch and XHR failures with their original clients', async ({ page }) => {
+  let releaseRequests;
+  let intercepted = 0;
+  const requestsMayFinish = new Promise(resolve => { releaseRequests = resolve; });
+  await page.route('**/slow-ownership-*', async route => {
+    intercepted++;
+    await requestsMayFinish;
+    await route.fulfill({ status: 503, body: 'synthetic failure' });
+  });
+  await page.goto(`${origin}/`);
+  await page.evaluate(async () => {
+    const { init } = await import('/sdk.js');
+    window.ownershipEvents = { A: [], B: [], C: [] };
+    const startClient = project => init({ project, endpoint: '/api/events', shouldCaptureHttp: () => true,
+      transport: batch => { window.ownershipEvents[project].push(...batch.events); } });
+    window.firstClient = startClient('A');
+    window.controlClient = startClient('C');
+    const xhr = new XMLHttpRequest();
+    const xhrDone = new Promise(resolve => xhr.addEventListener('loadend', resolve, { once: true }));
+    xhr.open('GET', '/slow-ownership-xhr');
+    xhr.send();
+    const fetchDone = fetch('/slow-ownership-fetch');
+    window.ownershipPending = Promise.all([xhrDone, fetchDone]);
+  });
+  await expect.poll(() => intercepted).toBe(2);
+  await page.evaluate(async () => {
+    const { init } = await import('/sdk.js');
+    window.firstClient.destroy();
+    window.replacementClient = init({ project: 'B', endpoint: '/api/events', shouldCaptureHttp: () => true,
+      transport: batch => { window.ownershipEvents.B.push(...batch.events); } });
+  });
+  releaseRequests();
+  const captured = await page.evaluate(async () => {
+    await window.ownershipPending;
+    await Promise.all([window.controlClient.flush(), window.replacementClient.flush()]);
+    const owned = structuredClone(window.ownershipEvents);
+    window.controlClient.destroy();
+    window.replacementClient.destroy();
+    return owned;
+  });
+  expect(captured.A).toEqual([]);
+  expect(captured.B).toEqual([]);
+  expect(captured.C.map(event => [event.project, event.network.url]).sort((a, b) => a[1].localeCompare(b[1]))).toEqual([
+    ['C', `${origin}/slow-ownership-fetch`],
+    ['C', `${origin}/slow-ownership-xhr`],
+  ]);
+});
+
 test('honors a null signal override on an aborted Request', async ({ page }) => {
   const refusedPort = await availablePort();
   const url = `http://127.0.0.1:${refusedPort}/offline`;

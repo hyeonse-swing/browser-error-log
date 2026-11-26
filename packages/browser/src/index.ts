@@ -1431,6 +1431,7 @@ function installNetwork(): Instrumentation {
   if (typeof originalFetch === 'function') {
     wrappedFetch = function (this: typeof window, ...args: Parameters<typeof fetch>): ReturnType<typeof fetch> {
       if (!clients.size) return Reflect.apply(originalFetch, this, args);
+      const requestClients = [...clients];
       const started = now();
       let request: ReturnType<typeof describeFetch>;
       try { request = describeFetch(args[0], args[1]); }
@@ -1438,19 +1439,25 @@ function installNetwork(): Instrumentation {
       let promise: ReturnType<typeof fetch>;
       try { promise = Reflect.apply(originalFetch, this, args); }
       catch (error) {
-        if (!isAbort(error, request.signal)) for (const client of clients) client.reportNetwork(request.method, request.url, undefined, now() - started, error);
+        if (!isAbort(error, request.signal)) for (const client of requestClients) {
+          if (clients.has(client)) client.reportNetwork(request.method, request.url, undefined, now() - started, error);
+        }
         throw error;
       }
       return promise.then(
         response => {
           try {
             const status = response.status;
-            for (const client of clients) client.reportNetwork(request.method, request.url, status, now() - started);
+            for (const client of requestClients) {
+              if (clients.has(client)) client.reportNetwork(request.method, request.url, status, now() - started);
+            }
           } catch { /* telemetry cannot change the fetch result */ }
           return response;
         },
         error => {
-          if (!isAbort(error, request.signal)) for (const client of clients) client.reportNetwork(request.method, request.url, undefined, now() - started, error);
+          if (!isAbort(error, request.signal)) for (const client of requestClients) {
+            if (clients.has(client)) client.reportNetwork(request.method, request.url, undefined, now() - started, error);
+          }
           throw error;
         },
       );
@@ -1477,6 +1484,7 @@ function installNetwork(): Instrumentation {
       if (!clients.size) return Reflect.apply(originalSend, this, args);
       const details = metadata.get(this);
       if (!details) return Reflect.apply(originalSend, this, args);
+      const requestClients = [...clients];
       const started = now();
       let aborted = false;
       let failed = false;
@@ -1497,11 +1505,15 @@ function installNetwork(): Instrumentation {
         try {
           const status = this.status;
           if (status === 0 && !failed) {
-            for (const client of clients) client.reportZeroStatusCompletion(details.method, details.url, now() - started);
+            for (const client of requestClients) {
+              if (clients.has(client)) client.reportZeroStatusCompletion(details.method, details.url, now() - started);
+            }
             return;
           }
-          for (const client of clients) client.reportNetwork(details.method, details.url,
-            status === 0 ? undefined : status, now() - started);
+          for (const client of requestClients) {
+            if (clients.has(client)) client.reportNetwork(details.method, details.url,
+              status === 0 ? undefined : status, now() - started);
+          }
         } catch { /* XHR state may be unavailable */ }
       };
       try {
