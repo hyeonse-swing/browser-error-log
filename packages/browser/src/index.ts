@@ -305,6 +305,7 @@ class Client implements BrowserErrorLogReferenceClient {
     if (this.consoleCaptureEnabled) addConsoleClient(this);
     if (this.navigationCaptureEnabled) addNavigationClient(this);
     this.interval = setInterval(() => { void this.flush(); }, boundedNumber(options.flushIntervalMs, 10, 60_000, 10_000));
+    if (this.endpoint) collectorClients.add(this);
   }
 
   captureException(error: unknown, extra: CaptureExtra = {}): string | undefined {
@@ -471,6 +472,7 @@ class Client implements BrowserErrorLogReferenceClient {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    collectorClients.delete(this);
     if (this.interval) clearInterval(this.interval);
     if (this.active) {
       if (this.captureGlobalErrors) window.removeEventListener('error', this.onError);
@@ -645,7 +647,7 @@ class Client implements BrowserErrorLogReferenceClient {
     catch { return url; }
   }
 
-  private isCollectorUrl(url: string): boolean {
+  isCollectorUrl(url: string): boolean {
     if (!this.endpoint) return false;
     try {
       const request = new URL(url, window.location.href);
@@ -1275,6 +1277,12 @@ interface Instrumentation {
 let networkInstrumentation: Instrumentation | undefined;
 let consoleInstrumentation: Instrumentation | undefined;
 let navigationInstrumentation: Instrumentation | undefined;
+const collectorClients = new Set<Client>();
+
+function isKnownCollectorUrl(url: string): boolean {
+  for (const client of collectorClients) if (client.isCollectorUrl(url)) return true;
+  return false;
+}
 
 type NavigationTrigger = 'pushState' | 'replaceState' | 'popstate' | 'hashchange';
 
@@ -1436,6 +1444,9 @@ function installNetwork(): Instrumentation {
       let request: ReturnType<typeof describeFetch>;
       try { request = describeFetch(args[0], args[1]); }
       catch { request = { url: '', method: 'GET' }; }
+      // Decide at request start, so a collector response stays excluded even if
+      // its client is destroyed before the request completes.
+      if (isKnownCollectorUrl(request.url)) return Reflect.apply(originalFetch, this, args);
       let promise: ReturnType<typeof fetch>;
       try { promise = Reflect.apply(originalFetch, this, args); }
       catch (error) {
@@ -1484,6 +1495,7 @@ function installNetwork(): Instrumentation {
       if (!clients.size) return Reflect.apply(originalSend, this, args);
       const details = metadata.get(this);
       if (!details) return Reflect.apply(originalSend, this, args);
+      if (isKnownCollectorUrl(details.url)) return Reflect.apply(originalSend, this, args);
       const requestClients = [...clients];
       const started = now();
       let aborted = false;

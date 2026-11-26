@@ -13,11 +13,74 @@ function client(project: string) {
 
 afterEach(() => {
   for (const instance of clients.splice(0)) instance.destroy();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
 describe('network request ownership', () => {
+  it('does not report another client’s collector retry or breadcrumb as an application failure', async () => {
+    vi.useFakeTimers();
+    const calls: string[] = [];
+    const deliveries: EventBatch[] = [];
+    vi.stubGlobal('fetch', vi.fn((url: string, options?: RequestInit) => {
+      calls.push(url);
+      if (url.endsWith('/collector-b')) deliveries.push(JSON.parse(String(options?.body)) as EventBatch);
+      const status = url.endsWith('/collector-a') && calls.filter(item => item === url).length === 1 ? 503
+        : url === '/application-failure' ? 503 : 204;
+      return Promise.resolve(new Response(null, { status }));
+    }));
+    const first = init({ project: 'A', endpoint: '/collector-a', captureNetwork: false });
+    const second = init({ project: 'B', endpoint: '/collector-b', captureNetworkBreadcrumbs: true });
+    clients.push(first, second);
+
+    first.captureException(new Error('original failure'));
+    const sending = first.flush();
+    await vi.advanceTimersByTimeAsync(250);
+    await sending;
+    expect(calls).toEqual(['http://localhost:3000/collector-a', 'http://localhost:3000/collector-a']);
+    expect(first.getStats().sent).toBe(1);
+    expect(second.getStats().queued).toBe(0);
+
+    second.captureException(new Error('before application request'));
+    await window.fetch('/application-failure');
+    expect(second.getStats().queued).toBe(2);
+    await second.flush();
+    expect(calls.at(-1)).toBe('http://localhost:3000/collector-b');
+    expect(second.getStats()).toMatchObject({ queued: 0, sent: 2 });
+    expect(deliveries.flatMap(batch => batch.events).map(event => event.type)).toEqual(['manual', 'http']);
+    expect(deliveries[0]?.events[0]?.breadcrumbs).toBeUndefined();
+  });
+
+  it('keeps XHR collector classification through disposal and captures later unrelated requests', async () => {
+    class FakeXHR extends EventTarget {
+      status = 0;
+      open(_method: string, _url: string): void {}
+      send(): void {}
+      finish(status: number): void {
+        this.status = status;
+        this.dispatchEvent(new Event('loadend'));
+      }
+    }
+    vi.stubGlobal('XMLHttpRequest', FakeXHR);
+    const first = init({ project: 'A', endpoint: '/collector-a', captureNetwork: false });
+    clients.push(first);
+    const second = client('B');
+    const collector = new XMLHttpRequest() as XMLHttpRequest & FakeXHR;
+    collector.open('POST', '/collector-a');
+    collector.send();
+    first.destroy();
+    collector.finish(503);
+    expect(second.instance.getStats().queued).toBe(0);
+
+    const application = new XMLHttpRequest() as XMLHttpRequest & FakeXHR;
+    application.open('GET', '/application-failure');
+    application.send();
+    application.finish(503);
+    await second.instance.flush();
+    expect(second.events().map(event => event.network?.url)).toEqual(['http://localhost:3000/application-failure']);
+  });
+
   for (const withControl of [false, true]) {
     it(`attributes a late fetch response to request-start clients with control=${withControl}`, async () => {
       let finishFirst!: (response: Response) => void;

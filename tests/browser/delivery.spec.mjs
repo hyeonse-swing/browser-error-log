@@ -1373,6 +1373,44 @@ test('delivers selected HTTP and fetch failures without recapturing collector re
   expect(await events(environment)).toHaveLength(2);
 });
 
+test('keeps another client’s collector retry out of browser network capture', async ({ page }) => {
+  let collectorAttempts = 0;
+  const delivered = [];
+  await page.route('**/collector-a', async route => {
+    collectorAttempts++;
+    await route.fulfill({ status: collectorAttempts === 1 ? 503 : 204 });
+  });
+  await page.route('**/collector-b', async route => {
+    delivered.push(...JSON.parse(route.request().postData()).events);
+    await route.fulfill({ status: 204 });
+  });
+  await page.route('**/application-failure', route => route.fulfill({ status: 503 }));
+  await page.goto(`${origin}/`);
+  const results = await page.evaluate(async () => {
+    const { init } = await import('/sdk.js');
+    const first = init({ project: 'A', endpoint: '/collector-a', captureNetwork: false });
+    const second = init({ project: 'B', endpoint: '/collector-b', captureNetworkBreadcrumbs: true });
+    try {
+      first.captureException(new Error('original failure'));
+      await first.flush();
+      const afterCollector = second.getStats().queued;
+      second.captureException(new Error('before application request'));
+      await fetch('/application-failure');
+      const afterApplication = second.getStats().queued;
+      await second.flush();
+      return { afterCollector, afterApplication, stats: second.getStats() };
+    } finally {
+      first.destroy();
+      second.destroy();
+    }
+  });
+  expect(collectorAttempts).toBe(2);
+  expect(results).toMatchObject({ afterCollector: 0, afterApplication: 2, stats: { queued: 0, sent: 2 } });
+  expect(delivered.map(event => event.type)).toEqual(['manual', 'http']);
+  expect(delivered[0].breadcrumbs).toBeUndefined();
+  expect(delivered[1].network.url).toBe(`${origin}/application-failure`);
+});
+
 test('keeps delayed native fetch and XHR failures with their original clients', async ({ page }) => {
   let releaseRequests;
   let intercepted = 0;
