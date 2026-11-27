@@ -1557,7 +1557,7 @@ test('keeps delayed native fetch and XHR failures with their original clients', 
   await page.evaluate(async () => {
     const { init } = await import('/sdk.js');
     window.ownershipEvents = { A: [], B: [], C: [] };
-    const startClient = project => init({ project, endpoint: '/api/events', shouldCaptureHttp: () => true,
+    const startClient = project => init({ project, endpoint: '/api/events', shouldCaptureHttp: () => true, flushIntervalMs: 60_000,
       transport: batch => { window.ownershipEvents[project].push(...batch.events); } });
     window.firstClient = startClient('A');
     window.controlClient = startClient('C');
@@ -1572,12 +1572,15 @@ test('keeps delayed native fetch and XHR failures with their original clients', 
   await page.evaluate(async () => {
     const { init } = await import('/sdk.js');
     window.firstClient.destroy();
-    window.replacementClient = init({ project: 'B', endpoint: '/api/events', shouldCaptureHttp: () => true,
+    window.replacementClient = init({ project: 'B', endpoint: '/api/events', shouldCaptureHttp: () => true, flushIntervalMs: 60_000,
       transport: batch => { window.ownershipEvents.B.push(...batch.events); } });
   });
   releaseRequests();
+  await page.evaluate(async () => { await window.ownershipPending; });
+  // The application's loadend listener can resolve its promise before the SDK's
+  // listener runs. Wait for both error records to be queued before flushing.
+  await expect.poll(() => page.evaluate(() => window.controlClient.getStats().queued)).toBe(2);
   const captured = await page.evaluate(async () => {
-    await window.ownershipPending;
     await Promise.all([window.controlClient.flush(), window.replacementClient.flush()]);
     const owned = structuredClone(window.ownershipEvents);
     window.controlClient.destroy();
