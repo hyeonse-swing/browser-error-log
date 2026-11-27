@@ -203,6 +203,8 @@ export function App() {
     return () => controller.abort();
   }, [filter, project, environment, type, query, timeRange, activeView, lookupReference, invalidReference]);
 
+  const listedEvent = selectedId ? events.find((event) => eventKey(event) === selectedId) : undefined;
+
   useEffect(() => {
     if (activeView !== 'events') return;
     // Exact-reference results already contain the full event. This effect can still
@@ -219,7 +221,7 @@ export function App() {
     const controller = new AbortController();
     setDetailLoading(true);
     setDetailError('');
-    setSelected(events.find((event) => eventKey(event) === selectedId) ?? null);
+    setSelected(listedEvent ?? null);
     const [selectedProject, selectedEventId] = JSON.parse(selectedId) as [string, string];
     eventDataSource.getEvent(selectedProject, selectedEventId, controller.signal).then((event) => {
       if (controller.signal.aborted) return;
@@ -231,7 +233,7 @@ export function App() {
       if (!controller.signal.aborted) setDetailLoading(false);
     });
     return () => controller.abort();
-  }, [selectedId, refreshToken, activeView, lookupReference]);
+  }, [selectedId, listedEvent, refreshToken, activeView, lookupReference]);
 
   const loadMore = useCallback(async () => {
     if (!cursor || loadingMore) return;

@@ -1176,6 +1176,81 @@ test('preserves manual steps through SDK delivery, both viewer details, and hist
   await page.screenshot({ path: resolve(`output/playwright/breadcrumbs-${test.info().project.name}-mobile.png`) });
 });
 
+test('keeps details when a filter returns the same selected event immediately', async ({ page }) => {
+  const environment = randomUUID();
+  await init(page, environment);
+  await page.evaluate(async () => {
+    window.testClient.addBreadcrumb({ category: 'action', message: 'Checkout submitted' });
+    window.testClient.captureException(new Error('selected checkout failure'));
+    await window.testClient.flush();
+    window.testClient.destroy();
+  });
+  const [captured] = await events(environment);
+  expect(captured.breadcrumbs).toHaveLength(1);
+  const other = { ...captured, eventId: randomUUID(), environment: randomUUID(),
+    occurredAt: new Date(Date.parse(captured.occurredAt) - 1000).toISOString(),
+    message: 'unrelated checkout failure', breadcrumbs: undefined };
+  const seeded = await fetch(`${origin}/api/events`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ schemaVersion: 1, events: [other] }),
+  });
+  expect(seeded.ok).toBe(true);
+
+  // A cached list can resolve before React commits the cleared selection.
+  // Keep the detail endpoint real so the test still exercises its abort flow.
+  await page.addInitScript(records => {
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (input, options) => {
+      const url = new URL(typeof input === 'string' ? input : input.url, location.href);
+      if (url.pathname !== '/api/events') return nativeFetch(input, options);
+      const environment = url.searchParams.get('environment');
+      const events = records.filter(event => !environment || event.environment === environment);
+      return Promise.resolve(new Response(JSON.stringify({ events }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      }));
+    };
+  }, [captured, other]);
+
+  await page.goto(`${origin}/viewer.html`);
+  await page.getByRole('button', { name: 'Event Timeline', exact: true }).last().click();
+  const inspector = page.locator('.detail-panel');
+  const row = page.locator('.event-row').filter({ hasText: 'selected checkout failure' });
+  const otherRow = page.locator('.event-row').filter({ hasText: 'unrelated checkout failure' });
+  await expect(row).toBeVisible();
+  await expect(otherRow).toBeVisible();
+  await expect(inspector.locator('.breadcrumb-entry')).toHaveCount(1);
+
+  await page.getByLabel('Environment', { exact: true }).last().fill(environment);
+  await expect(row).toBeVisible();
+  await expect(otherRow).toHaveCount(0);
+  await row.click();
+  await expect(inspector.locator('.breadcrumb-entry')).toHaveCount(1);
+  await expect(inspector.locator('.detail-lead h3')).toHaveText('selected checkout failure');
+
+  await page.getByLabel('Environment', { exact: true }).last().fill('');
+  await expect(otherRow).toBeVisible();
+  const pendingDetail = Promise.withResolvers();
+  const releaseDetail = Promise.withResolvers();
+  const settledDetail = Promise.withResolvers();
+  await page.route(`**/api/events/${captured.eventId}?*`, async route => {
+    pendingDetail.resolve();
+    await releaseDetail.promise;
+    try { await route.fulfill({ json: captured }); }
+    catch { /* The newer selection may have aborted this request. */ }
+    settledDetail.resolve();
+  });
+  try {
+    await page.getByRole('button', { name: 'Refresh' }).click();
+    await pendingDetail.promise;
+    await expect(otherRow).toBeVisible();
+    await otherRow.click();
+    await expect(inspector.locator('.detail-lead h3')).toHaveText('unrelated checkout failure');
+  } finally { releaseDetail.resolve(); }
+  await settledDetail.promise;
+  await expect(inspector.locator('.detail-lead h3')).toHaveText('unrelated checkout failure');
+  await expect(inspector.locator('.breadcrumb-entry')).toHaveCount(0);
+});
+
 test('delivers an uncaught runtime error to the local collector', async ({ page }) => {
   const environment = randomUUID();
   await init(page, environment);
