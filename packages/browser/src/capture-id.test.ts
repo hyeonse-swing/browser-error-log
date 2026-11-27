@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseEventReference, type EventBatch } from '@ihyeon/browser-error-log-protocol';
-import { formatEventReference, init, type BrowserErrorLogClient, type BrowserErrorLogDiagnosticsClient } from './index';
+import { formatEventReference, init, type BrowserErrorLogClient, type BrowserErrorLogDiagnosticsClient, type BrowserErrorLogOptions } from './index';
 import { EventStore, isEventRecord } from '../../../apps/local-collector/store';
 
 const clients: BrowserErrorLogClient[] = [];
@@ -10,6 +10,52 @@ afterEach(() => {
 });
 
 describe('manual capture event ID', () => {
+  it('keeps each client bound to its initialization settings when the caller reuses an options object', async () => {
+    const firstStore = new EventStore();
+    const secondStore = new EventStore();
+    const options: BrowserErrorLogOptions = {
+      project: 'first',
+      captureNetwork: false,
+      transport: batch => { batch.events.forEach(event => firstStore.add(event)); },
+    };
+    const first = init(options);
+    clients.push(first);
+
+    options.project = 'second';
+    options.transport = batch => { batch.events.forEach(event => secondStore.add(event)); };
+    const second = init(options);
+    clients.push(second);
+    const firstReference = first.captureExceptionWithReference(new Error('first failure'));
+    const secondReference = second.captureExceptionWithReference(new Error('second failure'));
+
+    await first.flush();
+    await second.flush();
+    expect(parseEventReference(formatEventReference(firstReference))).toEqual(firstReference);
+    expect(parseEventReference(formatEventReference(secondReference))).toEqual(secondReference);
+    expect(firstStore.get(firstReference!.project, firstReference!.eventId)?.message).toBe('first failure');
+    expect(secondStore.get(secondReference!.project, secondReference!.eventId)?.message).toBe('second failure');
+    expect(firstReference!.project).toBe('first');
+    expect(secondReference!.project).toBe('second');
+    expect(first.getStats().sent).toBe(1);
+    expect(second.getStats().sent).toBe(1);
+  });
+
+  it('rejects project names that become blank on the wire', async () => {
+    for (const project of ['   ', `${' '.repeat(80)}valid`]) {
+      expect(() => init({ project, captureNetwork: false, transport: () => {} }))
+        .toThrow('project is required');
+    }
+
+    const store = new EventStore();
+    const client = init({ project: ' valid ', captureNetwork: false,
+      transport: batch => { batch.events.forEach(event => store.add(event)); } });
+    clients.push(client);
+    const reference = client.captureExceptionWithReference(new Error('valid failure'));
+    await client.flush();
+    expect(parseEventReference(formatEventReference(reference))).toEqual(reference);
+    expect(store.get(reference!.project, reference!.eventId)?.message).toBe('valid failure');
+  });
+
   it('returns the ID delivered in the batch, including after a retry', async () => {
     const attempts: EventBatch[] = [];
     const store = new EventStore();

@@ -261,6 +261,7 @@ class Client implements BrowserErrorLogReferenceClient {
   private lastAdmissionClock?: number;
 
   constructor(options: BrowserErrorLogOptions) {
+    options = { ...options };
     this.options = options;
     this.active = options.enabled !== false && typeof window !== 'undefined' && typeof document !== 'undefined';
     const preset = options.preset ?? 'standard';
@@ -292,7 +293,7 @@ class Client implements BrowserErrorLogReferenceClient {
     this.deliveryStatusLimit = boundedNumber(options.deliveryStatusLimit, 0, 100, 0);
     if (this.deliveryStatusLimit > 0) this.deliveryStatuses = new Map();
     if (!this.active) return;
-    if (!options.project || typeof options.project !== 'string') throw new Error('project is required');
+    if (typeof options.project !== 'string' || !options.project.slice(0, 80).trim()) throw new Error('project is required');
     if (!options.transport && !options.endpoint) throw new Error('endpoint or transport is required');
     this.endpoint = options.endpoint ? this.absoluteUrl(options.endpoint) : undefined;
     if (this.captureGlobalErrors) window.addEventListener('error', this.onError);
