@@ -29,6 +29,8 @@ export interface BrowserErrorLogOptions {
   preset?: BrowserErrorLogPreset;
   /** Include error and component stacks; defaults to true except in minimal. */
   captureStack?: boolean;
+  /** With captureStack disabled, read a trusted global error's stack locally to recover a missing native caller. Never sends the stack. */
+  captureSourceLocationFromStack?: boolean;
   captureConsole?: boolean;
   /** Captures global JavaScript errors automatically; defaults to true in standard. */
   captureGlobalErrors?: boolean;
@@ -129,6 +131,8 @@ const MAX_BEACON_EVENTS = 10;
 const MAX_BEACON_BYTES = 24_000;
 const RETRY_DELAYS_MS = [250, 500];
 const SENSITIVE_KEY = /(?:password|passwd|token|secret|authorization|cookie|session|api.?key|credential|bearer|private.?key)/i;
+const V8_NATIVE_FRAME = /^\s+at\s+.+ \((?:native|<anonymous>)\)\s*$/u;
+const V8_HTTP_FRAME = /^\s*at\s+(?:[^()\n]*\()?((?:https?):\/\/[^\s()]+):([1-9]\d*):([1-9]\d*)(\))?\s*$/u;
 const EVENT_TYPES = new Set<EventType>(['javascript', 'promise', 'react', 'console', 'http', 'network', 'manual', 'resource']);
 const RUNTIMES = new Set<Runtime>(['browser', 'webview-ios', 'webview-android', 'unknown']);
 let fallbackId = 0;
@@ -189,6 +193,15 @@ function boundedNumber(value: unknown, minimum: number, maximum: number, fallbac
 
 function captureFlag(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
+}
+
+function isPageStart(filename: unknown, line: unknown, column: unknown): boolean {
+  if (typeof filename !== 'string' || line !== 1 || column !== 1) return false;
+  try {
+    const page = new URL(window.location.href);
+    const source = new URL(filename);
+    return source.origin === page.origin && source.pathname === page.pathname;
+  } catch { return false; }
 }
 
 function eventFingerprint(event: ErrorEventRecord): string {
@@ -550,11 +563,16 @@ class Client implements BrowserErrorLogReferenceClient {
       const filename = read(event, 'filename');
       const lineno = read(event, 'lineno');
       const colno = read(event, 'colno');
-      const context: Record<string, unknown> = {};
-      if (typeof filename === 'string' && filename.trim()) context.filename = this.cleanUrl(filename);
-      if (typeof lineno === 'number' && Number.isFinite(lineno) && lineno > 0) context.lineno = lineno;
-      if (typeof colno === 'number' && Number.isFinite(colno) && colno > 0) context.colno = colno;
-      this.captureExceptionInternal(read(event, 'error') ?? read(event, 'message') ?? 'Script error', {
+      const error = read(event, 'error');
+      const recovered = !this.captureStack && this.options.captureSourceLocationFromStack === true &&
+        event.isTrusted && isPageStart(filename, lineno, colno) ? this.recoverNativeCaller(error) : undefined;
+      const context: Record<string, unknown> = recovered ?? {};
+      if (!recovered) {
+        if (typeof filename === 'string' && filename.trim()) context.filename = this.cleanUrl(filename);
+        if (typeof lineno === 'number' && Number.isFinite(lineno) && lineno > 0) context.lineno = lineno;
+        if (typeof colno === 'number' && Number.isFinite(colno) && colno > 0) context.colno = colno;
+      }
+      this.captureExceptionInternal(error ?? read(event, 'message') ?? 'Script error', {
         type: 'javascript', ...(Object.keys(context).length ? { context } : {}),
       }, typeof filename === 'string' && typeof lineno === 'number' && typeof colno === 'number' &&
         Number.isSafeInteger(lineno) && Number.isSafeInteger(colno) && lineno > 0 && colno > 0
@@ -735,6 +753,30 @@ class Client implements BrowserErrorLogReferenceClient {
     return urls;
   }
 
+  private recoverNativeCaller(error: unknown): { filename: string; lineno: number; colno: number } | undefined {
+    try {
+      if (!(error instanceof Error)) return undefined;
+      const { name, message } = errorFields(error, false);
+      if (!name || name.length + message.length > 4096) return undefined;
+      const header = `${name}${message ? `: ${message}` : ''}\n`;
+      const stack = read(error, 'stack');
+      if (typeof stack !== 'string' || !stack.startsWith(header)) return undefined;
+      const bounded = stack.slice(header.length, header.length + 4096);
+      const frames = bounded.split('\n');
+      if (header.length + bounded.length < stack.length) frames.pop();
+      if (!V8_NATIVE_FRAME.test(frames[0] ?? '')) return undefined;
+      const caller = frames.find(frame => !V8_NATIVE_FRAME.test(frame));
+      const match = caller === undefined ? null : V8_HTTP_FRAME.exec(caller);
+      if (!match || !this.observedStackUrls().get(match[1])) return undefined;
+      const [, url, line, column] = match;
+      const lineno = Number(line), colno = Number(column);
+      if (!Number.isSafeInteger(lineno) || !Number.isSafeInteger(colno)) return undefined;
+      const filename = this.cleanUrl(url);
+      if (!/^https?:\/\//.test(filename)) return undefined;
+      return { filename, lineno, colno };
+    } catch { return undefined; }
+  }
+
   private cleanStackText(input: unknown, length: number): string {
     const raw = safeString(input);
     const clean = this.cleanText(raw, length);
@@ -749,7 +791,7 @@ class Client implements BrowserErrorLogReferenceClient {
       const rawLine = rawLines[index];
       if (!/[?#]/.test(rawLine) || (index === rawLines.length - 1 && raw.length >= length && !rawPrefix.endsWith('\n'))) continue;
       if ((rawLine.match(/https?:\/\//g) ?? []).length !== 1) continue;
-      const v8 = /^\s*at\s+(?:[^()\n]*\()?((?:https?):\/\/[^\s()]+):([1-9]\d*):([1-9]\d*)(\))?\s*$/u.exec(rawLine);
+      const v8 = V8_HTTP_FRAME.exec(rawLine);
       const gecko = /^(?:[^@\n]*@)?((?:https?):\/\/\S+):([1-9]\d*):([1-9]\d*)\s*$/u.exec(rawLine);
       const match = v8 ?? gecko;
       if (!match) continue;

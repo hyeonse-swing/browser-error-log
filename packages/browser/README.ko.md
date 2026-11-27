@@ -110,7 +110,9 @@ const errorLog = init({
 });
 ```
 
-명시한 `false`도 `detailed`보다 우선하고 `undefined`는 모드값을 따릅니다. `enabled: false`는 전체 수집을 중지합니다. 설정은 클라이언트별 초기화 때 고정됩니다. 모드를 바꾸려면 필요 시 대기 이벤트를 전송한 후 `destroy()`하고 새 클라이언트를 만드세요. `captureStack: false`는 오류·원인 스택 속성을 읽지 않고 `beforeSend`에서 추가한 스택도 최종 이벤트에서 제거합니다. 모드는 `sampleRate`, `maxEventsPerMinute`, `dedupeIntervalMs`, 큐 한도, 전송 설정을 바꾸지 않습니다. [전체 선택표와 제어 방법](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/ko/personal-sdk.md#수집-모드-선택)을 참고하세요.
+명시한 `false`도 `detailed`보다 우선하고 `undefined`는 모드값을 따릅니다. `enabled: false`는 전체 수집을 중지합니다. 설정은 클라이언트별 초기화 때 고정됩니다. 모드를 바꾸려면 필요 시 대기 이벤트를 전송한 후 `destroy()`하고 새 클라이언트를 만드세요. `captureStack: false`는 기본적으로 오류·원인 스택 속성을 읽지 않고 `beforeSend`에서 추가한 스택도 최종 이벤트에서 제거합니다. 모드는 `sampleRate`, `maxEventsPerMinute`, `dedupeIntervalMs`, 큐 한도, 전송 설정을 바꾸지 않습니다. [전체 선택표와 제어 방법](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/ko/personal-sdk.md#수집-모드-선택)을 참고하세요.
+
+Chromium이 내장 함수 오류의 위치를 문서 1행 1열로 보고할 때 `captureStack: false`와 함께 `captureSourceLocationFromStack: true`를 설정하면 호출 파일을 찾을 수 있습니다. SDK는 해당 오류의 스택을 브라우저 안에서 읽고, 내장 함수 프레임 뒤 첫 호출 위치가 페이지에서 관찰한 스크립트인지 확인합니다. 기존 이벤트 문맥에는 정리한 파일명·행·열만 전송합니다. 기본값은 `false`이며 전역 오류 수집이 필요합니다.
 
 ## 연결된 원인 오류 수집
 

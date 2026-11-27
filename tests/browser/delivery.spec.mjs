@@ -51,6 +51,9 @@ test.beforeAll(async () => {
   await cp('dist/viewer/assets', join(publicDir, 'assets'), { recursive: true });
   await writeFile(join(publicDir, 'index.html'), '<!doctype html><title>SDK browser delivery test</title>');
   await writeFile(join(publicDir, 'source-location.js'), "throw 'synthetic source failure';\n");
+  for (const script of ['cart', 'billing']) {
+    await writeFile(join(publicDir, `${script}.js`), `window.${script} = () => JSON.parse('basket');\n`);
+  }
   const port = await availablePort();
   origin = `http://127.0.0.1:${port}`;
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('MICRO_')));
@@ -1238,6 +1241,61 @@ test('delivers an unhandled promise rejection to the local collector', async ({ 
   await page.evaluate(() => { void Promise.reject(new Error('synthetic promise failure')); });
   await expect.poll(async () => (await events(environment)).length).toBe(1);
   expect((await events(environment))[0]).toMatchObject({ type: 'promise', message: 'synthetic promise failure' });
+});
+
+test('recovers distinct native callers without sending stacks when explicitly enabled', async ({ page, browserName }) => {
+  const environments = { fallback: randomUUID(), strict: randomUUID() };
+  await page.goto(`${origin}/?token=synthetic-page-secret`);
+  const native = await page.evaluate(async ({ fallback, strict }) => {
+    const { init } = await import('/sdk.js');
+    const options = { project: 'browser-test', endpoint: '/api/events', preset: 'minimal',
+      captureGlobalErrors: true, captureStack: false, flushIntervalMs: 60_000 };
+    const first = init({ ...options, environment: fallback, captureSourceLocationFromStack: true });
+    const second = init({ ...options, environment: strict });
+    const observed = [];
+    try {
+      for (const name of ['cart', 'billing']) {
+        await new Promise((ready, reject) => {
+          const script = document.createElement('script');
+          script.src = `/${name}.js?token=synthetic-${name}-secret`;
+          script.onload = ready;
+          script.onerror = reject;
+          document.head.append(script);
+        });
+        const error = await new Promise(ready => {
+          window.addEventListener('error', e => ready({ filename: e.filename, lineno: e.lineno, colno: e.colno }), { once: true });
+          setTimeout(() => window[name](), 0);
+        });
+        observed.push(error);
+      }
+      await first.flush();
+      await second.flush();
+      return observed;
+    } finally { first.destroy(); second.destroy(); }
+  }, environments);
+  const fallback = await events(environments.fallback);
+  const strict = await events(environments.strict);
+  expect(fallback).toHaveLength(2);
+  expect(strict).toHaveLength(2);
+  expect(new Set(fallback.map(event => event.context.filename))).toEqual(new Set([`${origin}/cart.js`, `${origin}/billing.js`]));
+  for (const event of fallback) {
+    expect(event.context.lineno).toBe(1);
+    expect(event.context.colno).toBeGreaterThan(1);
+  }
+  for (const event of [...fallback, ...strict]) {
+    expect(event).not.toHaveProperty('stack');
+    expect(event).not.toHaveProperty('componentStack');
+    expect(JSON.stringify(event)).not.toMatch(/synthetic-(?:cart|billing|page)-secret/);
+  }
+  if (browserName === 'chromium') {
+    for (const location of native) {
+      expect(new URL(location.filename).pathname).toBe('/');
+      expect(location).toMatchObject({ lineno: 1, colno: 1 });
+    }
+    for (const event of strict) expect(event.context).toEqual({ filename: `${origin}/`, lineno: 1, colno: 1 });
+  } else {
+    expect(fallback.map(event => event.context)).toEqual(strict.map(event => event.context));
+  }
 });
 
 test('keeps manual promise and native errors when automatic promise capture is disabled', async ({ page }) => {

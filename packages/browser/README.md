@@ -110,7 +110,9 @@ const errorLog = init({
 });
 ```
 
-An explicit `false` also wins over `detailed`; `undefined` inherits the preset. `enabled: false` disables the client entirely. Settings are resolved per client at initialization. To change modes, flush queued work if needed, call `destroy()`, then create a new client. `captureStack: false` skips error and cause stack access and removes stacks even if `beforeSend` adds them. Presets do not change `sampleRate`, `maxEventsPerMinute`, `dedupeIntervalMs`, queue limits, or delivery settings. See the [full mode matrix and controls](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md#choose-a-capture-mode).
+An explicit `false` also wins over `detailed`; `undefined` inherits the preset. `enabled: false` disables the client entirely. Settings are resolved per client at initialization. To change modes, flush queued work if needed, call `destroy()`, then create a new client. `captureStack: false` skips error and cause stack access by default and removes stacks even if `beforeSend` adds them. Presets do not change `sampleRate`, `maxEventsPerMinute`, `dedupeIntervalMs`, queue limits, or delivery settings. See the [full mode matrix and controls](https://github.com/hyeonse-swing/browser-error-log/blob/main/docs/personal-sdk.md#choose-a-capture-mode).
+
+When Chromium reports a built-in exception at the document's first line and column, set `captureSourceLocationFromStack: true` with `captureStack: false` to recover the calling script. The SDK reads that error's stack locally, verifies the first caller after the built-in frames against a script observed in the page, and sends only the sanitized filename, line, and column in the existing event context. This option defaults to `false` and needs global error capture.
 
 ## Include linked error causes
 

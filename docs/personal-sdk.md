@@ -100,7 +100,7 @@ Refresh `http://127.0.0.1:4319/` and select `my-web`. A successful `sent` counte
 | Navigation / network breadcrumbs | Off / off | Off / off | On / on |
 | Linked `Error.cause` details / stack and component stack | Off / off | Off / on | On / on |
 
-`minimal` still accepts explicit `captureException()` and `addBreadcrumb()` calls. Accepted manual events use the normal flush timer and page lifecycle delivery; you do not have to call `flush()` after every error. `captureStack: false` omits `stack` and `componentStack`, does not read error/cause stack properties, and prevents `beforeSend` from reintroducing those fields. The message, name, required event metadata, explicit context, and manual breadcrumbs remain available. If you need a stack in minimal mode, set `captureStack: true`.
+`minimal` still accepts explicit `captureException()` and `addBreadcrumb()` calls. Accepted manual events use the normal flush timer and page lifecycle delivery; you do not have to call `flush()` after every error. `captureStack: false` omits `stack` and `componentStack`, does not read error/cause stack properties by default, and prevents `beforeSend` from reintroducing those fields. The message, name, required event metadata, explicit context, and manual breadcrumbs remain available. If you need a stack in minimal mode, set `captureStack: true`.
 
 ```ts
 const errorLog = init({
@@ -125,6 +125,7 @@ Each explicit capture boolean overrides its mode; `false` wins in `detailed`, wh
 | `enabled` | `true` | Disable collection with `false` |
 | `preset` | `standard` | Select `minimal`, `standard`, or `detailed` runtime capture defaults |
 | `captureStack` | `true` (`minimal`: `false`) | Include sanitized error and component stacks |
+| `captureSourceLocationFromStack` | `false` | With stack capture off, recover a built-in error caller locally when Chromium supplies the document start location. Sends only a sanitized location in context. |
 | `captureNetwork` | `true` | Observe fetch/XHR; a custom transport also needs `endpoint` |
 | `captureConsole` | `false` | Opt in to `console.error` capture |
 | `captureGlobalErrors` / `captureUnhandledRejections` | `true` / `true` | Automatic global JavaScript and promise hooks |

@@ -100,7 +100,7 @@ console.log(errorLog.getStats());
 | 이동 / 네트워크 작업 기록 | 꺼짐 / 꺼짐 | 꺼짐 / 꺼짐 | 켜짐 / 켜짐 |
 | 연결된 `Error.cause` / 오류·컴포넌트 스택 | 꺼짐 / 꺼짐 | 꺼짐 / 켜짐 | 켜짐 / 켜짐 |
 
-`minimal`에서도 `captureException()`과 `addBreadcrumb()`를 직접 호출할 수 있습니다. 수락된 수동 이벤트는 기존 주기와 페이지 수명 주기 전송을 사용하므로 오류마다 `flush()`를 호출할 필요가 없습니다. `captureStack:false`는 `stack`·`componentStack`을 보내지 않고 오류·원인 스택 속성을 읽지 않으며, `beforeSend`에서 추가한 스택도 최종 이벤트에서 제거합니다. 메시지·이름·필수 메타데이터와 명시한 context·수동 작업 기록은 남습니다. 최소 모드에서 스택이 필요하면 `captureStack:true`를 지정하세요.
+`minimal`에서도 `captureException()`과 `addBreadcrumb()`를 직접 호출할 수 있습니다. 수락된 수동 이벤트는 기존 주기와 페이지 수명 주기 전송을 사용하므로 오류마다 `flush()`를 호출할 필요가 없습니다. `captureStack:false`는 `stack`·`componentStack`을 보내지 않고 기본적으로 오류·원인 스택 속성을 읽지 않으며, `beforeSend`에서 추가한 스택도 최종 이벤트에서 제거합니다. 메시지·이름·필수 메타데이터와 명시한 context·수동 작업 기록은 남습니다. 최소 모드에서 스택이 필요하면 `captureStack:true`를 지정하세요.
 
 ```ts
 const errorLog = init({
@@ -125,6 +125,7 @@ const errorLog = init({
 | `enabled` | `true` | `false`면 수집 중지 |
 | `preset` | `standard` | `minimal`·`standard`·`detailed` 자동 수집 기본값 선택 |
 | `captureStack` | `true` (`minimal`: `false`) | 정리한 오류·컴포넌트 스택 포함 |
+| `captureSourceLocationFromStack` | `false` | 스택 수집이 꺼져 있고 Chromium이 내장 함수 오류를 문서 시작 위치로 보고하면 호출 위치를 브라우저 안에서 찾습니다. 정리한 파일·행·열만 전송합니다. |
 | `captureNetwork` | `true` | fetch/XHR 관찰; 사용자 지정 전송에는 `endpoint`도 필요 |
 | `captureConsole` | `false` | `console.error` 수집 선택 |
 | `captureGlobalErrors` / `captureUnhandledRejections` | `true` / `true` | 전역 JavaScript·Promise 자동 수집 |
