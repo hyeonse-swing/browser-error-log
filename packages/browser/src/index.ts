@@ -1147,14 +1147,6 @@ class Client implements BrowserErrorLogReferenceClient {
   }
 
   private async sendWithRetry(batch: EventBatch, eventIds: readonly string[]): Promise<void> {
-    // A pagehide beacon may have queued part of the original in-flight batch
-    // before a split child starts. Do not resend those IDs in a fresh request.
-    const pending = batch.events.filter(event => !this.activeBatch?.beaconedIds.has(event.eventId));
-    if (!pending.length) return;
-    if (pending.length !== batch.events.length) {
-      batch = { schemaVersion: 1, events: pending };
-      eventIds = pending.map(event => event.eventId);
-    }
     // Snapshot custom transport data once so a failed or timed-out callback cannot
     // change what the next attempt sends. Native fetch serializes its own request.
     const originalPayload = this.options.transport ? JSON.stringify(batch) : undefined;
@@ -1162,6 +1154,17 @@ class Client implements BrowserErrorLogReferenceClient {
     let keepalive = true;
     let splitOnTooLarge = false;
     for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length && !this.destroyed; attempt++) {
+      // pagehide can beacon part of a batch before a split child or retry
+      // starts. Exclude those IDs before each attempt.
+      const beaconedIds = this.activeBatch?.beaconedIds;
+      if (beaconedIds?.size) {
+        const remaining = batch.events.filter(event => !beaconedIds.has(event.eventId));
+        if (!remaining.length) return;
+        if (remaining.length !== batch.events.length) {
+          batch = { schemaVersion: 1, events: remaining };
+          eventIds = remaining.map(event => event.eventId);
+        }
+      }
       if (attempt > 0 && originalPayload && !needsPristineCopy) {
         try { needsPristineCopy = JSON.stringify(batch) !== originalPayload; }
         catch { needsPristineCopy = true; }

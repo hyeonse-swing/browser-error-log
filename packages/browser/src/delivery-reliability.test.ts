@@ -110,6 +110,38 @@ describe('delivery reliability', () => {
       .toEqual([...Array(10).fill('beacon-queued'), ...Array(10).fill('transport-accepted')]);
   });
 
+  it('retries only unfinished events after a partial pagehide beacon and HTTP 503', async () => {
+    vi.useFakeTimers();
+    const sendBeacon = vi.fn().mockReturnValueOnce(true).mockReturnValueOnce(false);
+    vi.stubGlobal('navigator', { sendBeacon });
+    const attempts: string[][] = [];
+    let completeOriginal!: (response: Response) => void;
+    vi.stubGlobal('fetch', vi.fn((_url: string, options: RequestInit) => {
+      const batch = JSON.parse(String(options.body)) as { events: { eventId: string }[] };
+      attempts.push(batch.events.map(event => event.eventId));
+      return attempts.length === 1
+        ? new Promise<Response>(resolve => { completeOriginal = resolve; })
+        : Promise.resolve(new Response(null, { status: 204 }));
+    }));
+    const client = init({ project: 'test', endpoint: '/api/events', captureNetwork: false,
+      flushIntervalMs: 60_000, deliveryStatusLimit: 20 });
+    clients.push(client);
+    const ids = Array.from({ length: 20 }, (_, index) => client.captureException(`error ${index}`)!);
+    const flushing = client.flush();
+    expect(attempts).toEqual([ids]);
+
+    window.dispatchEvent(new Event('pagehide'));
+    expect(sendBeacon).toHaveBeenCalledTimes(2);
+    completeOriginal(new Response(null, { status: 503 }));
+    await vi.advanceTimersByTimeAsync(250);
+    await flushing;
+
+    expect(attempts).toEqual([ids, ids.slice(10)]);
+    expect(client.getStats()).toEqual({ queued: 0, sent: 20, dropped: 0 });
+    expect(ids.map(id => client.getDeliveryStatus(id).state))
+      .toEqual([...Array(10).fill('beacon-queued'), ...Array(10).fill('transport-accepted')]);
+  });
+
   it('tries one remaining event once after a rejected batch and records a final 413 drop', async () => {
     const sendBeacon = vi.fn().mockReturnValueOnce(true).mockReturnValueOnce(false);
     vi.stubGlobal('navigator', { sendBeacon });
