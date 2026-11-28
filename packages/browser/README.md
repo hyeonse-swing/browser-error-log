@@ -41,6 +41,8 @@ The `@ihyeon/browser-error-log-protocol` dependency resolves from npm. For local
    });
    ```
 
+   At capture time, omitted or blank `environment` and `release` values after SDK sanitization and length limits use `development` and `unknown`, respectively. Nonblank sanitized values are kept.
+
 3. Send a diagnostic error, then open `http://127.0.0.1:4319/`:
 
    ```ts

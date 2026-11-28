@@ -27,6 +27,23 @@ afterEach(() => {
 });
 
 describe('browser error client', () => {
+  it.each([
+    { label: 'omitted', options: {}, environment: 'development', release: 'unknown' },
+    { label: 'empty', options: { environment: '', release: '' }, environment: 'development', release: 'unknown' },
+    { label: 'whitespace', options: { environment: ' \t ', release: ' \n ' }, environment: 'development', release: 'unknown' },
+    { label: 'blank after truncation', options: { environment: `${' '.repeat(80)}production`, release: `${' '.repeat(120)}v2` },
+      environment: 'development', release: 'unknown' },
+    { label: 'nonblank', options: { environment: ' production ', release: ' v2 ' },
+      environment: ' production ', release: ' v2 ' },
+  ])('captures $label environment and release settings', async ({ options, environment, release }) => {
+    const instance = init({ project: 'web', transport: batch => { captured.push(batch); },
+      captureNetwork: false, ...options });
+    clients.push(instance);
+    expect(instance.captureException(new Error('configuration check'))).toBeTypeOf('string');
+    await instance.flush();
+    expect(captured[0].events[0]).toMatchObject({ environment, release, message: 'configuration check' });
+  });
+
   it('snapshots manual breadcrumbs in order and clears only future events', async () => {
     const instance = client();
     const input = { message: 'step one', data: { state: 'cart' } };

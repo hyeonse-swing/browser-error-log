@@ -41,6 +41,8 @@ npm install @ihyeon/browser-error-log
    });
    ```
 
+   이벤트를 기록할 때 `environment`·`release`를 생략하거나 SDK 정제·길이 제한 후 빈 값 또는 공백만 남으면 각각 `development`·`unknown`을 사용합니다. 비어 있지 않은 정제 결과는 그대로 기록합니다.
+
 3. 진단 오류를 보내고 `http://127.0.0.1:4319/`에서 확인합니다.
 
    ```ts

@@ -983,12 +983,14 @@ class Client implements BrowserErrorLogReferenceClient {
       }
     }
     const network = this.cleanNetwork(extra.network);
+    const environment = this.cleanText(this.options.environment ?? 'development', 80);
+    const release = this.cleanText(this.options.release ?? 'unknown', 120);
     return {
       schemaVersion: 1,
       eventId: newId(),
       project: this.cleanText(this.options.project, 80),
-      environment: this.cleanText(this.options.environment ?? 'development', 80),
-      release: this.cleanText(this.options.release ?? 'unknown', 120),
+      environment: environment.trim() ? environment : 'development',
+      release: release.trim() ? release : 'unknown',
       sdkVersion: '0.2.31',
       occurredAt: new Date().toISOString(),
       viewId: this.viewId,
