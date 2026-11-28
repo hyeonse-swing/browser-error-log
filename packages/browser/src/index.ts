@@ -991,7 +991,7 @@ class Client implements BrowserErrorLogReferenceClient {
       project: this.cleanText(this.options.project, 80),
       environment: environment.trim() ? environment : 'development',
       release: release.trim() ? release : 'unknown',
-      sdkVersion: '0.2.31',
+      sdkVersion: '0.2.32',
       occurredAt: new Date().toISOString(),
       viewId: this.viewId,
       sequence: ++this.sequence,
